@@ -87,8 +87,14 @@ const Cloud = (() => {
   }
   function receive(snapshot) {
     if (!user) return;
+    // 웹 SDK의 메모리 캐시가 비어 있어도 계정별 로컬 기록은 보존한다.
+    if (snapshot.metadata.fromCache) {
+      if (!ready) Timer.init();
+      ready = true; scheduleRefresh();
+      return;
+    }
     remote = buildRemote(snapshot);
-    loaded = !snapshot.metadata.fromCache;
+    loaded = true;
     for (const key of keys) {
       const value = overlay(key, remote[key]);
       if ((value !== undefined || loaded) && !same(Store.get(key, undefined), value)) Store.applyRemote(key, value);
@@ -159,7 +165,7 @@ const Cloud = (() => {
       merged[key] = now.concat(old.filter((v, i) => !ids.has(arrayId(key, v, i))));
     }
     for (const key of MAP_KEYS) merged[key] = { ...(legacy[key] || {}), ...(current.kv[key] || {}) };
-    merged.captures = current.kv.captures || legacy.captures || [];
+    merged.captures = (current.kv.captures || []).length ? current.kv.captures : (legacy.captures || []);
     await Store.copyLegacyImages();
     for (const [key, value] of Object.entries(merged)) Store.set(key, value);
     localStorage.setItem('classhub:migrated:' + user.uid, '1');

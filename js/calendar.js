@@ -8,7 +8,7 @@ const Calendar = (() => {
 
   let mode = 'month';
   let focus = new Date();
-  let weekLessonsVisible = Store.get('weekLessonsVisible', true) !== false;
+  const weekLessonsVisible = () => Store.get('weekLessonsVisible', true) !== false;
   let collapse = true; // 일정 없는 시간대를 접어서 보여 준다
   const opened = new Set(); // 눌러서 펼친 빈 시간대
 
@@ -308,12 +308,11 @@ const Calendar = (() => {
         days.map((d) => h('button', { type: 'button', class: 'tl-dh' + (dateStr(d) === today ? ' today' : '') + (d.getDay() === 0 ? ' sun' : '') + (d.getDay() === 6 ? ' sat' : ''),
           onclick: () => { focus = d; mode = 'day'; opened.clear(); draw(); } }, h('span', null, WEEK[d.getDay()]), h('b', null, d.getDate())))));
       root.append(h('div', { class: 'week-lesson-toggle' },
-        h('button', { class: 'btn ghost', type: 'button', 'aria-expanded': String(weekLessonsVisible), onclick: () => {
-          weekLessonsVisible = !weekLessonsVisible;
-          Store.set('weekLessonsVisible', weekLessonsVisible);
+        h('button', { class: 'btn ghost', type: 'button', 'aria-expanded': String(weekLessonsVisible()), onclick: () => {
+          Store.set('weekLessonsVisible', !weekLessonsVisible());
           redraw();
-        } }, weekLessonsVisible ? '수업 목록 접기 ⌃' : '수업 목록 펼치기 ⌄')));
-      if (weekLessonsVisible) root.append(h('div', { class: 'tl-row tl-lessons' }, h('div', { class: 'tl-corner' }, '수업'),
+        } }, weekLessonsVisible() ? '수업 목록 접기 ⌃' : '수업 목록 펼치기 ⌄')));
+      if (weekLessonsVisible()) root.append(h('div', { class: 'tl-row tl-lessons' }, h('div', { class: 'tl-corner' }, '수업'),
         days.map((d) => h('div', { class: 'tl-lcell' }, Timetable.lessonsFor(d).map((l) => h('span', { class: 'chip', style: { '--c': colorFor(l.subject) }, title: l.teacher ? `${l.subject} · ${l.teacher}` : l.subject }, `${l.period} ${l.subject}`))))));
     }
 
