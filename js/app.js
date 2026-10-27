@@ -146,6 +146,7 @@ const App = (() => {
   }
 
   function route() {
+    if (Cloud.configured && !Cloud.ready) { Cloud.showGate(); return; }
     const name = (location.hash || '#home').slice(1);
     const view = views[name] || views.home;
     const key = views[name] ? name : 'home';

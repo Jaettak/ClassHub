@@ -77,8 +77,9 @@ App.registerView('home', { label: '홈', icon: 'home', render: Home.render });
 
 (async function start() {
   await Store.init();
+  await Cloud.init();
   Settings.apply();
-  Timer.init();
+  if (!Cloud.configured) Timer.init();
   window.addEventListener('hashchange', App.route);
-  App.route();
+  if (Cloud.ready) App.route();
 })();

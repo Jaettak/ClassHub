@@ -80,7 +80,7 @@ const Settings = (() => {
 
     const m = App.modal({
       title: '설정', wide: true,
-      body: h('div', { class: 'set-grid' }, schoolBox, alBox, viewBox, soundBox, backupBox, resetBox),
+      body: h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, backupBox, resetBox),
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '닫기'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {

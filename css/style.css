@@ -779,3 +779,9 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .ev-detail textarea { width:100%; min-height:110px; resize:vertical; }
 .mini-list li > span { font-size:.76rem; white-space:nowrap; }
 @media (max-width:550px){.mini-list li { flex-wrap:wrap; }.mini-list li > b { flex-basis:50%; }}
+.auth-gate { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.auth-card { width: min(100%, 430px); display: grid; gap: 14px; padding: 30px; background: var(--card, #fff); border-radius: 24px; box-shadow: 0 12px 40px #14285822; }
+.auth-card img { width: 56px; height: 56px; }
+.auth-card h1, .auth-card p { margin: 0; }
+.auth-card .field { margin: 0; }
+.auth-actions { display: flex; gap: 8px; flex-wrap: wrap; }

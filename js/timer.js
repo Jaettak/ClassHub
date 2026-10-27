@@ -158,7 +158,14 @@ const Timer = (() => {
     if (st && st.mode) mount(); else st = null;
   }
 
-  return { open, start, spent, init, active: () => !!st };
+  function suspend() {
+    st = null;
+    if (tick) { clearInterval(tick); tick = null; }
+    if (dock) { dock.remove(); dock = null; }
+    document.title = baseTitle;
+  }
+
+  return { open, start, spent, init, suspend, active: () => !!st };
 })();
 
 App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
