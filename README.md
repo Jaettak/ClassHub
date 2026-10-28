@@ -73,22 +73,18 @@
 
 ## 실행 및 배포
 
-- 실행: `index.html`을 더블클릭한다.
+- 실행: 배포된 HTTPS 주소를 사용한다. 로컬 테스트는 HTTP 서버(`python -m http.server 8765`)로 열어 `http://localhost:8765/`에 접속한다.
 - 배포: 폴더 전체(`index.html`, `css/`, `js/`, `lib/`, `assets/`)를 GitHub 저장소에 올리고 Settings → Pages에서 브랜치를 선택한다.
 
-## Firebase 연결 (2026-10-27)
+## Firebase 연결 (2026-10-28)
 
-Firebase 프로젝트 정보가 아직 없어 실제 서버 연결은 완료되지 않았다. 아래 절차를 마치면 기존 GitHub Pages 주소에서 로그인 및 동기화가 동작한다.
+Firebase 프로젝트 `classhub-e35f2`의 Spark 요금제, 웹앱, Google Authentication, 서울 리전 Cloud Firestore를 설정했다. `jaettak.github.io` 도메인도 로그인 허용 목록에 추가했다. `firestore.rules`를 Firebase Console에 게시했다.
 
-1. [Firebase Console](https://console.firebase.google.com/)에서 프로젝트를 만들고 Spark 요금제를 선택한다. 프로젝트 설정에서 웹앱(`</>`)을 등록한다.
-2. 웹앱 설정의 `firebaseConfig` 중 `apiKey`, `authDomain`, `projectId`, `appId`를 `js/firebase-config.js`에 넣는다. 이 네 값은 클라이언트용 공개 설정이다. 서비스 계정 개인 키는 절대 넣지 않는다.
-3. Authentication → Sign-in method에서 Google 및 이메일/비밀번호 제공업체를 사용 설정한다. Authentication → Settings → Authorized domains에 GitHub Pages 도메인을 등록한다. Google 팝업은 배포된 HTTPS 주소에서 시험한다.
-4. Firestore Database를 생성한 뒤 Rules 탭에 `firestore.rules` 전체 내용을 붙여 넣고 **게시**한다. 이 규칙은 `users/{본인 UID}/records`만 해당 계정에서 읽고 쓰도록 제한한다. 다른 데이터 경로는 거부된다.
-5. 프로젝트 전체를 기존 GitHub Pages 저장소에 올린다. `js/firebase-config.js`, `js/cloud.js`, `firestore.rules`도 포함한다. 규칙 파일을 GitHub에 올리는 것만으로는 규칙이 적용되지 않으므로 4번의 게시가 필수다.
-   개인 JSON 백업 파일은 프로젝트 폴더 밖에 보관하고 GitHub 저장소에 올리지 않는다.
-6. 배포된 사이트에서 로그인한다. 기존 브라우저의 기록을 옮기려면 설정 → 계정과 동기화 → **이 브라우저의 기존 기록 가져오기**를 누른다. 기존 로컬 기록은 남고, 클라우드에 같은 ID 또는 설정 키가 있으면 클라우드 쪽을 유지한다. 가져오기 전에 기존 백업도 별도로 보관한다.
+웹앱 공개 설정값은 `js/firebase-config.js`에 있다. 이 값은 클라이언트용 공개 설정이며 서비스 계정 개인 키가 아니다. 개인 JSON 백업 파일은 프로젝트 폴더 밖에 보관하고 GitHub 저장소에 올리지 않는다.
 
-로그인 방식은 Google과 이메일/비밀번호 두 가지를 지원한다. 같은 사람이라도 서로 다른 방식으로 별도 계정을 만들면 데이터가 합쳐지지 않는다. 처음 사용한 로그인 방식을 다른 기기에서도 사용한다.
+배포된 사이트에서 Google로 로그인한다. 기존 브라우저의 기록을 옮기려면 설정 → 계정과 동기화 → **이 브라우저의 기존 기록 가져오기**를 누른다. 기존 로컬 기록은 남고, 클라우드에 같은 ID 또는 설정 키가 있으면 클라우드 쪽을 유지한다. 가져오기 전에 기존 백업도 별도로 보관한다.
+
+로그인 방식은 Google만 사용한다. 모든 기기에서 같은 Google 계정으로 로그인한다.
 
 ### 저장 범위와 충돌 처리
 
@@ -100,7 +96,7 @@ Firebase 프로젝트 정보가 아직 없어 실제 서버 연결은 완료되�
 
 ### 확인이 필요한 실제 환경 테스트
 
-Firebase 설정값과 프로젝트 접근 권한이 제공되지 않아 실제 인증, 기기 간 동기화, 보안 규칙 게시 및 교차 계정 접근 차단은 아직 검증되지 않았다. 설정 후 두 브라우저에서 동일 계정 로그인 → 각 항목 수정 → 재접속 및 오프라인 재시도 → 다른 계정의 접근 거부를 확인해야 한다.
+로컬 HTTP 서버에서 Google 로그인 후 Firestore 연결을 확인했다. 임시 메모를 저장하고 Firebase Console의 `users/{uid}/records` 문서로 저장된 것을 확인했다. 두 번째 탭에도 메모와 삭제가 반영됐다. 배포된 GitHub Pages에서의 로그인, 실제 두 기기 간 동기화, 오프라인 재시도, 기존 데이터 이전, 다른 계정의 접근 차단은 아직 확인해야 한다.
 
 
 ## 2026-10-26 UI 업데이트

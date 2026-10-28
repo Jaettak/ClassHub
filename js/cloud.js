@@ -104,18 +104,12 @@ const Cloud = (() => {
   }
   function showGate(message = '') {
     const root = document.getElementById('app'); root.replaceChildren(); root.className = 'auth-gate';
-    const email = h('input', { type: 'email', autocomplete: 'email', placeholder: '이메일' });
-    const password = h('input', { type: 'password', autocomplete: 'current-password', placeholder: '비밀번호' });
     const status = h('p', { class: 'muted', role: 'status' }, message);
     const run = async (fn) => { status.textContent = '연결 중…'; try { await fn(); } catch (e) { status.textContent = e.message || '로그인에 실패했어요.'; } };
     root.append(h('div', { class: 'auth-card' },
       h('img', { src: 'assets/logo.svg', alt: '' }), h('h1', null, 'ClassHub'),
       h('p', null, '내 기록을 모든 기기에서 이어서 사용해요.'),
       h('button', { class: 'btn primary', type: 'button', onclick: () => run(() => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())) }, 'Google로 로그인'),
-      App.field('이메일', email), App.field('비밀번호', password),
-      h('div', { class: 'auth-actions' },
-        h('button', { class: 'btn primary', type: 'button', onclick: () => run(() => auth.signInWithEmailAndPassword(email.value.trim(), password.value)) }, '로그인'),
-        h('button', { class: 'btn', type: 'button', onclick: () => run(() => auth.createUserWithEmailAndPassword(email.value.trim(), password.value)) }, '계정 만들기')),
       status));
   }
   async function signedIn(next) {
