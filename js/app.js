@@ -188,15 +188,17 @@ const App = (() => {
     toast('백업 파일을 저장했어요.');
   }
 
-  function importData() {
+  function importData(merge = false) {
     const input = h('input', { type: 'file', accept: '.json,application/json' });
     input.addEventListener('change', async () => {
       const f = input.files[0];
       if (!f) return;
-      if (!confirm('지금 저장된 내용이 백업 파일 내용으로 바뀌어요. 계속할까요?')) return;
+      if (!confirm(merge ? '백업에만 있는 기록을 현재 기록에 추가할까요? 같은 항목은 현재 기록을 유지해요.' : '지금 저장된 내용이 백업 파일 내용으로 바뀌어요. 계속할까요?')) return;
       try {
-        await Store.importAll(JSON.parse(await f.text()));
-        toast('불러왔어요!');
+        const data = JSON.parse(await f.text());
+        if (merge) await Store.mergeAll(data);
+        else await Store.importAll(data);
+        toast(merge ? '백업 기록을 합쳤어요.' : '불러왔어요!');
         refresh();
       } catch (e) {
         toast(e.message || '불러오지 못했어요.');

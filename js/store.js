@@ -86,6 +86,24 @@ const Store = (() => {
     async delImg(id) { if (db) { const tx = db.transaction(imgName(), 'readwrite'); tx.objectStore(imgName()).delete(keyFor(id)); await done(tx); } else localStorage.removeItem(lsPrefix(true) + id); },
     async exportAll() { return { app: 'ClassHub', version: 1, exportedAt: new Date().toISOString(), kv: clone(cache), img: await images() }; },
     async importAll(data) { if (!data || data.app !== 'ClassHub' || !data.kv || typeof data.kv !== 'object' || Array.isArray(data.kv)) throw new Error('ClassHub 백업 파일이 아니에요.'); await replace(data.kv, true); await replaceImages(data.img || {}); },
+    async mergeAll(data) {
+      if (!data || data.app !== 'ClassHub' || !data.kv || typeof data.kv !== 'object' || Array.isArray(data.kv)) throw new Error('ClassHub 백업 파일이 아니에요.');
+      const next = clone(cache);
+      const maps = new Set(['subjectColors', 'lessonDayNotes']);
+      const itemId = (v) => v && typeof v === 'object' ? String(v.id ?? v.at ?? JSON.stringify(v)) : String(v);
+      for (const [key, old] of Object.entries(data.kv)) {
+        const current = next[key];
+        if (current === undefined || current === null) { next[key] = clone(old); continue; }
+        if (Array.isArray(current) && Array.isArray(old)) {
+          const ids = new Set(current.map(itemId));
+          next[key] = current.concat(old.filter((item) => !ids.has(itemId(item))).map(clone));
+        } else if (maps.has(key) && current && old && typeof current === 'object' && typeof old === 'object') {
+          next[key] = { ...clone(old), ...current };
+        }
+      }
+      await replace(next, true);
+      await replaceImages({ ...(data.img || {}), ...(await images()) });
+    },
     async copyLegacyImages() { if (!account) throw new Error('로그인해 주세요.'); const uid = account; account = null; const oldImages = await images(); account = uid; await replaceImages({ ...oldImages, ...(await images()) }); },
   };
 })();

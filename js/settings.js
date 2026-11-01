@@ -71,7 +71,8 @@ const Settings = (() => {
     const backupBox = section('백업',
       h('div', { class: 'set-row set-btns' },
         h('button', { class: 'btn', type: 'button', onclick: App.exportData }, '백업 내보내기'),
-        h('button', { class: 'btn', type: 'button', onclick: () => { m.close(); App.importData(); } }, '백업 불러오기')));
+        h('button', { class: 'btn', type: 'button', onclick: () => { m.close(); App.importData(true); } }, '백업 합치기'),
+        h('button', { class: 'btn', type: 'button', onclick: () => { m.close(); App.importData(); } }, '백업으로 바꾸기')));
 
     // 초기화
     const resetBox = section('데이터 초기화',
