@@ -4,6 +4,8 @@ const Timer = (() => {
   let dock = null;
   let tick = null;
   let ctx = null;
+  let alarmTimer = null;
+  let alarmBar = null;
   const baseTitle = document.title;
 
   const elapsed = () => (st ? st.before + (st.running ? (Date.now() - st.startedAt) / 1000 : 0) : 0);
@@ -33,6 +35,25 @@ const Timer = (() => {
     } catch (e) { /* 소리를 못 내도 무시 */ }
   }
 
+  function stopAlarm() {
+    if (alarmTimer) clearInterval(alarmTimer);
+    alarmTimer = null;
+    if (alarmBar) alarmBar.remove();
+    alarmBar = null;
+  }
+
+  function startAlarm(title) {
+    stopAlarm();
+    const settings = Store.get('settings', {}) || {};
+    if (settings.timerSound === false || Number(settings.soundVolume ?? 70) <= 0) return;
+    alarmBar = h('div', { class: 'timer-alarm', role: 'alert' },
+      h('b', null, `${title || '타이머'} 시간이 끝났어요`),
+      h('button', { class: 'btn primary', type: 'button', onclick: stopAlarm }, '소리 끄기'));
+    document.body.append(alarmBar);
+    beep();
+    alarmTimer = setInterval(beep, 1800);
+  }
+
   function saveSession() {
     let sec = Math.round(elapsed());
     if (st.mode === 'down') sec = Math.min(sec, st.total);
@@ -57,7 +78,7 @@ const Timer = (() => {
     const info = { ...st };
     const sec = saveSession();
     clear();
-    if (auto) beep();
+    if (auto) startAlarm(info.title);
     const min = Math.max(1, Math.round(sec / 60));
     App.toast(`${info.title || '타이머'} · ${min}분 기록했어요.`);
     if (info.evId) askDone(info);
@@ -109,6 +130,7 @@ const Timer = (() => {
   }
 
   function start(o) {
+    stopAlarm();
     if (st && !confirm('진행 중인 타이머가 있어요. 기록하고 새로 시작할까요?')) return;
     if (st) { saveSession(); clear(); }
     try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.resume) ctx.resume(); } catch (e) { /* 무시 */ }
@@ -159,13 +181,14 @@ const Timer = (() => {
   }
 
   function suspend() {
+    stopAlarm();
     st = null;
     if (tick) { clearInterval(tick); tick = null; }
     if (dock) { dock.remove(); dock = null; }
     document.title = baseTitle;
   }
 
-  return { open, start, spent, init, suspend, active: () => !!st };
+  return { open, start, spent, init, suspend, stopAlarm, active: () => !!st };
 })();
 
 App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {

@@ -12,7 +12,8 @@ const Neis = (() => {
   async function call(service, params, maxPages) {
     const k = key();
     const size = k ? 1000 : 5;
-    const cap = maxPages || (k ? 5 : 30);
+    // 샘플 키는 pIndex가 1로 고정되어 여러 페이지를 요청하면 첫 5건이 반복된다.
+    const cap = k ? (maxPages || 5) : 1;
     const get = async (i) => {
       const q = new URLSearchParams({ Type: 'json', pIndex: i, pSize: size, ...params });
       if (k) q.set('KEY', k);
@@ -54,11 +55,23 @@ const Neis = (() => {
 
   // { '2026-10-26': [{ kind:'중식', dishes, cal, ntr, origin }] }
   async function meals(school, from, to) {
-    const r = await call('mealServiceDietInfo', { ATPT_OFCDC_SC_CODE: school.atpt, SD_SCHUL_CODE: school.code, MLSV_FROM_YMD: ymd(from), MLSV_TO_YMD: ymd(to) });
+    const params = { ATPT_OFCDC_SC_CODE: school.atpt, SD_SCHUL_CODE: school.code };
+    // 샘플 응답은 하루에 최대 5건. 날짜를 나누어 한 주 전체를 가져온다.
+    const dates = [];
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) dates.push(new Date(d));
+    const results = key()
+      ? [await call('mealServiceDietInfo', { ...params, MLSV_FROM_YMD: ymd(from), MLSV_TO_YMD: ymd(to) })]
+      : await Promise.all(dates.map((d) => call('mealServiceDietInfo', { ...params, MLSV_YMD: ymd(d) })));
+    const rows = results.flatMap((r) => r.rows);
     const out = {};
-    r.rows.forEach((x) => {
+    const seen = new Set();
+    rows.forEach((x) => {
       const d = isoDate(x.MLSV_YMD);
-      (out[d] = out[d] || []).push({ code: Number(x.MMEAL_SC_CODE), kind: x.MMEAL_SC_NM, dishes: parseDishes(x.DDISH_NM), cal: x.CAL_INFO || '', ntr: lines(x.NTR_INFO), origin: lines(x.ORPLC_INFO) });
+      const code = Number(x.MMEAL_SC_CODE);
+      const id = `${d}|${code}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      (out[d] = out[d] || []).push({ code, kind: ({ 1: '조식', 2: '중식', 3: '석식' })[code] || x.MMEAL_SC_NM, dishes: parseDishes(x.DDISH_NM), cal: x.CAL_INFO || '', ntr: lines(x.NTR_INFO), origin: lines(x.ORPLC_INFO) });
     });
     Object.values(out).forEach((l) => l.sort((a, b) => a.code - b.code));
     return out;
@@ -68,8 +81,15 @@ const Neis = (() => {
   async function timetable(school, grade, cls, from, to) {
     const service = TT[school.kind];
     if (!service) throw new Error('이 종류의 학교는 시간표 불러오기를 지원하지 않아요.');
-    const r = await call(service, { ATPT_OFCDC_SC_CODE: school.atpt, SD_SCHUL_CODE: school.code, GRADE: grade, CLASS_NM: cls, TI_FROM_YMD: ymd(from), TI_TO_YMD: ymd(to) });
-    return r.rows.map((x) => ({ date: isoDate(x.ALL_TI_YMD), period: Number(x.PERIO), subject: String(x.ITRT_CNTNT || '').trim() })).filter((x) => x.subject);
+    const params = { ATPT_OFCDC_SC_CODE: school.atpt, SD_SCHUL_CODE: school.code, GRADE: grade, CLASS_NM: cls };
+    const dates = [];
+    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) dates.push(new Date(d));
+    const results = key()
+      ? [await call(service, { ...params, TI_FROM_YMD: ymd(from), TI_TO_YMD: ymd(to) })]
+      : await Promise.all(dates.map((d) => call(service, { ...params, TI_FROM_YMD: ymd(d), TI_TO_YMD: ymd(d) })));
+    const seen = new Set();
+    return results.flatMap((r) => r.rows).map((x) => ({ date: isoDate(x.ALL_TI_YMD), period: Number(x.PERIO), subject: String(x.ITRT_CNTNT || '').trim() }))
+      .filter((x) => { const id = `${x.date}|${x.period}`; if (!x.subject || seen.has(id)) return false; seen.add(id); return true; });
   }
 
   // 학교 검색 창. 고르면 onPick(school) 호출

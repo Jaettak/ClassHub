@@ -1,5 +1,6 @@
 // 홈 화면과 앱 시작
 const Home = (() => {
+  let selectedDate = new Date();
   const CARDS = [
     { to: 'wrong', cls: 'blue', icon: 'wrong', title: '오답노트', desc: 'pdf파일을 잘라내고 오답정리를 해요.' },
     { to: 'timetable', cls: 'green', icon: 'timetable', title: '시간표', desc: '나의 시간표를 입력하고 관리해요.' },
@@ -13,9 +14,6 @@ const Home = (() => {
 
   function render(root) {
     const now = new Date();
-    const today = todayStr();
-    const lessons = Timetable.lessonsFor(now);
-    const todayEvents = Calendar.byDate(today).filter((e) => !e.schoolLesson);
     const st = Activities.stats();
     let sideMode = Store.get('homeSideMode', 'list');
 
@@ -28,29 +26,35 @@ const Home = (() => {
     const todayBox = h('div', { class: 'side-box' },
       h('button', { type: 'button', class: 'bm r', title: '오늘 일정 목록', 'aria-label': '오늘 일정 목록으로 보기', onclick: () => selectSide('list') }),
       h('button', { type: 'button', class: 'bm b', title: '오늘 일정 원 그래프', 'aria-label': '오늘 일정 원 그래프로 보기', onclick: () => selectSide('pie') }),
-      h('h3', null, `오늘 ${now.getMonth() + 1}월 ${now.getDate()}일 (${WEEK[now.getDay()]})`),
-      h('div', { class: 'side-scroll' },
-        lessons.length
-          ? h('div', { class: 'chips' }, lessons.map((l) => h('span', { class: 'chip', style: { '--c': colorFor(l.subject) }, title: l.teacher }, `${l.period} ${l.subject}`)))
-          : h('p', { class: 'muted' }, '오늘 입력된 수업이 없어요.'),
-        todayEvents.length
-          ? h('ul', { class: 'mini-list' }, todayEvents.map((e) => h('li', { style: { '--c': e.color } },
-            h('button', { type: 'button', class: 'ck sm' + (e.done ? ' on' : ''), role: 'checkbox', 'aria-checked': String(!!e.done), 'aria-label': `${e.title} 완료 표시`, title: e.done ? '완료 취소' : '완료로 표시',
-              onclick: () => { Calendar.setDone(e.id, e.date, !e.done); App.refresh(); } }),
-            h('span', null, `${e.start}~${e.end}`), h('b', null, e.title))))
-          : h('p', { class: 'muted' }, '오늘 등록된 일정이 없어요.')),
+      h('div', { class: 'side-date-nav' },
+        h('button', { class: 'btn ghost', type: 'button', 'aria-label': '이전 날짜', onclick: () => changeDate(-1) }, '◀'),
+        h('h3', null),
+        h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { selectedDate = new Date(); drawSide(); } }, '오늘')),
+      h('div', { class: 'side-scroll' }),
       st.total ? h('p', { class: 'note' }, `생기부 미기록 활동 ${st.todo}개`) : null);
 
     const sideScroll = todayBox.querySelector('.side-scroll');
-    const listContents = Array.from(sideScroll.childNodes);
+    function changeDate(n) { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + n); drawSide(); }
+    function drawSide() {
+      const ds = dateStr(selectedDate), lessons = Timetable.lessonsFor(selectedDate), dayEvents = Calendar.byDate(ds).filter((e) => !e.schoolLesson);
+      todayBox.querySelector('h3').textContent = `${ds === todayStr() ? '오늘 ' : ''}${selectedDate.getMonth() + 1}월 ${selectedDate.getDate()}일 (${WEEK[selectedDate.getDay()]})`;
+      if (sideMode === 'pie') return sideScroll.replaceChildren(h('div', { class: 'home-pie-view' }, Calendar.homePie(selectedDate)));
+      sideScroll.replaceChildren(...[
+        lessons.length ? h('div', { class: 'chips' }, lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher, onclick: () => Calendar.showEvent(l, drawSide) }, `${l.period} ${l.displayTitle}`)))
+          : h('p', { class: 'muted' }, '입력된 수업이 없어요.'),
+        dayEvents.length ? h('ul', { class: 'mini-list' }, dayEvents.map((e) => h('li', { style: { '--c': e.color } },
+          e.checkable !== false ? h('button', { type: 'button', class: 'ck sm' + (e.done ? ' on' : ''), role: 'checkbox', 'aria-checked': String(!!e.done), 'aria-label': `${e.title} 완료 표시`, title: e.done ? '완료 취소' : '완료로 표시', onclick: () => { Calendar.setDone(e.id, e.date, !e.done); drawSide(); } }) : null,
+          h('button', { class: 'home-event-open', type: 'button', onclick: () => Calendar.showEvent(e, drawSide) }, h('span', null, `${e.start}~${e.end}`), h('b', null, e.title)))))
+          : h('p', { class: 'muted' }, '등록된 일정이 없어요.'),
+        Notes.forDate(ds).length ? h('div', { class: 'home-day-notes' }, h('b', null, '이 날의 메모'), Notes.forDate(ds).map((n) => h('button', { type: 'button', onclick: () => Notes.edit(n, drawSide) }, n.title || n.body))) : null].filter(Boolean));
+    }
     function selectSide(next) {
       sideMode = next; Store.set('homeSideMode', next);
       todayBox.classList.toggle('show-pie', next === 'pie');
       todayBox.querySelector('.bm.r').setAttribute('aria-pressed', String(next === 'list'));
       todayBox.querySelector('.bm.b').setAttribute('aria-pressed', String(next === 'pie'));
-      if (next === 'pie') {
-        sideScroll.replaceChildren(h('div', { class: 'home-pie-view' }, Calendar.homePie(new Date())));
-      } else { sideScroll.replaceChildren(...listContents); }
+      drawSide();
     }
     selectSide(sideMode);
 
@@ -67,7 +71,7 @@ const Home = (() => {
     root.append(h('div', { class: 'home' },
       cards,
       h('aside', { class: 'home-side' },
-        h('div', { class: 'home-topline' }, h('div', { class: 'home-greeting' }, h('span', { class: 'home-greeting-kicker' }, 'CLASS HUB'), h('b', null, '오늘도 차근차근!'), h('span', null, '할 일과 수업을 한눈에 확인해요.')), logo),
+        h('div', { class: 'home-topline' }, h('div', { class: 'home-greeting' }, h('span', { class: 'home-greeting-kicker' }, 'CLASS HUB'), h('b', null, '오늘도 차근차근!'), h('span', null, '학교생활의 모든 순간을 한곳에.')), logo),
         todayBox)));
   }
   return { render };
@@ -76,6 +80,8 @@ const Home = (() => {
 App.registerView('home', { label: '홈', icon: 'home', render: Home.render });
 
 (async function start() {
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   await Store.init();
   await Cloud.init();
   Settings.apply();

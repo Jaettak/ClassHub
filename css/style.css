@@ -6,6 +6,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
+html { scrollbar-gutter: stable; }
 body {
   margin: 0; color: var(--navy); min-height: 100vh;
   font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
@@ -14,6 +15,7 @@ body {
   line-height: 1.5;
 }
 body.modal-open { overflow: hidden; }
+body.modal-open { padding-right: 0; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
 h1, h2, h3, h4, p { margin: 0; }
@@ -757,6 +759,41 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .tt-color-list { display: grid; gap: 8px; max-height: 55vh; overflow: auto; }
 .tt-subject-color-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: #f5f8ff; }
 .tt-subject-color-row strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* 추가 상호작용 */
+.side-date-nav { display: flex; align-items: center; gap: 4px; padding-right: 100px; }
+.side-date-nav h3 { flex: 1; padding-right: 0; margin: 0; text-align: center; min-width: 0; }
+.side-date-nav .btn { min-height: 30px; padding: 2px 6px; font-size: .76rem; }
+.home-event-open { display: flex; align-items: center; gap: 6px; min-width: 0; border: 0; background: transparent; text-align: left; cursor: pointer; padding: 2px; }
+.home-event-open:hover, .home-event-open:focus-visible { text-decoration: underline; }
+.home-day-notes { display: flex; flex-direction: column; gap: 4px; }
+.home-day-notes button { border: 0; border-radius: 8px; background: #fff4b8; text-align: left; padding: 4px 8px; cursor: pointer; }
+.tt-lunch-row th, .tt-lunch-row td { background: #fff5df; padding: 8px; text-align: center; }
+.tt-lunch-row small { display: block; font-size: .75rem; }
+.ml-dishes li.ml-marked { background: linear-gradient(transparent 35%, #fff27a 35%, #fff27a 90%, transparent 90%); }
+.ml-mark { border: 0; background: transparent; color: #adb5c7; cursor: pointer; font-size: 1.2rem; line-height: 1; }
+.ml-mark[aria-pressed="true"] { color: #f2a900; }
+.ml-more { margin-top: 10px; }
+.nt-card { position: relative; }
+.nt-card[draggable="true"] { cursor: grab; }
+.nt-card:active { cursor: grabbing; }
+.nt-card .badge { color: #111; }
+.nt-move { display: flex; gap: 5px; margin-top: auto; }
+.nt-move button { border: 1px solid #d5dbe8; border-radius: 8px; background: #fff9; min-width: 30px; min-height: 28px; cursor: pointer; }
+.nt-move button:disabled { opacity: .35; cursor: default; }
+.cal-day-notes { border: 2px solid var(--line); background: #fff; border-radius: 16px; padding: 10px; display: grid; gap: 6px; }
+.cal-day-notes .title-row { display: flex; justify-content: space-between; align-items: center; }
+.cal-note { display: flex; flex-direction: column; border: 0; border-left: 4px solid var(--c); background: color-mix(in srgb, var(--c) 45%, #fff); border-radius: 8px; padding: 7px; text-align: left; cursor: pointer; }
+.cal-note span { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timer-alarm { position: fixed; z-index: 500; right: 20px; bottom: 20px; display: flex; align-items: center; gap: 12px; background: #fff; border: 3px solid var(--blue); border-radius: 18px; box-shadow: var(--shadow); padding: 12px; }
+.cloud-import-hint { background: #fff4d3; border-radius: 10px; padding: 8px; font-size: .86rem; }
+@media (max-width: 600px) { .side-date-nav { padding-right: 80px; } .timer-alarm { left: 10px; right: 10px; justify-content: space-between; } }
+@media (max-width: 570px) {
+  .cal-head .cal-nav { grid-template-columns: 32px minmax(0, 1fr) 32px 48px; gap: 4px; width: 100%; }
+  .cal-head .cal-nav .seg { grid-column: 1 / -1; width: 100%; justify-content: center; }
+  .cal-head .cal-nav > .ym, .cal-head .cal-nav > .cal-label { min-width: 0; }
+  .cal-head .cal-nav > .ym select { max-width: 46%; }
+}
 .tt-auto-label { display: inline-flex; align-items: center; gap: 5px; font-size: .85rem; white-space: nowrap; cursor: pointer; }
 @media (max-width: 460px) { .tt-subject-color-row { gap: 6px; padding: 8px; } .tt-subject-color-row input[type="color"] { width: 40px; } }
 

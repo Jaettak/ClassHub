@@ -1,6 +1,6 @@
 // 시간표 관리: 내 시간표 + 친구 시간표, 기본 5일 x 6교시, 교시/요일 추가·삭제, 학교 시간표(NEIS) 불러오기
 const Timetable = (() => {
-  const DEFAULT = () => ({ days: ['월', '화', '수', '목', '금'], periods: 6, periodTimes: Array.from({ length: 6 }, () => ({ start: '', end: '' })), cells: Array.from({ length: 5 }, () => Array(6).fill(null)) });
+  const DEFAULT = () => ({ days: ['월', '화', '수', '목', '금'], periods: 6, periodTimes: Array.from({ length: 6 }, () => ({ start: '', end: '' })), lunch: null, cells: Array.from({ length: 5 }, () => Array(6).fill(null)) });
   let activeId = 'me';
 
   const friends = () => Store.get('ttFriends', []);
@@ -33,28 +33,62 @@ const Timetable = (() => {
 
   // 홈·달력에서 쓰는 특정 날짜의 내 수업 목록
   function lessonsFor(date) {
-    const t = loadMe();
-    const col = t.days.indexOf(WEEK[date.getDay()]);
-    if (col < 0) return [];
-    const out = [];
-    t.cells[col].forEach((c, i) => { if (c && c.subject) out.push({ period: i + 1, subject: c.subject, teacher: c.teacher || '', ...timesFor(t, i) }); });
-    return out;
+    return Store.get('events', []).filter((e) => e.schoolLesson && e.date === dateStr(date))
+      .sort((a, b) => a.start.localeCompare(b.start))
+      .map((e) => ({ ...e, period: e.period, subject: e.subject || e.title, displayTitle: e.title.replace(/\s*\(\d+교시\)$/, ''), teacher: e.teacher || '' }));
   }
 
-  // 실제 일정 목록에 복사하지 않고, 조회할 때 수업을 생성한다.
-  // 따라서 교시 시간/과목 변경은 즉시 달력에 반영되고 기존 개인 일정은 유지된다.
+  // 수업은 기간 적용 시 실제 일정으로 저장한다. 기존 조회용 가상 수업은 생성하지 않는다.
   function calendarLessons(date) {
-    const t = loadMe();
-    const col = t.days.indexOf(WEEK[date.getDay()]);
-    if (col < 0 || !Array.isArray(t.cells[col])) return [];
-    const ds = dateStr(date);
-    return t.cells[col].flatMap((c, i) => {
-      const times = validTimes(t, i);
-      if (!c || !c.subject || !times) return [];
-      return [{ id: `class-${col}-${i}`, date: ds, start: times.start, end: times.end,
-        title: `${c.subject} (${i + 1}교시)`, subject: c.subject, period: i + 1,
-        teacher: c.teacher || '', color: colorFor(c.subject), schoolLesson: true, done: false }];
+    return lessonsFor(date);
+  }
+
+  function applyPeriod(t, done) {
+    const start = h('input', { type: 'date', value: todayStr(), min: '2020-01-01', max: '2030-12-31' });
+    const end = h('input', { type: 'date', value: dateStr(new Date(new Date().getFullYear(), new Date().getMonth() + 4, new Date().getDate())), min: '2020-01-01', max: '2030-12-31' });
+    const name = h('input', { type: 'text', value: `${new Date().getFullYear()}년 시간표`, maxLength: 40 });
+    const m = App.modal({ title: '시간표 적용 기간', body: [
+      App.field('기간 이름', name), h('div', { class: 'row2' }, App.field('시작 날짜', start), App.field('끝 날짜', end)),
+      h('p', { class: 'hint' }, '이 기간의 수업을 실제 일정으로 추가해요. 이후 각 날짜의 수업을 자유롭게 수정하거나 삭제할 수 있고, 시간표를 바꿔도 이미 추가한 일정은 바뀌지 않아요. 시간을 설정하지 않은 교시는 추가하지 않아요.')],
+      footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
+        h('button', { class: 'btn primary', type: 'button', onclick: apply }, '기간 일정에 추가')],
     });
+    function apply() {
+      if (!start.value || !end.value || end.value < start.value) return App.toast('적용 기간을 확인해 주세요.');
+      if (Store.get('timetableTerms', []).some((saved) => saved.start <= end.value && saved.end >= start.value))
+        return App.toast('이미 적용한 기간과 겹쳐요. 해당 날짜의 수업은 일정 관리에서 수정해 주세요.');
+      const a = parseDate(start.value), b = parseDate(end.value);
+      const days = Math.round((b - a) / 86400000) + 1;
+      if (days > 370) return App.toast('한 번에 최대 370일까지 적용할 수 있어요.');
+      const term = { id: uid(), name: name.value.trim() || '시간표', start: start.value, end: end.value, timetable: JSON.parse(JSON.stringify(t)) };
+      const list = Store.get('events', []);
+      const oldLessonNotes = Store.get('lessonDayNotes', {});
+      const occupied = new Set(list.filter((e) => e.schoolLesson).map((e) => `${e.date}|${e.period}`));
+      let added = 0;
+      for (let i = 0; i < days; i++) {
+        const d = new Date(a.getFullYear(), a.getMonth(), a.getDate() + i), ds = dateStr(d);
+        const col = t.days.indexOf(WEEK[d.getDay()]);
+        if (col < 0 || !Array.isArray(t.cells[col])) continue;
+        t.cells[col].forEach((c, p) => {
+          const time = validTimes(t, p), slot = `${ds}|${p + 1}`;
+          if (!c?.subject || !time || occupied.has(slot)) return;
+          list.push({ id: uid(), date: ds, start: time.start, end: time.end, title: `${c.subject} (${p + 1}교시)`,
+            subject: c.subject, period: p + 1, teacher: c.teacher || '', color: colorFor(c.subject),
+            memo: oldLessonNotes[`${ds}|class-${col}-${p}`] || '',
+            schoolLesson: true, checkable: false, sourceTerm: term.id, done: false });
+          occupied.add(slot); added++;
+        });
+        if (t.lunch?.start && t.lunch?.end && !list.some((e) => e.date === ds && e.sourceBreak === 'lunch')) {
+          list.push({ id: uid(), date: ds, start: t.lunch.start, end: t.lunch.end,
+            title: '점심시간', memo: '', color: '#ffba4a', checkable: false, sourceTerm: term.id, sourceBreak: 'lunch', done: false });
+          added++;
+        }
+      }
+      if (!added) return App.toast('추가할 수업이 없어요. 교시별 시간을 확인해 주세요.');
+      Store.set('timetableTerms', [...Store.get('timetableTerms', []), term]);
+      Store.set('events', list);
+      m.close(); done(); App.toast(`${added}개 수업을 일정에 추가했어요.`);
+    }
   }
 
   function openPeriodTimes(t, save, done) {
@@ -66,7 +100,7 @@ const Timetable = (() => {
         h('strong', null, `${i + 1}교시`), start, h('span', null, '~'), end) };
     });
     const m = App.modal({ title: '교시별 수업 시간', wide: true,
-      body: [h('p', { class: 'hint' }, '각 교시의 시작·종료 시간을 입력하면 내 시간표의 수업이 일정 관리의 주간·하루·원 그래프에 자동 표시돼요. 비워둔 교시는 일정에 나타나지 않아요.'),
+      body: [h('p', { class: 'hint' }, '각 교시의 시작·종료 시간을 정한 뒤 “기간 일정에 추가” 버튼을 누르면 해당 기간의 수업이 일정에 저장돼요. 비워둔 교시는 추가되지 않아요.'),
         h('div', { class: 'tt-period-times' }, inputs.map((x) => x.row))],
       footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {
@@ -79,7 +113,7 @@ const Timetable = (() => {
             }
           }
           t.periodTimes = next;
-          save(); m.close(); done(); App.toast('교시별 시간을 저장했어요. 일정 관리에 자동 반영돼요.');
+          save(); m.close(); done(); App.toast('교시별 시간을 저장했어요. 기간을 지정해 일정에 추가해 주세요.');
         } }, '저장')],
     });
   }
@@ -125,6 +159,32 @@ const Timetable = (() => {
       done();
     }
     m.el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') submit(); });
+  }
+
+  function editLunch(t, save, done) {
+    const after = h('input', { type: 'number', min: 1, max: t.periods, value: t.lunch?.afterPeriod || Math.min(4, t.periods) });
+    const start = h('input', { type: 'time', value: t.lunch?.start || '' });
+    const end = h('input', { type: 'time', value: t.lunch?.end || '' });
+    const m = App.modal({ title: '점심시간 설정', body: [App.field('몇 교시 뒤', after), h('div', { class: 'row2' }, App.field('시작', start), App.field('끝', end))],
+      footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => { t.lunch = null; save(); m.close(); done(); } }, '점심시간 제거'),
+        h('button', { class: 'btn primary', type: 'button', onclick: () => {
+          if (!start.value || !end.value || start.value >= end.value || Number(after.value) < 1 || Number(after.value) > t.periods) return App.toast('점심시간을 확인해 주세요.');
+          t.lunch = { afterPeriod: Number(after.value), start: start.value, end: end.value }; save(); m.close(); done();
+        } }, '저장')],
+    });
+  }
+
+  function showTerm(term) {
+    const snap = term.timetable;
+    const rows = Array.from({ length: snap.periods }, (_, p) => h('tr', null,
+      h('th', null, `${p + 1}교시`, h('small', null, `${timesFor(snap, p).start}~${timesFor(snap, p).end}`)),
+      snap.days.map((_, d) => h('td', null, snap.cells[d]?.[p]?.subject || ''))));
+    App.modal({ title: term.name, wide: true, body: [
+      h('p', { class: 'hint' }, `${term.start} ~ ${term.end}에 추가한 시간표예요. 날짜별 수업 변경은 일정 관리에서 확인해 주세요.`),
+      h('div', { class: 'tt-scroll' }, h('table', { class: 'tt' },
+        h('thead', null, h('tr', null, h('th', null, '교시'), snap.days.map((d) => h('th', null, d)))),
+        h('tbody', null, rows)))],
+    });
   }
 
   // 과목명이 길면 글자를 줄이고, 너무 길면 앞부분만 보여준다
@@ -264,20 +324,27 @@ const Timetable = (() => {
             } else td.append(h('span', { class: 'plus' }, '+'));
             return td;
           })));
+        if (t.lunch?.afterPeriod === p + 1) rows.push(h('tr', { class: 'tt-lunch-row' },
+          h('th', { class: 'period' }, '점심시간', h('small', null, `${t.lunch.start}~${t.lunch.end}`)),
+          t.days.map(() => h('td', null, '식사 및 휴식'))));
       }
-      wrap.append(
+      wrap.append(...[
         tabs,
         h('div', { class: 'tt-tools' },
           h('button', { class: 'btn primary', type: 'button', onclick: addPeriod }, '＋ 교시'),
           h('button', { class: 'btn', type: 'button', onclick: addDay }, '＋ 요일'),
           h('button', { class: 'btn', type: 'button', onclick: () => openPeriodTimes(t, save, draw) }, '⏰ 교시별 시간 설정'),
+          h('button', { class: 'btn', type: 'button', onclick: () => editLunch(t, save, draw) }, '점심시간 설정'),
+          !friend ? h('button', { class: 'btn primary', type: 'button', onclick: () => applyPeriod(t, draw) }, '기간 일정에 추가') : null,
           h('button', { class: 'btn', type: 'button', onclick: openSubjectColors }, '🎨 과목별 색상'),
           h('button', { class: 'btn', type: 'button', onclick: () => importFromSchool(t, save, draw) }, '학교 시간표 불러오기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: reset }, '기본값으로'),
           friend ? h('button', { class: 'btn ghost', type: 'button', onclick: renameFriend }, '이름 바꾸기') : null,
           friend ? h('button', { class: 'btn danger', type: 'button', onclick: removeFriend }, '이 친구 삭제') : null),
         friend ? h('p', { class: 'hint' }, `${friend.name}의 시간표예요. 친구 시간표는 홈·달력의 수업 표시에는 쓰이지 않아요.`) : null,
-        h('div', { class: 'tt-scroll' }, h('table', { class: 'tt' }, h('thead', null, head), h('tbody', null, rows))));
+        h('div', { class: 'tt-scroll' }, h('table', { class: 'tt' }, h('thead', null, head), h('tbody', null, rows))),
+        !friend && Store.get('timetableTerms', []).length ? h('div', { class: 'tt-term-list' },
+          h('b', null, '적용한 기간'), Store.get('timetableTerms', []).map((term) => h('button', { class: 'btn ghost', type: 'button', onclick: () => showTerm(term) }, `${term.name} · ${term.start} ~ ${term.end}`))) : null].filter(Boolean));
 
       function addPeriod() {
         if (t.periods >= 14) return App.toast('교시는 최대 14개까지예요.');
@@ -314,7 +381,7 @@ const Timetable = (() => {
       function reset() {
         if (!confirm('이 시간표를 모두 지우고 기본값으로 되돌릴까요?')) return;
         const d = DEFAULT();
-        t.days = d.days; t.periods = d.periods; t.cells = d.cells; t.periodTimes = d.periodTimes;
+        t.days = d.days; t.periods = d.periods; t.cells = d.cells; t.periodTimes = d.periodTimes; t.lunch = null;
         save(); draw();
       }
       function renameFriend() {

@@ -86,6 +86,7 @@ const App = (() => {
         back.remove();
         if (!modalStack.length) document.body.classList.remove('modal-open');
         if (opts.onClose) opts.onClose();
+        if (!modalStack.length) document.dispatchEvent(new Event('classhub:modal-closed'));
       },
     };
     modalStack.push(api);
@@ -207,4 +208,22 @@ const App = (() => {
   const openSettings = () => Settings.open();
   const api = { views, registerView, toast, modal, field, subjectField, route, refresh, download, exportData, importData, openSettings, get current() { return current; } };
   return api;
+})();
+
+// 사용자가 직접 누른 주요 동작에만 짧고 작은 효과음을 낸다.
+(() => {
+  let audio;
+  document.addEventListener('click', (event) => {
+    const target = event.target.closest('a[href^="#"], .btn.primary, .bm, .ck');
+    const settings = Store.get('settings', {}) || {};
+    if (!target || settings.uiSound === false || Number(settings.soundVolume ?? 70) <= 0) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audio.createOscillator(), gain = audio.createGain(), t = audio.currentTime;
+      osc.type = 'sine'; osc.frequency.setValueAtTime(540, t); osc.frequency.exponentialRampToValueAtTime(680, t + 0.06);
+      gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(Math.min(0.025, 0.018 * Number(settings.soundVolume ?? 70) / 70), t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      osc.connect(gain); gain.connect(audio.destination); osc.start(t); osc.stop(t + 0.1);
+    } catch (_) { /* 소리를 낼 수 없는 브라우저에서는 조용히 동작 */ }
+  });
 })();

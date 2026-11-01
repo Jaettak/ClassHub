@@ -1,6 +1,6 @@
 // 설정: 학교 정보, NEIS 키, 알레르기, 화면, 백업, 초기화
 const Settings = (() => {
-  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, soundVolume: 70 };
+  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, uiSound: true, soundVolume: 70 };
   const SCALE = { small: '15px', normal: '16px', large: '18px' };
 
   const get = () => ({ ...DEFAULTS, ...(Store.get('settings', {}) || {}) });
@@ -53,6 +53,7 @@ const Settings = (() => {
     drawScale();
     const motion = h('input', { type: 'checkbox', checked: !!draft.reduceMotion });
     const sound = h('input', { type: 'checkbox', checked: draft.timerSound !== false });
+    const uiSound = h('input', { type: 'checkbox', checked: draft.uiSound !== false });
     const volume = h('input', { type: 'range', min: 0, max: 100, step: 5, value: draft.soundVolume ?? 70, 'aria-label': '소리 크기' });
     const volumeLabel = h('output', null, `${volume.value}%`);
     volume.addEventListener('input', () => { volumeLabel.textContent = `${volume.value}%`; });
@@ -61,7 +62,10 @@ const Settings = (() => {
       h('label', { class: 'check' }, motion, '애니메이션 효과 줄이기'));
     const soundBox = section('소리 설정',
       h('label', { class: 'check' }, sound, '타이머 끝날 때 소리 내기'),
+      h('label', { class: 'check' }, uiSound, '버튼 효과음'),
       h('div', { class: 'set-row' }, h('span', null, '소리 크기'), h('div', { class: 'volume-control' }, volume, volumeLabel)));
+    const installBox = section('앱처럼 사용', h('p', { class: 'hint' },
+      '휴대폰 브라우저에서 ClassHub를 열고 “홈 화면에 추가”를 선택하면 앱 아이콘으로 실행할 수 있어요. iPhone은 Safari 공유 메뉴, Android는 브라우저 메뉴에서 찾을 수 있어요.'));
 
     // 백업
     const backupBox = section('백업',
@@ -80,12 +84,13 @@ const Settings = (() => {
 
     const m = App.modal({
       title: '설정', wide: true,
-      body: h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, backupBox, resetBox),
+      body: h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, installBox, backupBox, resetBox),
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '닫기'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {
           save({ school: draft.school, grade: grade.value.trim(), cls: cls.value.trim(), allergies: draft.allergies.slice().sort((a, b) => a - b),
-            fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, soundVolume: Number(volume.value) });
+            fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value) });
+          if (!sound.checked) Timer.stopAlarm();
           m.close(); App.toast('설정을 저장했어요.'); App.route();
         } }, '저장'),
       ],

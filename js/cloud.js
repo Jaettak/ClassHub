@@ -1,16 +1,16 @@
 // Firebase 인증 및 레코드 단위 Firestore 동기화. PDF 캡처와 이미지는 로컬 전용.
 const Cloud = (() => {
-  const ARRAY_KEYS = new Set(['events', 'activities', 'grades', 'notes', 'ttFriends', 'timerLog']);
+  const ARRAY_KEYS = new Set(['events', 'activities', 'grades', 'notes', 'ttFriends', 'timerLog', 'timetableTerms', 'mealFavorites']);
   const MAP_KEYS = new Set(['lessonDayNotes', 'subjectColors']);
   const LOCAL_KEYS = new Set(['captures']);
-  const keys = ['timetable', 'ttFriends', 'subjectColors', 'events', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'notes', 'settings', 'mealSchool', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
-  let auth, firestore, user = null, unsubscribe = null, ready = false, configured = false, syncing = false, remote = {}, queue = [], loaded = false;
+  const keys = ['timetable', 'timetableTerms', 'ttFriends', 'subjectColors', 'events', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'notes', 'settings', 'mealSchool', 'mealFavorites', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
+  let auth, firestore, user = null, unsubscribe = null, ready = false, configured = false, syncing = false, remote = {}, queue = [], loaded = false, guest = false;
   let refreshTimer = null;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const opKey = (key, id) => key + '|' + id;
   const docId = (key, id) => key + '__' + encodeURIComponent(String(id));
   const outboxKey = () => 'classhub:outbox:' + user.uid;
-  const arrayId = (key, item, index) => key === 'timerLog' ? String(item.at || index) : String(item.id || index);
+  const arrayId = (key, item, index) => key === 'mealFavorites' ? String(item) : key === 'timerLog' ? String(item.at || index) : String(item.id || index);
   function entries(key, value) {
     if (ARRAY_KEYS.has(key)) return new Map((value || []).map((v, i) => [arrayId(key, v, i), { value: v, order: i }]));
     if (MAP_KEYS.has(key)) return new Map(Object.entries(value || {}).map(([id, v]) => [id, { value: v }]));
@@ -26,7 +26,10 @@ const Cloud = (() => {
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => {
-      if (ready && !document.body.classList.contains('modal-open')) { Settings.apply(); App.refresh(); }
+      if (!ready) return;
+      if (document.body.classList.contains('modal-open')) {
+        document.addEventListener('classhub:modal-closed', scheduleRefresh, { once: true });
+      } else { Settings.apply(); App.refresh(); }
     }, 120);
   }
   function saveQueue() {
@@ -45,15 +48,18 @@ const Cloud = (() => {
   async function flush() {
     if (syncing || !user || !loaded || !navigator.onLine) return;
     syncing = true;
-    while (queue.length && user) {
-      const op = queue[0], uid = user.uid;
+    while (queue.length && user && navigator.onLine) {
+      const uid = user.uid, ops = queue.slice(0, 400);
       try {
-        await firestore.collection('users').doc(uid).collection('records').doc(docId(op.key, op.id)).set({
+        const batch = firestore.batch(), records = firestore.collection('users').doc(uid).collection('records');
+        for (const op of ops) batch.set(records.doc(docId(op.key, op.id)), {
           key: op.key, id: op.id, value: op.deleted ? null : op.value, order: op.order ?? 0,
           deleted: !!op.deleted, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
+        await batch.commit();
         if (!user || user.uid !== uid) break;
-        if (queue[0]?.token === op.token) queue.shift();
+        const sent = new Set(ops.map((op) => op.token));
+        queue = queue.filter((op) => !sent.has(op.token));
         saveQueue();
       } catch (e) { App.toast('클라우드 저장 대기 중: ' + (e.code || e.message)); break; }
     }
@@ -110,6 +116,7 @@ const Cloud = (() => {
       h('img', { src: 'assets/logo.svg', alt: '' }), h('h1', null, 'ClassHub'),
       h('p', null, '내 기록을 모든 기기에서 이어서 사용해요.'),
       h('button', { class: 'btn primary', type: 'button', onclick: () => run(() => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())) }, 'Google로 로그인'),
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => { guest = true; sessionStorage.setItem('classhub:guest', '1'); Timer.init(); App.route(); } }, '로그인 없이 이 브라우저에서 사용'),
       status));
   }
   async function signedIn(next) {
@@ -120,7 +127,8 @@ const Cloud = (() => {
       Store.leaveAccount(); queue = []; remote = {}; ready = false; loaded = false;
     }
     user = next;
-    if (!next) { showGate(); return; }
+    if (!next) { if (guest) { ready = true; App.route(); } else showGate(); return; }
+    guest = false; sessionStorage.removeItem('classhub:guest');
     showGate('기록을 불러오는 중…');
     await Store.useAccount(next.uid);
     try { queue = JSON.parse(localStorage.getItem(outboxKey()) || '[]'); } catch (_) { queue = []; }
@@ -141,6 +149,7 @@ const Cloud = (() => {
       });
     } catch (_) { showGate('Firebase SDK를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'); return; }
     firebase.initializeApp(c); auth = firebase.auth(); firestore = firebase.firestore();
+    guest = sessionStorage.getItem('classhub:guest') === '1';
     auth.onAuthStateChanged((next) => signedIn(next).catch((e) => showGate(e.message)));
     window.addEventListener('online', flush);
   }
@@ -166,14 +175,22 @@ const Cloud = (() => {
     App.toast('기존 기록을 계정에 복사했어요.'); App.refresh();
   }
   function accountSection() {
-    if (!configured || !user) return null;
+    if (!configured) return null;
+    if (!user) return h('section', { class: 'set-sec' }, h('h4', null, '계정과 동기화'),
+      h('p', { class: 'muted' }, '이 브라우저에만 저장 중이에요.'),
+      h('button', { class: 'btn primary', type: 'button', onclick: () => auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()) }, 'Google로 로그인해 동기화'));
+    const old = Store.legacyData();
+    const needsImport = !localStorage.getItem('classhub:migrated:' + user.uid) &&
+      ['timetable', 'events', 'notes', 'activities', 'grades'].some((key) => old[key] && (!Array.isArray(old[key]) || old[key].length));
     return h('section', { class: 'set-sec' }, h('h4', null, '계정과 동기화'),
       h('p', null, user.email || 'Google 계정'),
       h('p', { class: 'muted' }, loaded ? queue.length ? '저장 대기 ' + queue.length + '건' : '클라우드 연결됨' : '오프라인 또는 연결 중'),
+      needsImport ? h('p', { class: 'cloud-import-hint' }, '이 브라우저에 이전 시간표·일정·메모가 있어요. 다른 기기에도 보이게 하려면 아래에서 가져와 주세요.') : null,
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => { flush(); App.toast(queue.length ? `저장 대기 ${queue.length}건` : loaded ? '클라우드 동기화 중이에요.' : '연결을 확인 중이에요.'); } }, '동기화 상태 확인'),
       h('p', { class: 'muted' }, 'PDF 오답 이미지는 이 기기에만 저장됩니다.'),
       h('div', { class: 'set-row set-btns' },
         h('button', { class: 'btn', type: 'button', onclick: migrate }, '이 브라우저의 기존 기록 가져오기'),
         h('button', { class: 'btn', type: 'button', onclick: () => auth.signOut() }, '로그아웃')));
   }
-  return { init, showGate, accountSection, get configured() { return configured; }, get ready() { return !configured || ready; }, get user() { return user; } };
+  return { init, showGate, accountSection, get configured() { return configured; }, get ready() { return !configured || ready || guest; }, get user() { return user; } };
 })();

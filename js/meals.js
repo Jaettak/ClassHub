@@ -7,23 +7,34 @@ const Meals = (() => {
   const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
   const getSchool = () => Store.get('mealSchool', null) || Settings.get().school;
 
-  function dishLi(d, mine) {
+  function dishLi(d, mine, id) {
     const hit = d.allergens.filter((n) => mine.has(n));
-    return h('li', { class: hit.length ? 'al-hit' : '', title: hit.length ? `내 알레르기: ${hit.map((n) => Neis.ALLERGY[n]).join(', ')}` : '' },
+    const favorites = new Set(Store.get('mealFavorites', []));
+    const marked = favorites.has(id);
+    return h('li', { class: (hit.length ? 'al-hit ' : '') + (marked ? 'ml-marked' : ''), title: hit.length ? `내 알레르기: ${hit.map((n) => Neis.ALLERGY[n]).join(', ')}` : '' },
       h('span', { class: 'dn' }, d.name),
-      d.allergens.length ? h('span', { class: 'al-nums' }, d.allergens.map((n) => h('i', { class: mine.has(n) ? 'mine' : '', title: Neis.ALLERGY[n] || '' }, n))) : null);
+      d.allergens.length ? h('span', { class: 'al-nums' }, d.allergens.map((n) => h('i', { class: mine.has(n) ? 'mine' : '', title: Neis.ALLERGY[n] || '' }, n))) : null,
+      h('button', { type: 'button', class: 'ml-mark', 'aria-label': `${d.name} 맛있는 급식 표시`, 'aria-pressed': String(marked), onclick: (e) => {
+        const next = new Set(Store.get('mealFavorites', []));
+        if (next.has(id)) next.delete(id); else next.add(id);
+        Store.set('mealFavorites', [...next]);
+        e.currentTarget.parentElement.classList.toggle('ml-marked', next.has(id));
+        e.currentTarget.setAttribute('aria-pressed', String(next.has(id)));
+      } }, '★'));
   }
 
-  function mealCard(m, mine) {
+  function mealCard(m, mine, school, ds) {
     const hits = new Set();
     m.dishes.forEach((d) => d.allergens.forEach((n) => { if (mine.has(n)) hits.add(n); }));
     return h('section', { class: 'ml-card' },
       h('h3', null, m.kind, m.cal ? h('small', null, ` ${m.cal}`) : null),
       hits.size ? h('p', { class: 'al-warn' }, `내 알레르기 주의: ${[...hits].map((n) => Neis.ALLERGY[n]).join(', ')}`) : null,
-      h('ul', { class: 'ml-dishes' }, m.dishes.map((d) => dishLi(d, mine))),
-      m.ntr.length || m.origin.length ? h('details', { class: 'ml-more' }, h('summary', null, '영양·원산지 보기'),
-        m.ntr.length ? h('div', null, h('b', null, '영양 정보'), h('ul', null, m.ntr.map((x) => h('li', null, x)))) : null,
-        m.origin.length ? h('div', null, h('b', null, '원산지'), h('ul', null, m.origin.map((x) => h('li', null, x)))) : null) : null);
+      h('ul', { class: 'ml-dishes' }, m.dishes.map((d, i) => dishLi(d, mine, `${school.code}|${ds}|${m.code}|${i}`))),
+      m.ntr.length || m.origin.length ? h('button', { class: 'btn ghost ml-more', type: 'button', onclick: () => App.modal({
+        title: `${ds} ${m.kind} 영양·원산지`,
+        body: [m.ntr.length ? h('div', null, h('b', null, '영양 정보'), h('ul', null, m.ntr.map((x) => h('li', null, x)))) : null,
+          m.origin.length ? h('div', null, h('b', null, '원산지'), h('ul', null, m.origin.map((x) => h('li', null, x)))) : null],
+      }) }, '영양·원산지 보기') : null);
   }
 
   function render(root) {
@@ -93,7 +104,7 @@ const Meals = (() => {
       detail.replaceChildren(
         h('h2', { class: 'ml-date' }, `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`),
         list && list.length
-          ? h('div', { class: 'ml-cards' }, list.map((m) => mealCard(m, mine)))
+          ? h('div', { class: 'ml-cards' }, list.map((m) => mealCard(m, mine, school, dateStr(sel))))
           : h('div', { class: 'empty-box' }, '이 날은 급식 정보가 없어요. 주말·방학·휴업일이거나 아직 등록되지 않았을 수 있어요.'));
     }
 
