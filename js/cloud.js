@@ -53,7 +53,7 @@ const Cloud = (() => {
       try {
         const batch = firestore.batch(), records = firestore.collection('users').doc(uid).collection('records');
         for (const op of ops) batch.set(records.doc(docId(op.key, op.id)), {
-          key: op.key, id: op.id, value: op.deleted ? null : op.value, order: op.order ?? 0,
+          key: op.key, id: op.id, valueJson: op.deleted ? null : JSON.stringify(op.value), order: op.order ?? 0,
           deleted: !!op.deleted, updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         await batch.commit();
@@ -70,6 +70,9 @@ const Cloud = (() => {
     snapshot.forEach((doc) => {
       const d = doc.data();
       if (!keys.includes(d.key) || d.deleted) return;
+      if (typeof d.valueJson === 'string') {
+        try { d.value = JSON.parse(d.valueJson); } catch (_) { return; }
+      }
       (byKey[d.key] ||= []).push(d);
     });
     const result = {};
