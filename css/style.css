@@ -819,6 +819,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .ml-mark[aria-pressed="true"] { background: #ffe38b; color: #9c6100; }
 .ml-nav { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
 .ml-nav .cal-label { min-width: 185px; text-align: center; }
+.ml-nav .btn { flex: none; min-width: 44px; }
 .tt-lunch-row th, .tt-lunch-row td { background: #fff6df; border: 1px solid #e5d8b6; color: #765410; }
 .tt-lunch-row td { font-weight: 700; }
 .tt-tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); align-items: stretch; }
