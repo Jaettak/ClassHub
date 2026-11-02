@@ -48,7 +48,7 @@ const Timer = (() => {
     if (settings.timerSound === false || Number(settings.soundVolume ?? 70) <= 0) return;
     alarmBar = h('div', { class: 'timer-alarm', role: 'alert' },
       h('b', null, `${title || '타이머'} 시간이 끝났어요`),
-      h('button', { class: 'btn primary', type: 'button', onclick: stopAlarm }, '소리 끄기'));
+      h('button', { class: 'btn primary', type: 'button', onclick: stopAlarm }, '타이머 끄기'));
     document.body.append(alarmBar);
     beep();
     alarmTimer = setInterval(beep, 1800);
@@ -143,7 +143,7 @@ const Timer = (() => {
     o = o || {};
     const title = h('input', { type: 'text', value: o.title || '', placeholder: '예: 수학 숙제', maxLength: 40 });
     const mins = h('input', { type: 'number', min: 1, max: 600, value: o.minutes || 25 });
-    let mode = 'down';
+    let mode = o.mode === 'up' ? 'up' : 'down';
     const seg = h('div', { class: 'seg' });
     const minsField = App.field('시간 (분)', mins);
     const draw = () => {
@@ -174,6 +174,7 @@ const Timer = (() => {
 
   // 일정에 쓴 공부 시간(분)
   const spent = (evId, date) => Math.round(log().filter((x) => x.evId === evId && x.date === date).reduce((a, x) => a + x.sec, 0) / 60);
+  const totalForDate = (date) => Math.round(log().filter((x) => x.date === date).reduce((a, x) => a + x.sec, 0) / 60);
 
   function init() {
     st = Store.get('timer', null);
@@ -188,16 +189,15 @@ const Timer = (() => {
     document.title = baseTitle;
   }
 
-  return { open, start, spent, init, suspend, stopAlarm, active: () => !!st };
+  return { open, start, spent, totalForDate, init, suspend, stopAlarm, active: () => !!st };
 })();
 
 App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
   const panel = h('section', { class: 'panel timer-page' },
     h('h1', { class: 'page-title' }, '타이머'),
-    h('div', { class: 'timer-page-card' }, icon('timer'),
-      h('h2', null, '학습 타이머'),
-      h('p', { class: 'muted' }, '타이머와 스톱워치로 공부 시간을 기록해요.'),
-      h('button', { class: 'btn primary', type: 'button', onclick: () => Timer.open({}) }, Timer.active() ? '새 타이머 시작' : '타이머 시작')),
+    h('div', { class: 'timer-mode-grid' },
+      h('button', { class: 'timer-page-card', type: 'button', onclick: () => Timer.open({ mode: 'down' }) }, icon('timer'), h('h2', null, '타이머'), h('span', null, '정해 둔 시간만큼 집중하기')),
+      h('button', { class: 'timer-page-card', type: 'button', onclick: () => Timer.open({ mode: 'up' }) }, icon('timer'), h('h2', null, '스톱워치'), h('span', null, '공부한 시간 재기'))),
     h('h3', null, '최근 기록'),
     h('div', { class: 'timer-history' }));
   const list = panel.querySelector('.timer-history');

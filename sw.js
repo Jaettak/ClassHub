@@ -1,4 +1,4 @@
-const CACHE = 'classhub-static-2026-11-02d';
+const CACHE = 'classhub-static-2026-11-03a';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './assets/logo.svg', './assets/logo.png', './lib/pdf.min.js', './lib/pdf.worker.min.js',

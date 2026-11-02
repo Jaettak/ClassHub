@@ -146,6 +146,17 @@ const App = (() => {
       h('span', { class: 'tab-ico' }, icon(views[n].icon)), h('span', { class: 'tab-txt' }, views[n].label))));
   }
 
+  const HELP = {
+    wrong: 'PDF에서 오답을 캡처하고 과목별로 정리할 수 있어요. PDF와 이미지는 이 브라우저에 저장돼요.',
+    timetable: '교시와 과목을 정한 뒤 적용 기간을 선택해 일정에 추가하세요. 추가한 수업은 일정에서 날짜별로 수정할 수 있어요.',
+    calendar: '월·주·일 화면을 오가며 일정을 확인하세요. 날짜를 연결한 메모도 하루 화면에서 볼 수 있어요.',
+    activities: '학교 활동과 기록할 내용을 모아 관리할 수 있어요.',
+    grades: '과목별 시험 점수를 기록하고 성적 변화를 확인할 수 있어요.',
+    meals: '학교를 선택해 급식을 확인하세요. 별을 누른 메뉴는 같은 음식이 다시 나올 때 표시돼요.',
+    notes: '메모를 누르면 내용을 볼 수 있어요. 드래그해 순서를 바꾸고 완료한 메모는 별도 목록에서 확인하세요.',
+    timer: '타이머나 스톱워치를 선택해 공부 시간을 기록하세요. 기록은 해당 날짜의 일정 화면에서도 확인할 수 있어요.',
+  };
+
   function route() {
     if (Cloud.configured && !Cloud.ready) { Cloud.showGate(); return; }
     const name = (location.hash || '#home').slice(1);
@@ -167,6 +178,7 @@ const App = (() => {
           navTabs(key)),
         page);
       view.render(page);
+      page.prepend(h('div', { class: 'view-help-row' }, h('button', { class: 'view-help', type: 'button', 'aria-label': `${view.label} 도움말`, onclick: () => modal({ title: `${view.label} 도움말`, body: h('p', { class: 'help-copy' }, HELP[key] || '') }) }, '?')));
     }
     window.scrollTo(0, 0);
   }
@@ -212,20 +224,24 @@ const App = (() => {
   return api;
 })();
 
-// 사용자가 직접 누른 주요 동작에만 짧고 작은 효과음을 낸다.
+// 주요 선택 동작마다 같은 계열의 짧은 효과음을 낸다.
 (() => {
   let audio;
   document.addEventListener('click', (event) => {
-    const target = event.target.closest('a[href^="#"], .btn.primary, .bm, .ck');
+    const target = event.target.closest('a[href^="#"], .btn.primary, .bm, .ck, .nt-check, .nt-card, .ml-mark, .fchip, .timer-page-card');
     const settings = Store.get('settings', {}) || {};
     if (!target || settings.uiSound === false || Number(settings.soundVolume ?? 70) <= 0) return;
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
       const osc = audio.createOscillator(), gain = audio.createGain(), t = audio.currentTime;
-      osc.type = 'sine'; osc.frequency.setValueAtTime(540, t); osc.frequency.exponentialRampToValueAtTime(680, t + 0.06);
-      gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(Math.min(0.025, 0.018 * Number(settings.soundVolume ?? 70) / 70), t + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
-      osc.connect(gain); gain.connect(audio.destination); osc.start(t); osc.stop(t + 0.1);
+      const select = target.matches('.ck, .nt-check, .ml-mark');
+      const navigate = target.matches('a[href^="#"], .bm, .home-card');
+      const from = select ? 610 : navigate ? 480 : 540;
+      osc.type = 'sine'; osc.frequency.setValueAtTime(from, t); osc.frequency.exponentialRampToValueAtTime(from * (select ? 1.18 : 1.12), t + 0.07);
+      gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(Math.min(0.045, 0.034 * Number(settings.soundVolume ?? 70) / 70), t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.105);
+      osc.connect(gain); gain.connect(audio.destination); osc.start(t); osc.stop(t + 0.11);
     } catch (_) { /* 소리를 낼 수 없는 브라우저에서는 조용히 동작 */ }
   });
 })();

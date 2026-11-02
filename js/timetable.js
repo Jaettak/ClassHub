@@ -254,6 +254,21 @@ const Timetable = (() => {
   function render(root) {
     const wrap = h('div', { class: 'tt-wrap' });
 
+    function askName(title, initial, onSave) {
+      const input = h('input', { type: 'text', value: initial, maxLength: 12, placeholder: '이름' });
+      const m = App.modal({ title, body: App.field('이름', input), footer: [
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
+        h('button', { class: 'btn primary', type: 'button', onclick: submit }, '저장'),
+      ] });
+      function submit() {
+        const name = input.value.trim();
+        if (!name) return App.toast('이름을 입력해 주세요.');
+        m.close(); onSave(name.slice(0, 12));
+      }
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+      setTimeout(() => input.focus(), 50);
+    }
+
     function openSubjectColors() {
       const names = new Set();
       for (const col of loadMe().cells) for (const c of col) if (c && c.subject) names.add(c.subject.trim());
@@ -333,10 +348,10 @@ const Timetable = (() => {
         h('div', { class: 'tt-tools' },
           h('button', { class: 'btn primary', type: 'button', onclick: addPeriod }, '＋ 교시'),
           h('button', { class: 'btn', type: 'button', onclick: addDay }, '＋ 요일'),
-          h('button', { class: 'btn', type: 'button', onclick: () => openPeriodTimes(t, save, draw) }, '⏰ 교시별 시간 설정'),
+          h('button', { class: 'btn', type: 'button', onclick: () => openPeriodTimes(t, save, draw) }, '교시별 시간 설정'),
           h('button', { class: 'btn', type: 'button', onclick: () => editLunch(t, save, draw) }, '점심시간 설정'),
           !friend ? h('button', { class: 'btn primary', type: 'button', onclick: () => applyPeriod(t, draw) }, '기간 일정에 추가') : null,
-          h('button', { class: 'btn', type: 'button', onclick: openSubjectColors }, '🎨 과목별 색상'),
+          h('button', { class: 'btn', type: 'button', onclick: openSubjectColors }, '과목별 색상'),
           h('button', { class: 'btn', type: 'button', onclick: () => importFromSchool(t, save, draw) }, '학교 시간표 불러오기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: reset }, '기본값으로'),
           friend ? h('button', { class: 'btn ghost', type: 'button', onclick: renameFriend }, '이름 바꾸기') : null,
@@ -355,13 +370,13 @@ const Timetable = (() => {
         save(); draw();
       }
       function addDay() {
-        const name = (prompt('추가할 요일 이름을 입력하세요 (예: 토)', t.days.includes('토') ? '일' : '토') || '').trim();
-        if (!name) return;
-        if (t.days.includes(name)) return App.toast('이미 있는 요일이에요.');
         if (t.days.length >= 7) return App.toast('요일은 최대 7개까지예요.');
-        t.days.push(name);
-        t.cells.push(Array(t.periods).fill(null));
-        save(); draw();
+        askName('요일 추가', t.days.includes('토') ? '일' : '토', (name) => {
+          if (t.days.includes(name)) return App.toast('이미 있는 요일이에요.');
+          t.days.push(name);
+          t.cells.push(Array(t.periods).fill(null));
+          save(); draw();
+        });
       }
       function removeDay(d) {
         if (t.days.length <= 1) return App.toast('요일은 최소 1개가 필요해요.');
@@ -385,10 +400,7 @@ const Timetable = (() => {
         save(); draw();
       }
       function renameFriend() {
-        const name = (prompt('친구 이름', friend.name) || '').trim();
-        if (!name) return;
-        friend.name = name.slice(0, 12);
-        save(); draw();
+        askName('친구 이름 바꾸기', friend.name, (name) => { friend.name = name; save(); draw(); });
       }
       function removeFriend() {
         if (!confirm(`${friend.name}의 시간표를 삭제할까요?`)) return;
@@ -398,15 +410,15 @@ const Timetable = (() => {
     }
 
     function addFriend() {
-      const name = (prompt('친구 이름을 입력하세요') || '').trim();
-      if (!name) return;
-      const arr = friends();
-      if (arr.length >= 12) return App.toast('친구 시간표는 최대 12개까지예요.');
-      const f = { id: uid(), name: name.slice(0, 12), ...DEFAULT() };
-      arr.push(f);
-      Store.set('ttFriends', arr);
-      activeId = f.id;
-      draw();
+      if (friends().length >= 12) return App.toast('친구 시간표는 최대 12개까지예요.');
+      askName('친구 시간표 추가', '', (name) => {
+        const arr = friends();
+        const f = { id: uid(), name, ...DEFAULT() };
+        arr.push(f);
+        Store.set('ttFriends', arr);
+        activeId = f.id;
+        draw();
+      });
     }
 
     draw();

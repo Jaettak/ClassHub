@@ -7,16 +7,16 @@ const Meals = (() => {
   const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
   const getSchool = () => Store.get('mealSchool', null) || Settings.get().school;
 
-  function dishLi(d, mine, id) {
+  function dishLi(d, mine, id, legacyId) {
     const hit = d.allergens.filter((n) => mine.has(n));
     const favorites = new Set(Store.get('mealFavorites', []));
-    const marked = favorites.has(id);
+    const marked = favorites.has(id) || favorites.has(legacyId);
     return h('li', { class: (hit.length ? 'al-hit ' : '') + (marked ? 'ml-marked' : ''), title: hit.length ? `내 알레르기: ${hit.map((n) => Neis.ALLERGY[n]).join(', ')}` : '' },
       h('span', { class: 'dn' }, d.name),
       d.allergens.length ? h('span', { class: 'al-nums' }, d.allergens.map((n) => h('i', { class: mine.has(n) ? 'mine' : '', title: Neis.ALLERGY[n] || '' }, n))) : null,
       h('button', { type: 'button', class: 'ml-mark', 'aria-label': `${d.name} 맛있는 급식 표시`, 'aria-pressed': String(marked), onclick: (e) => {
         const next = new Set(Store.get('mealFavorites', []));
-        if (next.has(id)) next.delete(id); else next.add(id);
+        if (next.has(id) || next.has(legacyId)) { next.delete(id); next.delete(legacyId); } else next.add(id);
         Store.set('mealFavorites', [...next]);
         e.currentTarget.parentElement.classList.toggle('ml-marked', next.has(id));
         e.currentTarget.setAttribute('aria-pressed', String(next.has(id)));
@@ -29,7 +29,8 @@ const Meals = (() => {
     return h('section', { class: 'ml-card' },
       h('h3', null, m.kind, m.cal ? h('small', null, ` ${m.cal}`) : null),
       hits.size ? h('p', { class: 'al-warn' }, `내 알레르기 주의: ${[...hits].map((n) => Neis.ALLERGY[n]).join(', ')}`) : null,
-      h('ul', { class: 'ml-dishes' }, m.dishes.map((d, i) => dishLi(d, mine, `${school.code}|${ds}|${m.code}|${i}`))),
+      h('ul', { class: 'ml-dishes' }, m.dishes.map((d, i) => dishLi(d, mine,
+        `${school.code}|${d.name.replace(/\s+/g, '').toLowerCase()}`, `${school.code}|${ds}|${m.code}|${i}`))),
       m.ntr.length || m.origin.length ? h('button', { class: 'btn ghost ml-more', type: 'button', onclick: () => App.modal({
         title: `${ds} ${m.kind} 영양·원산지`,
         body: [m.ntr.length ? h('div', null, h('b', null, '영양 정보'), h('ul', null, m.ntr.map((x) => h('li', null, x)))) : null,

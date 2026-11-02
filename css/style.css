@@ -778,6 +778,17 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .nt-card[draggable="true"] { cursor: grab; }
 .nt-card:active { cursor: grabbing; }
 .nt-card .badge { color: #111; }
+.nt-top { justify-content: flex-start; }
+.nt-top h4 { flex: 1; }
+.nt-check { flex: none; width: 21px; height: 21px; border: 2px solid #455477; border-radius: 6px; background: #fff9; cursor: pointer; }
+.nt-check:hover, .nt-check:focus-visible { background: #fff; box-shadow: 0 0 0 3px #2f6bff33; }
+.nt-detail { display: grid; gap: 12px; }
+.nt-detail p { white-space: pre-wrap; line-height: 1.6; overflow-wrap: anywhere; }
+.nt-detail small { color: var(--muted); }
+.nt-completed { display: grid; gap: 8px; }
+.nt-completed .btn { text-align: left; }
+.nt-dates { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cal-note.done, .home-day-notes button.done { opacity: .65; text-decoration: line-through; }
 .nt-move { display: flex; gap: 5px; margin-top: auto; }
 .nt-move button { border: 1px solid #d5dbe8; border-radius: 8px; background: #fff9; min-width: 30px; min-height: 28px; cursor: pointer; }
 .nt-move button:disabled { opacity: .35; cursor: default; }
@@ -786,6 +797,41 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .cal-note { display: flex; flex-direction: column; border: 0; border-left: 4px solid var(--c); background: color-mix(in srgb, var(--c) 45%, #fff); border-radius: 8px; padding: 7px; text-align: left; cursor: pointer; }
 .cal-note span { font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .timer-alarm { position: fixed; z-index: 500; right: 20px; bottom: 20px; display: flex; align-items: center; gap: 12px; background: #fff; border: 3px solid var(--blue); border-radius: 18px; box-shadow: var(--shadow); padding: 12px; }
+.timer-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.timer-mode-grid .timer-page-card { margin: 12px 0 24px; width: 100%; color: var(--navy); font: inherit; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.timer-mode-grid .timer-page-card:hover, .timer-mode-grid .timer-page-card:focus-visible { transform: translateY(-3px); box-shadow: var(--shadow); outline: 2px solid var(--blue); }
+.timer-mode-grid .timer-page-card span { color: var(--muted); }
+.day-study-time { margin: 0; padding: 10px 14px; background: #eaf4ff; border-radius: 12px; font-weight: 800; }
+.home-pie-actions { display: flex; gap: 7px; justify-content: flex-end; flex-wrap: wrap; padding: 5px; }
+.home-pie-actions .btn { min-height: 30px; padding: 4px 8px; font-size: .78rem; }
+.home-pie-large { display: grid; place-items: center; min-height: 420px; }
+.home-pie-large svg { width: min(100%, 560px); height: auto; }
+.logo-name { display: flex; justify-content: center; white-space: nowrap; }
+.logo-name span, .logo-name b { display: inline-block; }
+.home-logo.go .logo-name { animation: none; }
+.home-logo.go .logo-name span, .home-logo.go .logo-name b { animation: letter-hop .55s calc(var(--i) * 55ms) ease-out both; }
+@keyframes letter-hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-9px); } 72% { transform: translateY(2px); } }
+@media (prefers-reduced-motion: reduce) { .home-logo.go .logo-name span, .home-logo.go .logo-name b { animation: none; } }
+.ml-dishes li.ml-marked { background: #fff4b3; box-shadow: inset 4px 0 #f4bc24; }
+.ml-dishes li { align-items: center; }
+.ml-mark { flex: none; width: 27px; height: 27px; border-radius: 50%; font-size: 1rem; transition: background .15s, transform .15s; }
+.ml-mark:hover, .ml-mark:focus-visible { background: #fff0bf; transform: scale(1.08); outline: none; }
+.ml-mark[aria-pressed="true"] { background: #ffe38b; color: #9c6100; }
+.ml-nav { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.ml-nav .cal-label { min-width: 185px; text-align: center; }
+.tt-lunch-row th, .tt-lunch-row td { background: #fff6df; border: 1px solid #e5d8b6; color: #765410; }
+.tt-lunch-row td { font-weight: 700; }
+.tt-tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); align-items: stretch; }
+.tt-tools .btn { width: 100%; min-width: 0; white-space: normal; line-height: 1.25; }
+.tt-tools .btn:hover, .tt-tools .btn:focus-visible, .ml-day:focus-visible, .cal-note:hover, .cal-note:focus-visible, .home-day-notes button:hover, .home-day-notes button:focus-visible { transform: translateY(-2px); box-shadow: 0 5px 14px #25386122; outline: 2px solid #2f6bff55; }
+.page { position: relative; }
+.view-help-row { display: flex; justify-content: flex-end; height: 29px; margin-bottom: 4px; }
+.view-help { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: var(--muted); font-weight: 900; cursor: pointer; }
+.view-help:hover, .view-help:focus-visible { color: var(--blue); border-color: var(--blue); box-shadow: 0 0 0 3px #2f6bff22; outline: none; }
+.help-copy { line-height: 1.7; }
+[hidden] { display: none !important; }
+@media (max-width: 600px) { .timer-mode-grid { grid-template-columns: 1fr; } .timer-mode-grid .timer-page-card { margin: 4px 0; } }
+@media (max-width: 640px) { .home-card::after { display: none; } }
 .cloud-import-hint { background: #fff4d3; border-radius: 10px; padding: 8px; font-size: .86rem; }
 @media (max-width: 600px) { .side-date-nav { padding-right: 80px; } .timer-alarm { left: 10px; right: 10px; justify-content: space-between; } }
 @media (max-width: 570px) {

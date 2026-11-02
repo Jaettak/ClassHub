@@ -39,7 +39,13 @@ const Home = (() => {
     function drawSide() {
       const ds = dateStr(selectedDate), lessons = Timetable.lessonsFor(selectedDate), dayEvents = Calendar.byDate(ds).filter((e) => !e.schoolLesson);
       todayBox.querySelector('h3').textContent = `${ds === todayStr() ? '오늘 ' : ''}${selectedDate.getMonth() + 1}월 ${selectedDate.getDate()}일 (${WEEK[selectedDate.getDay()]})`;
-      if (sideMode === 'pie') return sideScroll.replaceChildren(h('div', { class: 'home-pie-view' }, Calendar.homePie(selectedDate)));
+      if (sideMode === 'pie') return sideScroll.replaceChildren(
+        h('div', { class: 'home-pie-actions' },
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 일정`, body: h('div', { class: 'home-pie-large' }, Calendar.homePie(selectedDate)), wide: true }) }, '크게 보기'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 메모`, body: Notes.forDate(ds).length
+            ? h('div', { class: 'nt-completed' }, Notes.forDate(ds).map((n) => h('button', { class: 'btn ghost', type: 'button', onclick: () => Notes.show(n, drawSide) }, `${n.done ? '✓ ' : ''}${n.title || n.body}`)))
+            : h('p', { class: 'muted' }, '이 날의 메모가 없어요.') }) }, '이 날의 메모')),
+        h('div', { class: 'home-pie-view' }, Calendar.homePie(selectedDate)));
       sideScroll.replaceChildren(...[
         lessons.length ? h('div', { class: 'chips' }, lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher, onclick: () => Calendar.showEvent(l, drawSide) }, `${l.period} ${l.displayTitle}`)))
           : h('p', { class: 'muted' }, '입력된 수업이 없어요.'),
@@ -47,7 +53,7 @@ const Home = (() => {
           e.checkable !== false ? h('button', { type: 'button', class: 'ck sm' + (e.done ? ' on' : ''), role: 'checkbox', 'aria-checked': String(!!e.done), 'aria-label': `${e.title} 완료 표시`, title: e.done ? '완료 취소' : '완료로 표시', onclick: () => { Calendar.setDone(e.id, e.date, !e.done); drawSide(); } }) : null,
           h('button', { class: 'home-event-open', type: 'button', onclick: () => Calendar.showEvent(e, drawSide) }, h('span', null, `${e.start}~${e.end}`), h('b', null, e.title)))))
           : h('p', { class: 'muted' }, '등록된 일정이 없어요.'),
-        Notes.forDate(ds).length ? h('div', { class: 'home-day-notes' }, h('b', null, '이 날의 메모'), Notes.forDate(ds).map((n) => h('button', { type: 'button', onclick: () => Notes.edit(n, drawSide) }, n.title || n.body))) : null].filter(Boolean));
+        Notes.forDate(ds).length ? h('div', { class: 'home-day-notes' }, h('b', null, '이 날의 메모'), Notes.forDate(ds).map((n) => h('button', { type: 'button', class: n.done ? 'done' : '', onclick: () => Notes.show(n, drawSide) }, `${n.done ? '✓ ' : ''}${n.title || n.body}`))) : null].filter(Boolean));
     }
     function selectSide(next) {
       sideMode = next; Store.set('homeSideMode', next);
@@ -61,7 +67,9 @@ const Home = (() => {
     // 마우스를 올리거나 누르면 책이 차례로 통통 튄다
     const logo = h('div', { class: 'home-logo' },
       icon('books', 'logo-books'),
-      h('div', { class: 'logo-name' }, 'Class', h('b', null, 'Hub')));
+      h('div', { class: 'logo-name', 'aria-label': 'ClassHub' },
+        [...'Class'].map((letter, i) => h('span', { style: { '--i': i }, 'aria-hidden': 'true' }, letter)),
+        [...'Hub'].map((letter, i) => h('b', { style: { '--i': i + 5 }, 'aria-hidden': 'true' }, letter))));
     const bounce = () => { logo.classList.remove('go'); void logo.offsetWidth; logo.classList.add('go'); };
     logo.addEventListener('mouseenter', bounce);
     logo.addEventListener('pointerdown', bounce);
@@ -71,7 +79,7 @@ const Home = (() => {
     root.append(h('div', { class: 'home' },
       cards,
       h('aside', { class: 'home-side' },
-        h('div', { class: 'home-topline' }, h('div', { class: 'home-greeting' }, h('span', { class: 'home-greeting-kicker' }, 'CLASS HUB'), h('b', null, '오늘도 차근차근!'), h('span', null, '학교생활의 모든 순간을 한곳에.')), logo),
+        h('div', { class: 'home-topline' }, h('div', { class: 'home-greeting' }, h('span', { class: 'home-greeting-kicker' }, 'CLASS HUB'), h('b', null, '오늘도 차근차근!'), h('span', null, '수업부터 기록까지, 오늘을 한눈에.')), logo),
         todayBox)));
   }
   return { render };
