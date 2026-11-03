@@ -43,7 +43,7 @@ const Home = (() => {
         h('div', { class: 'home-pie-actions' },
           h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 일정`, body: h('div', { class: 'home-pie-large' }, Calendar.homePie(selectedDate)), wide: true }) }, '크게 보기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 메모`, body: Notes.forDate(ds).length
-            ? h('div', { class: 'nt-completed' }, Notes.forDate(ds).map((n) => h('button', { class: 'btn ghost', type: 'button', onclick: () => Notes.show(n, drawSide) }, `${n.done ? '✓ ' : ''}${n.title || n.body}`)))
+            ? h('div', { class: 'nt-completed' }, Notes.forDate(ds).map((n) => h('button', { class: 'btn ghost', type: 'button', onclick: () => Notes.show(n, drawSide) }, n.title || n.body)))
             : h('p', { class: 'muted' }, '이 날의 메모가 없어요.') }) }, '이 날의 메모')),
         h('div', { class: 'home-pie-view' }, Calendar.homePie(selectedDate)));
       sideScroll.replaceChildren(...[
@@ -53,7 +53,7 @@ const Home = (() => {
           e.checkable !== false ? h('button', { type: 'button', class: 'ck sm' + (e.done ? ' on' : ''), role: 'checkbox', 'aria-checked': String(!!e.done), 'aria-label': `${e.title} 완료 표시`, title: e.done ? '완료 취소' : '완료로 표시', onclick: () => { Calendar.setDone(e.id, e.date, !e.done); drawSide(); } }) : null,
           h('button', { class: 'home-event-open', type: 'button', onclick: () => Calendar.showEvent(e, drawSide) }, h('span', null, `${e.start}~${e.end}`), h('b', null, e.title)))))
           : h('p', { class: 'muted' }, '등록된 일정이 없어요.'),
-        Notes.forDate(ds).length ? h('div', { class: 'home-day-notes' }, h('b', null, '이 날의 메모'), Notes.forDate(ds).map((n) => h('button', { type: 'button', class: n.done ? 'done' : '', onclick: () => Notes.show(n, drawSide) }, `${n.done ? '✓ ' : ''}${n.title || n.body}`))) : null].filter(Boolean));
+        Notes.forDate(ds).length ? h('div', { class: 'home-day-notes' }, h('b', null, '이 날의 메모'), Notes.forDate(ds).map((n) => h('button', { type: 'button', onclick: () => Notes.show(n, drawSide) }, n.title || n.body))) : null].filter(Boolean));
     }
     function selectSide(next) {
       sideMode = next; Store.set('homeSideMode', next);
@@ -79,7 +79,12 @@ const Home = (() => {
     root.append(h('div', { class: 'home' },
       cards,
       h('aside', { class: 'home-side' },
-        h('div', { class: 'home-topline' }, h('div', { class: 'home-greeting' }, h('span', { class: 'home-greeting-kicker' }, 'CLASS HUB'), h('b', null, '오늘도 차근차근!'), h('span', null, '수업부터 기록까지, 오늘을 한눈에.')), logo),
+        h('div', { class: 'home-topline' },
+          h('div', { class: 'home-visual', 'aria-label': '시간표, 일정과 메모를 연결한 그림' },
+            h('span', { class: 'home-visual-path', 'aria-hidden': 'true' }),
+            h('span', { class: 'home-visual-tile one', 'aria-hidden': 'true' }, icon('timetable')),
+            h('span', { class: 'home-visual-tile two', 'aria-hidden': 'true' }, icon('calendar')),
+            h('span', { class: 'home-visual-tile three', 'aria-hidden': 'true' }, icon('notes'))), logo),
         todayBox)));
   }
   return { render };

@@ -1,9 +1,9 @@
 // Firebase 인증 및 레코드 단위 Firestore 동기화. PDF 캡처와 이미지는 로컬 전용.
 const Cloud = (() => {
-  const ARRAY_KEYS = new Set(['events', 'activities', 'grades', 'notes', 'ttFriends', 'timerLog', 'timetableTerms', 'mealFavorites']);
+  const ARRAY_KEYS = new Set(['events', 'activities', 'grades', 'notes', 'noteFolders', 'ttFriends', 'timerLog', 'timetableTerms', 'mealFavorites']);
   const MAP_KEYS = new Set(['lessonDayNotes', 'subjectColors']);
   const LOCAL_KEYS = new Set(['captures']);
-  const keys = ['timetable', 'timetableTerms', 'ttFriends', 'subjectColors', 'events', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'notes', 'settings', 'mealSchool', 'mealFavorites', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
+  const keys = ['timetable', 'timetableTerms', 'ttFriends', 'subjectColors', 'events', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'notes', 'noteFolders', 'settings', 'mealSchool', 'mealFavorites', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
   let auth, firestore, user = null, unsubscribe = null, ready = false, configured = false, syncing = false, remote = {}, queue = [], loaded = false, guest = false;
   let refreshTimer = null;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

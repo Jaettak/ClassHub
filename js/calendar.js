@@ -524,8 +524,8 @@ const Calendar = (() => {
             lessons.length ? h('div', { class: 'day-lessons' }, h('b', null, '수업 '), lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher || '', onclick: () => showEvent(l, drawDay) }, `${l.period} ${l.displayTitle}`))) : null,
             h('section', { class: 'cal-day-notes' },
               h('div', { class: 'title-row' }, h('b', null, '이 날의 메모'), h('button', { class: 'btn ghost', type: 'button', onclick: () => Notes.openForDate(ds, drawDay) }, '＋ 메모')),
-              dayNotes.length ? dayNotes.map((n) => h('button', { class: 'cal-note' + (n.done ? ' done' : ''), type: 'button', style: { '--c': n.color }, onclick: () => Notes.show(n, drawDay) },
-                h('b', null, `${n.done ? '✓ ' : ''}${n.title || '제목 없음'}`), h('span', null, n.body || ''))) : h('p', { class: 'muted' }, '시간이 정해지지 않은 메모가 없어요.')),
+              dayNotes.length ? dayNotes.map((n) => h('button', { class: 'cal-note', type: 'button', style: { '--c': n.color }, onclick: () => Notes.show(n, drawDay) },
+                h('b', null, n.title || '제목 없음'), h('span', null, n.body || ''))) : h('p', { class: 'muted' }, '시간이 정해지지 않은 메모가 없어요.')),
             timeline([focus], { big: true }, drawDay))));
     };
 

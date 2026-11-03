@@ -153,7 +153,7 @@ const App = (() => {
     activities: '학교 활동과 기록할 내용을 모아 관리할 수 있어요.',
     grades: '과목별 시험 점수를 기록하고 성적 변화를 확인할 수 있어요.',
     meals: '학교를 선택해 급식을 확인하세요. 별을 누른 메뉴는 같은 음식이 다시 나올 때 표시돼요.',
-    notes: '메모를 누르면 내용을 볼 수 있어요. 드래그해 순서를 바꾸고 완료한 메모는 별도 목록에서 확인하세요.',
+    notes: '메모를 보관함별로 정리하고 드래그해 순서를 바꿀 수 있어요. 삭제한 메모는 휴지통에서 복원할 수 있어요.',
     timer: '타이머나 스톱워치를 선택해 공부 시간을 기록하세요. 기록은 해당 날짜의 일정 화면에서도 확인할 수 있어요.',
   };
 
@@ -174,7 +174,9 @@ const App = (() => {
         h('header', { class: 'topbar' },
           h('a', { class: 'brand', href: '#home', 'aria-label': '홈으로' },
             h('span', { class: 'brand-mark' }, icon('books')),
-            h('span', { class: 'brand-name' }, 'Class', h('b', null, 'Hub'))),
+            h('span', { class: 'brand-name', 'aria-label': 'ClassHub' },
+              [...'Class'].map((letter, i) => h('span', { style: { '--i': i }, 'aria-hidden': 'true' }, letter)),
+              [...'Hub'].map((letter, i) => h('b', { style: { '--i': i + 5 }, 'aria-hidden': 'true' }, letter)))),
           navTabs(key)),
         page);
       view.render(page);

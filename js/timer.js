@@ -147,15 +147,15 @@ const Timer = (() => {
     const seg = h('div', { class: 'seg' });
     const minsField = App.field('시간 (분)', mins);
     const draw = () => {
-      seg.replaceChildren(...[['down', '타이머'], ['up', '스톱워치']].map(([k, l]) => h('button', { type: 'button', class: 'seg-btn' + (mode === k ? ' on' : ''), onclick: () => { mode = k; draw(); } }, l)));
+      if (!o.mode) seg.replaceChildren(...[['down', '타이머'], ['up', '스톱워치']].map(([k, l]) => h('button', { type: 'button', class: 'seg-btn' + (mode === k ? ' on' : ''), onclick: () => { mode = k; draw(); } }, l)));
       minsField.hidden = mode !== 'down';
       if (typeof quick !== 'undefined') quick.hidden = mode !== 'down';
     };
     const quick = h('div', { class: 'chips tm-quick' }, [10, 25, 30, 45, 60].map((n) => h('button', { type: 'button', class: 'fchip', onclick: () => { mins.value = n; mode = 'down'; draw(); } }, `${n}분`)));
     draw();
     const m = App.modal({
-      title: '타이머 시작',
-      body: [App.field('무엇을 할까요?', title), h('div', { class: 'field' }, h('span', null, '방식'), seg), minsField, quick,
+      title: mode === 'up' ? '스톱워치 시작' : '타이머 시작',
+      body: [App.field('무엇을 할까요?', title), o.mode ? null : h('div', { class: 'field' }, h('span', null, '방식'), seg), minsField, quick,
         o.spent ? h('p', { class: 'hint' }, `이 일정에 지금까지 ${o.spent}분 공부했어요.`) : null],
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
