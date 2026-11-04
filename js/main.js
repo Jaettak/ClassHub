@@ -1,6 +1,7 @@
 // 홈 화면과 앱 시작
 const Home = (() => {
   let selectedDate = new Date();
+  let clockTimer, sideObserver;
   const CARDS = [
     { to: 'wrong', cls: 'blue', icon: 'wrong', title: '오답노트', desc: 'pdf파일을 잘라내고 오답정리를 해요.' },
     { to: 'timetable', cls: 'green', icon: 'timetable', title: '시간표', desc: '나의 시간표를 입력하고 관리해요.' },
@@ -13,6 +14,8 @@ const Home = (() => {
   ];
 
   function render(root) {
+    clearInterval(clockTimer);
+    sideObserver?.disconnect();
     const now = new Date();
     const st = Activities.stats();
     let sideMode = Store.get('homeSideMode', 'list');
@@ -38,16 +41,20 @@ const Home = (() => {
     function changeDate(n) { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + n); drawSide(); }
     function drawSide() {
       const ds = dateStr(selectedDate), lessons = Timetable.lessonsFor(selectedDate), dayEvents = Calendar.byDate(ds).filter((e) => !e.schoolLesson);
-      todayBox.querySelector('h3').textContent = `${ds === todayStr() ? '오늘 ' : ''}${selectedDate.getMonth() + 1}월 ${selectedDate.getDate()}일 (${WEEK[selectedDate.getDay()]})`;
+      todayBox.querySelector('h3').replaceChildren(
+        h('span', { class: 'date-long' }, `${ds === todayStr() ? '오늘 ' : ''}${selectedDate.getMonth() + 1}월 ${selectedDate.getDate()}일 (${WEEK[selectedDate.getDay()]})`),
+        h('span', { class: 'date-short' }, `${selectedDate.getMonth() + 1}/${selectedDate.getDate()} (${WEEK[selectedDate.getDay()]})`));
       if (sideMode === 'pie') return sideScroll.replaceChildren(
         h('div', { class: 'home-pie-actions' },
-          h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 일정`, body: h('div', { class: 'home-pie-large' }, Calendar.homePie(selectedDate)), wide: true }) }, '크게 보기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 메모`, body: Notes.forDate(ds).length
             ? h('div', { class: 'nt-completed' }, Notes.forDate(ds).map((n) => h('button', { class: 'btn ghost', type: 'button', onclick: () => Notes.show(n, drawSide) }, n.title || n.body)))
-            : h('p', { class: 'muted' }, '이 날의 메모가 없어요.') }) }, '이 날의 메모')),
-        h('div', { class: 'home-pie-view' }, Calendar.homePie(selectedDate)));
+            : h('p', { class: 'muted' }, '이 날의 메모가 없어요.') }) }, '메모 보기'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 전체 일정`, body: h('div', { class: 'home-pie-large' }, Calendar.homePie(selectedDate)), wide: true }) }, '전체 보기')),
+        h('div', { class: 'home-pie-view' },
+          h('div', { class: 'home-pie-full' }, Calendar.homePie(selectedDate)),
+          h('div', { class: 'home-pie-half' }, Calendar.homeSemi(selectedDate))));
       sideScroll.replaceChildren(...[
-        lessons.length ? h('div', { class: 'chips' }, lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher, onclick: () => Calendar.showEvent(l, drawSide) }, `${l.period} ${l.displayTitle}`)))
+        lessons.length ? h('div', { class: 'chips side-lessons' }, lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher, onclick: () => Calendar.showEvent(l, drawSide) }, `${l.period} ${l.displayTitle}`)))
           : h('p', { class: 'muted' }, '입력된 수업이 없어요.'),
         dayEvents.length ? h('ul', { class: 'mini-list' }, dayEvents.map((e) => h('li', { style: { '--c': e.color } },
           e.checkable !== false ? h('button', { type: 'button', class: 'ck sm' + (e.done ? ' on' : ''), role: 'checkbox', 'aria-checked': String(!!e.done), 'aria-label': `${e.title} 완료 표시`, title: e.done ? '완료 취소' : '완료로 표시', onclick: () => { Calendar.setDone(e.id, e.date, !e.done); drawSide(); } }) : null,
@@ -80,12 +87,20 @@ const Home = (() => {
       cards,
       h('aside', { class: 'home-side' },
         h('div', { class: 'home-topline' },
-          h('div', { class: 'home-visual', 'aria-label': '시간표, 일정과 메모를 연결한 그림' },
-            h('span', { class: 'home-visual-path', 'aria-hidden': 'true' }),
-            h('span', { class: 'home-visual-tile one', 'aria-hidden': 'true' }, icon('timetable')),
-            h('span', { class: 'home-visual-tile two', 'aria-hidden': 'true' }, icon('calendar')),
-            h('span', { class: 'home-visual-tile three', 'aria-hidden': 'true' }, icon('notes'))), logo),
+          h('div', { class: 'home-schedule-preview' },
+            h('h3', null, '오늘 시간표'),
+            Timetable.lessonsFor(now).length ? h('div', { class: 'home-schedule-list' }, Timetable.lessonsFor(now).map((lesson) => h('button', { type: 'button', class: 'home-schedule-lesson', style: { '--c': colorFor(lesson.subject) }, onclick: () => Calendar.showEvent(lesson, () => App.refresh()) }, `${lesson.period}교시 · ${lesson.displayTitle}`)))
+              : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')), logo),
         todayBox)));
+    sideObserver = new ResizeObserver(() => {
+      const area = todayBox.querySelector('.home-pie-view');
+      if (area) todayBox.classList.toggle('wide-pie', area.clientWidth > area.clientHeight * 1.55 && area.clientHeight < 350);
+    });
+    sideObserver.observe(todayBox);
+    clockTimer = setInterval(() => {
+      if (!root.isConnected) { clearInterval(clockTimer); sideObserver?.disconnect(); return; }
+      if (sideMode === 'pie' && dateStr(selectedDate) === todayStr()) drawSide();
+    }, 60000);
   }
   return { render };
 })();

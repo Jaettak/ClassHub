@@ -102,9 +102,11 @@ const Notes = (() => {
   }
 
   function render(root) {
+    let viewMode = Store.get('notesViewMode', 'cards');
     const grid = h('div', { class: 'nt-grid' });
     const folderBar = h('div', { class: 'nt-folders' });
     const redraw = () => {
+      grid.classList.toggle('list', viewMode === 'list');
       const all = active();
       const s = q.trim().toLowerCase();
       const sortNotes = (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
@@ -212,6 +214,8 @@ const Notes = (() => {
           h('button', { class: 'btn primary', type: 'button', onclick: () => edit({}, redraw) }, '＋ 새 메모'))),
       active().some((n) => n.done) ? h('button', { class: 'btn ghost nt-legacy-done', type: 'button', onclick: removeCompleted }, '완료 표시된 메모 한꺼번에 삭제') : null,
       folderBar,
+      h('div', { class: 'nt-view-switch', role: 'group', 'aria-label': '메모 보기 방식' },
+        ...[['cards', '네모 보기'], ['list', '줄 보기']].map(([mode, label]) => h('button', { class: 'btn' + (viewMode === mode ? ' on' : ''), type: 'button', 'aria-pressed': String(viewMode === mode), onclick: () => { viewMode = mode; Store.set('notesViewMode', mode); App.refresh(); } }, label))),
       h('div', { class: 'filters' }, h('input', { type: 'search', placeholder: '메모 검색', value: q, oninput: (e) => { q = e.target.value; redraw(); } })),
       grid));
     redraw();

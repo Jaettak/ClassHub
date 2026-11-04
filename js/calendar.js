@@ -269,6 +269,7 @@ const Calendar = (() => {
 
   // ---------- 시간표형 보기(주간·하루) : 일정 없는 시간대는 접는다 ----------
   function timeline(days, o, redraw) {
+    const hourPx = matchMedia('(max-width: 640px)').matches ? 38 : HP;
     const today = todayStr();
     const per = days.map((d) => layout(byDate(dateStr(d))));
     const used = new Set();
@@ -308,20 +309,20 @@ const Calendar = (() => {
           `${pad(sg.a)}:00 ~ ${pad(sg.b)}:00 · 일정 없음 · 눌러서 펼치기`));
         return;
       }
-      const labels = h('div', { class: 'tl-times' }, Array.from({ length: sg.b - sg.a }, (_, i) => h('div', { class: 'tl-t', style: { height: HP + 'px' } }, `${pad(sg.a + i)}:00`)));
+      const labels = h('div', { class: 'tl-times' }, Array.from({ length: sg.b - sg.a }, (_, i) => h('div', { class: 'tl-t', style: { height: hourPx + 'px' } }, `${pad(sg.a + i)}:00`)));
       const cols = days.map((d, ci) => {
         const ds = dateStr(d);
-        const col = h('div', { class: 'tl-col' + (ds === today ? ' today' : ''), style: { height: (sg.b - sg.a) * HP + 'px' },
+        const col = h('div', { class: 'tl-col' + (ds === today ? ' today' : ''), style: { height: (sg.b - sg.a) * hourPx + 'px' },
           onclick: (e) => {
             if (e.target !== col) return;
-            const hr = Math.min(sg.b - 1, sg.a + Math.floor((e.clientY - col.getBoundingClientRect().top) / HP));
+            const hr = Math.min(sg.b - 1, sg.a + Math.floor((e.clientY - col.getBoundingClientRect().top) / hourPx));
             editEvent(blank(ds, hr), redraw);
           } });
         per[ci].filter((x) => { const sh = Math.floor(x.s / 60); return sh >= sg.a && sh < sg.b; }).forEach((x) => {
-          const hgt = Math.max(22, (x.f - x.s) / 60 * HP - 2);
+          const hgt = Math.max(22, (x.f - x.s) / 60 * hourPx - 2);
           const open = () => showEvent(x.e, redraw);
           col.append(h('div', { role: 'button', tabIndex: 0, class: 'tl-ev' + (o.big ? ' big' : '') + (x.e.done ? ' done' : ''),
-            style: { '--c': x.e.color, top: (x.s - sg.a * 60) / 60 * HP + 'px', height: hgt + 'px', left: `calc(${x.lane / x.n * 100}% + 1px)`, width: `calc(${100 / x.n}% - 3px)` },
+            style: { '--c': x.e.color, top: (x.s - sg.a * 60) / 60 * hourPx + 'px', height: hgt + 'px', left: `calc(${x.lane / x.n * 100}% + 1px)`, width: `calc(${100 / x.n}% - 3px)` },
             title: `${range(x.e)} ${x.e.title}`, onclick: open, onkeydown: (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } } },
           ckBtn(x.e, redraw, true),
           h('b', null, x.e.schoolLesson ? `수업 · ${x.e.title}` : x.e.rep ? `↻ ${x.e.title}` : x.e.title), h('small', null, range(x.e)),
@@ -400,8 +401,40 @@ const Calendar = (() => {
     const doneN = evs.filter((x) => x.e.checkable !== false && x.e.done).length;
     svg.append(
       sv('text', { x: C, y: C - 14, class: 'pie-c1', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, `${d.getMonth() + 1}월 ${d.getDate()}일`),
-      sv('text', { x: C, y: C + 14, class: 'pie-c2', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, `${WEEK[d.getDay()]}요일`),
+      sv('text', { x: C, y: C + 14, class: 'pie-c2', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, ds === todayStr() ? `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}` : `${WEEK[d.getDay()]}요일`),
       sv('text', { x: C, y: C + 36, class: 'pie-c3', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, evs.length ? `일정 ${evs.length}개 · 완료 ${doneN}` : '일정 없음'));
+    return svg;
+  }
+
+  // 가로로 긴 홈 북마크에서는 24시간을 반원에 펼쳐 표시한다.
+  function semiPie(d, redraw) {
+    const ds = dateStr(d), evs = layout(byDate(ds));
+    const C = 210, Y = 205, outer = 162, inner = 96;
+    const angle = (minutes) => Math.PI + Math.max(0, Math.min(1440, minutes)) / 1440 * Math.PI;
+    const point = (radius, a) => [C + radius * Math.cos(a), Y + radius * Math.sin(a)];
+    const f = (n) => n.toFixed(2);
+    const svg = sv('svg', { viewBox: '0 0 420 240', class: 'home-semi-svg', role: 'img', 'aria-label': `${longDate(d)} 반원 일정표` });
+    svg.append(sv('path', { d: `M${C - outer} ${Y} A${outer} ${outer} 0 0 1 ${C + outer} ${Y}`, fill: 'none', stroke: '#edf2fb', 'stroke-width': outer - inner }));
+    for (let k = 0; k <= 24; k += 6) {
+      const [x, y] = point(outer + 17, angle(k * 60));
+      svg.append(sv('text', { x: f(x), y: f(y), class: 'pie-hr', 'text-anchor': 'middle' }, `${k}시`));
+    }
+    const lanes = Math.min(4, Math.max(1, ...evs.map((x) => x.lane + 1)));
+    const band = (outer - inner) / lanes;
+    evs.forEach((x) => {
+      const ro = outer - Math.min(x.lane, lanes - 1) * band, ri = ro - band + 1;
+      const a0 = angle(x.s), a1 = angle(x.f);
+      const [x0, y0] = point(ro, a0), [x1, y1] = point(ro, a1), [x2, y2] = point(ri, a1), [x3, y3] = point(ri, a0);
+      svg.append(sv('path', { d: `M${f(x0)} ${f(y0)} A${f(ro)} ${f(ro)} 0 0 1 ${f(x1)} ${f(y1)} L${f(x2)} ${f(y2)} A${f(ri)} ${f(ri)} 0 0 0 ${f(x3)} ${f(y3)} Z`,
+        fill: x.e.color, class: 'pie-sec', role: 'button', tabindex: 0, 'aria-label': `${range(x.e)} ${x.e.title}`, onclick: () => showEvent(x.e, redraw), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showEvent(x.e, redraw); } } }, sv('title', null, `${range(x.e)} ${x.e.title}`)));
+    });
+    if (ds === todayStr()) {
+      const now = new Date(), a = angle(now.getHours() * 60 + now.getMinutes());
+      const [x0, y0] = point(inner - 8, a), [x1, y1] = point(outer + 3, a);
+      svg.append(sv('line', { x1: f(x0), y1: f(y0), x2: f(x1), y2: f(y1), class: 'pie-now' }), sv('circle', { cx: f(x1), cy: f(y1), r: 6, class: 'pie-now-dot' }));
+      svg.append(sv('text', { x: C, y: Y - 20, class: 'pie-c1', 'text-anchor': 'middle' }, `${pad(now.getHours())}:${pad(now.getMinutes())}`));
+    } else svg.append(sv('text', { x: C, y: Y - 20, class: 'pie-c1', 'text-anchor': 'middle' }, `${d.getMonth() + 1}월 ${d.getDate()}일`));
+    svg.append(sv('text', { x: C, y: Y + 2, class: 'pie-c3', 'text-anchor': 'middle' }, `${evs.length}개 일정`));
     return svg;
   }
 
@@ -534,7 +567,7 @@ const Calendar = (() => {
     root.append(panel);
   }
 
-  return { render, byDate, eventsFrom, setDone, isDone, repDesc, showEvent, homePie: (date) => pie(date || new Date(), () => App.refresh()) };
+  return { render, byDate, eventsFrom, setDone, isDone, repDesc, showEvent, homePie: (date) => pie(date || new Date(), () => App.refresh()), homeSemi: (date) => semiPie(date || new Date(), () => App.refresh()) };
 })();
 
 App.registerView('calendar', { label: '일정 관리', icon: 'calendar', render: Calendar.render });

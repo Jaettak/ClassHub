@@ -210,6 +210,7 @@ const Timetable = (() => {
     const info = h('p', { class: 'hint' });
     const grade = h('input', { type: 'number', min: 1, max: 6, value: s.grade || '', placeholder: '학년' });
     const cls = h('input', { type: 'number', min: 1, max: 40, value: s.cls || '', placeholder: '반' });
+    const apiKey = h('input', { type: 'text', value: Neis.savedKey(), placeholder: 'NEIS 교육정보 개방포털에서 발급한 인증키', autocomplete: 'off', onchange: (e) => Neis.setKey(e.target.value) });
     const nameEl = h('b', { class: 'set-school' });
     const drawName = () => { nameEl.textContent = school ? `${school.name} (${school.region})` : '학교를 선택해 주세요'; };
     drawName();
@@ -219,6 +220,9 @@ const Timetable = (() => {
       body: [
         h('div', { class: 'set-row' }, nameEl, h('button', { class: 'btn', type: 'button', onclick: () => Neis.pickSchool((sc) => { school = sc; drawName(); }) }, '학교 찾기')),
         h('div', { class: 'row2' }, App.field('학년', grade), App.field('반', cls)),
+        App.field('NEIS 인증키', apiKey),
+        h('p', { class: 'hint' }, '인증키 없이 조회하면 NEIS가 5건만 보여 줘서 전체 교시를 가져올 수 없어요. 인증키는 이 기기에만 저장돼요.'),
+        h('a', { class: 'btn ghost', href: 'https://open.neis.go.kr/portal/guide/apiGuidePage.do', target: '_blank', rel: 'noopener noreferrer' }, '인증키 발급 안내'),
         h('p', { class: 'hint' }, '이번 주 학급 시간표를 NEIS(공식)에서 가져와 지금 시간표를 덮어써요. 고등학교는 선택과목이 반마다 달라 내 시간표와 다를 수 있으니, 불러온 뒤 직접 고쳐 주세요.'),
         info,
       ],
@@ -227,7 +231,9 @@ const Timetable = (() => {
     async function run() {
       if (!school) { info.textContent = '학교를 먼저 선택해 주세요.'; return; }
       if (!grade.value || !cls.value) { info.textContent = '학년과 반을 입력해 주세요.'; return; }
+      if (!apiKey.value.trim()) { info.textContent = '전체 교시를 가져오려면 NEIS 인증키를 입력해 주세요.'; return; }
       if (t.cells.some((col) => col.some(Boolean)) && !confirm('지금 시간표가 불러온 내용으로 바뀌어요. 계속할까요?')) return;
+      Neis.setKey(apiKey.value);
       go.disabled = true;
       info.textContent = '불러오는 중…';
       try {
@@ -241,11 +247,18 @@ const Timetable = (() => {
         rows.forEach((r) => {
           if (r.period >= 1 && r.period <= periods) cells[days.indexOf(dayOf(r))][r.period - 1] = { subject: r.subject, teacher: '' };
         });
+        const oldTimes = Array.from({ length: periods }, (_, i) => validTimes(t, i));
+        const hhmm = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
         t.days = days; t.periods = periods; t.cells = cells;
-        t.periodTimes = Array.from({ length: periods }, (_, i) => timesFor(t, i));
+        t.periodTimes = oldTimes.map((time, i) => {
+          if (time) return time;
+          const start = 9 * 60 + i * 60 + (i >= 4 ? 50 : 0);
+          return { start: hhmm(start), end: hhmm(start + 50) };
+        });
+        if (!t.lunch && periods >= 5) t.lunch = { afterPeriod: 4, start: '12:50', end: '13:50' };
         save();
         m.close();
-        App.toast(`${school.name} ${grade.value}학년 ${cls.value}반 시간표를 불러왔어요.`);
+        App.toast(`${school.name} 시간표를 불러왔어요. 교시·점심 시간은 예시이니 확인해 주세요.`);
         done();
       } catch (e) { info.textContent = e.message; go.disabled = false; }
     }

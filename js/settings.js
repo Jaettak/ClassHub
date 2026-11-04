@@ -64,8 +64,6 @@ const Settings = (() => {
       h('label', { class: 'check' }, sound, '타이머 끝날 때 소리 내기'),
       h('label', { class: 'check' }, uiSound, '버튼 효과음'),
       h('div', { class: 'set-row' }, h('span', null, '소리 크기'), h('div', { class: 'volume-control' }, volume, volumeLabel)));
-    const installBox = section('앱처럼 사용', h('p', { class: 'hint' },
-      '휴대폰 브라우저에서 ClassHub를 열고 “홈 화면에 추가”를 선택하면 앱 아이콘으로 실행할 수 있어요. iPhone은 Safari 공유 메뉴, Android는 브라우저 메뉴에서 찾을 수 있어요.'));
 
     // 백업
     const backupBox = section('백업',
@@ -85,7 +83,7 @@ const Settings = (() => {
 
     const m = App.modal({
       title: '설정', wide: true,
-      body: h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, installBox, backupBox, resetBox),
+      body: h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, backupBox, resetBox),
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '닫기'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {

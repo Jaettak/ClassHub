@@ -32,7 +32,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .btn.ghost { background: transparent; }
 .btn.tool.on { background: #e6efff; border-color: var(--blue); color: var(--blue); }
 .icon-btn { border: 0; background: #eef3ff; width: 38px; height: 38px; border-radius: 50%; cursor: pointer; font-size: 1rem; flex: none; }
-input[type=text], input[type=date], input[type=time], input[type=search], select, textarea {
+input[type=text], input[type=number], input[type=date], input[type=time], input[type=search], select, textarea {
   width: 100%; border: 2px solid var(--line); border-radius: 12px; padding: 9px 12px; background: #fff; min-height: 42px;
 }
 textarea { resize: vertical; }
@@ -915,4 +915,79 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
 .auth-card img { width: 56px; height: 56px; }
 .auth-card h1, .auth-card p { margin: 0; }
 .auth-card .field { margin: 0; }
+
+/* 2026-11-04: 홈 일정, 북마크, 좁은 화면 */
+.chip { border: 0; appearance: none; cursor: pointer; transition: transform .14s, box-shadow .14s, filter .14s; }
+.chip:hover, .chip:focus-visible { transform: translateY(-2px); box-shadow: 0 4px 10px #2439572c; filter: saturate(1.12); outline: 2px solid color-mix(in srgb, var(--c) 60%, #fff); }
+.side-scroll { position: relative; z-index: 1; padding-left: 10px; padding-right: 10px; }
+.side-scroll .mini-list, .side-scroll .chips, .side-scroll .home-day-notes { position: relative; z-index: 1; }
+.home-schedule-preview { display: none; min-width: 0; flex: 1; align-self: stretch; padding: 12px 8px; }
+.home-schedule-preview h3 { margin-bottom: 9px; font-size: 1rem; }
+.home-schedule-list { display: flex; flex-direction: column; gap: 6px; max-height: 170px; overflow: auto; padding: 2px 4px 4px 0; }
+.home-schedule-lesson { border: 0; border-left: 5px solid var(--c); border-radius: 10px; background: color-mix(in srgb, var(--c) 15%, white); padding: 7px 10px; text-align: left; font-weight: 750; cursor: pointer; }
+.home-schedule-lesson:hover, .home-schedule-lesson:focus-visible { outline: 2px solid var(--c); transform: translateX(2px); }
+@media (min-width: 1100px) and (min-height: 700px) {
+  .home-schedule-preview { display: block; }
+  .side-scroll .side-lessons { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1099px) {
+  .home-topline { min-height: 0; align-items: flex-start; }
+  .home-topline .home-logo { align-self: flex-start; }
+}
+.home-pie-full, .home-pie-half { width: 100%; height: 100%; min-height: 0; display: flex; justify-content: center; align-items: center; }
+.home-pie-half { display: none; }
+.side-box.wide-pie .home-pie-full { display: none; }
+.side-box.wide-pie .home-pie-half { display: flex; }
+.side-box.wide-pie .home-pie-half svg { width: 100%; height: 100%; max-height: 240px; }
+.side-box.wide-pie .home-pie-actions { position: absolute; top: 4px; right: 8px; z-index: 2; }
+.side-box.wide-pie .home-pie-view { padding-right: 74px; }
+.side-box.wide-pie .home-pie-half svg { max-height: none; }
+.date-short { display: none; }
+@media (min-width: 641px) and (max-width: 899px) { .home-logo { align-self: flex-start; } }
+.home-pie-actions { flex-direction: column; align-items: flex-end; }
+.home-pie-actions .btn { flex: none; }
+.tt-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tt-tools .btn { width: auto; flex: none; white-space: nowrap; padding: 8px 12px; }
+.nt-grid.list { grid-template-columns: 1fr; }
+.nt-grid.list .nt-card { min-height: 0; padding: 9px 13px; border-radius: 13px; gap: 12px; flex-direction: row; align-items: center; }
+.nt-grid.list .nt-card .nt-top { flex: 0 1 170px; min-width: 0; }
+.nt-grid.list .nt-card p { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-grid.list .nt-card small { flex: none; }
+.nt-view-switch { display: flex; gap: 5px; align-items: center; }
+.nt-view-switch .btn { min-height: 34px; padding: 4px 9px; font-size: .8rem; }
+.nt-view-switch .on { background: #e8efff; border-color: var(--blue); color: var(--blue); }
+.context-help { margin: 7px 0 12px; color: var(--muted); font-size: .87rem; }
+.context-help summary { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; font-weight: 800; color: var(--blue); list-style: none; }
+.context-help summary::-webkit-details-marker { display: none; }
+.context-help summary::before { content: '?'; width: 20px; height: 20px; border: 1px solid var(--blue); border-radius: 50%; display: inline-grid; place-items: center; }
+.context-help > div { padding: 8px 10px; margin-top: 5px; border-radius: 9px; background: #f3f7ff; }
+.gr-extra { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+.gr-rates { margin: 3px 0 13px; }
+.gr-rates summary { cursor: pointer; color: var(--blue); font-weight: 800; }
+.gr-rate-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 8px; margin-top: 10px; }
+.gr-rate-grid .field { min-width: 0; }
+@media (max-width: 640px) {
+  .nt-grid.list .nt-card { flex-wrap: wrap; gap: 2px 8px; }
+  .nt-grid.list .nt-card .nt-top { flex: 1 1 100%; }
+  .nt-grid.list .nt-card p { flex: 1 1 55%; }
+  .date-long { display: none; }
+  .date-short { display: inline; }
+  .side-box.wide-pie .home-pie-actions { right: 5px; }
+  .side-box.wide-pie .home-pie-view { padding-right: 73px; }
+  .auth-gate { width: 100%; max-width: 100vw; min-width: 0; padding: 16px; overflow-x: hidden; }
+  .auth-card { min-width: 0; width: 100%; max-width: 430px; padding: 22px 18px; margin-inline: auto; }
+  .auth-card .btn { max-width: 100%; white-space: normal; }
+  .view-wrong .page { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .view-wrong .title-row { align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .view-wrong .title-row .btn.primary { max-width: 100%; margin-bottom: 4px; }
+  .pdf-tools { margin-bottom: 24px; }
+  .tt { min-width: 660px; }
+  .tt th.period, .tt th.corner { width: 68px; min-width: 68px; font-size: .69rem; }
+  .tt td.slot { min-width: 104px; height: 75px; padding: 5px; font-size: .94rem; }
+  .tt td.slot small { font-size: .69rem; }
+  .tt-period-time { font-size: .58rem; letter-spacing: -.03em; }
+  .wk-scroll .tl { min-width: 520px; }
+  .tl-row, .tl-seg { grid-template-columns: 36px repeat(var(--n, 7), minmax(0, 1fr)); }
+  .tl-ev { font-size: .7rem; padding: 2px; }
+}
 .auth-actions { display: flex; gap: 8px; flex-wrap: wrap; }

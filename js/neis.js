@@ -4,7 +4,7 @@ const Neis = (() => {
   const TT = { '초등학교': 'elsTimetable', '중학교': 'misTimetable', '고등학교': 'hisTimetable', '특수학교': 'spsTimetable' };
   const ALLERGY = ['', '난류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', '돼지고기', '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기', '오징어', '조개류', '잣'];
 
-  const key = () => String((Store.get('settings', {}) || {}).neisKey || '').trim();
+  const key = () => String(localStorage.getItem('classhub:neisKey') || (Store.get('settings', {}) || {}).neisKey || '').trim();
   const ymd = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
   const isoDate = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 
@@ -114,5 +114,5 @@ const Neis = (() => {
     setTimeout(() => q.focus(), 50);
   }
 
-  return { searchSchools, meals, timetable, pickSchool, ALLERGY, ymd, hasKey: () => !!key() };
+  return { searchSchools, meals, timetable, pickSchool, ALLERGY, ymd, hasKey: () => !!key(), savedKey: key, setKey: (value) => localStorage.setItem('classhub:neisKey', String(value || '').trim()) };
 })();

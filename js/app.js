@@ -67,6 +67,15 @@ const App = (() => {
     toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
   }
 
+  function contextualHelp(container) {
+    container.querySelectorAll('p.hint').forEach((hint) => {
+      if (!hint.textContent.trim()) return;
+      const help = h('details', { class: 'context-help' },
+        h('summary', null, '도움말'), h('div', null, ...Array.from(hint.childNodes)));
+      hint.replaceWith(help);
+    });
+  }
+
   // 모달: { title, body, footer, wide, full, onClose }
   function modal(opts) {
     const closeBtn = h('button', { class: 'icon-btn', type: 'button', 'aria-label': '닫기', onclick: () => api.close() }, '✕');
@@ -74,6 +83,7 @@ const App = (() => {
       h('div', { class: 'modal-head' }, h('h3', null, opts.title || ''), closeBtn),
       h('div', { class: 'modal-body' }, opts.body),
       opts.footer ? h('div', { class: 'modal-foot' }, opts.footer) : null);
+    contextualHelp(box);
     const back = h('div', { class: 'modal-back' }, box);
     back.style.zIndex = 100 + modalStack.length * 10;
     const api = {
@@ -180,6 +190,7 @@ const App = (() => {
           navTabs(key)),
         page);
       view.render(page);
+      contextualHelp(page);
       page.prepend(h('div', { class: 'view-help-row' }, h('button', { class: 'view-help', type: 'button', 'aria-label': `${view.label} 도움말`, onclick: () => modal({ title: `${view.label} 도움말`, body: h('p', { class: 'help-copy' }, HELP[key] || '') }) }, '?')));
     }
     window.scrollTo(0, 0);

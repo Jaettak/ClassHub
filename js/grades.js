@@ -10,8 +10,8 @@ const Grades = (() => {
   const fmt = (n) => (Math.round(n * 10) / 10).toString();
   const num = (v) => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
 
-  const groupKey = (g) => `${g.grade}|${g.semester}|${EXAMS.indexOf(g.exam)}`;
-  const groupLabel = (g) => `${g.grade}학년 ${g.semester}학기 ${g.exam}`;
+  const groupKey = (g) => `${g.grade}|${g.semester}|${EXAMS.indexOf(g.exam)}|${g.examDate || ''}`;
+  const groupLabel = (g) => `${g.grade}학년 ${g.semester}학기 ${g.exam}${g.examDate ? ` (${g.examDate})` : ''}`;
 
   function filtered() {
     return load().filter((g) => (!filters.grade || String(g.grade) === filters.grade) && (!filters.sem || String(g.semester) === filters.sem));
@@ -27,15 +27,42 @@ const Grades = (() => {
     const full = h('input', { type: 'number', step: 'any', min: 1, value: g.full ?? 100, placeholder: '만점' });
     const rank = h('input', { type: 'number', min: 1, max: 9, value: g.rank ?? '', placeholder: '1~9' });
     const avg = h('input', { type: 'number', step: 'any', min: 0, value: g.avg ?? '', placeholder: '반 평균' });
+    const examDate = h('input', { type: 'date', value: g.examDate || '' });
+    const optional = (key, placeholder, max) => h('input', { type: 'number', step: 'any', min: 0, ...(max ? { max } : {}), value: g[key] ?? '', placeholder });
+    const classRank = optional('classRank', '석차');
+    const jointRank = optional('jointRank', '동석차 인원');
+    const studentCount = optional('studentCount', '수강자 수');
+    const stdDev = optional('stdDev', '표준편차');
+    const achievement = h('select', null, [['', '선택 안 함'], ...'ABCDE'.split('').map((x) => [x, x])].map(([value, label]) => h('option', { value, selected: (g.achievement || '') === value }, label)));
+    const achievementRate = optional('achievementRate', '내 성취도 비율', 100);
+    const schoolRates = Object.fromEntries('ABCDE'.split('').map((x) => [x, optional('rate' + x, x + ' 비율', 100)]));
+    const standardScore = optional('standardScore', '표준점수');
+    const percentile = optional('percentile', '백분위', 100);
+    const mockRank = optional('mockRank', '전국 석차');
+    const mockParticipants = optional('mockParticipants', '응시자 수');
+    const mockRates = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 1, optional('mockRate' + (i + 1), (i + 1) + '등급 비율', 100)]));
+    const schoolFields = h('div', { class: 'gr-extra' },
+      h('div', { class: 'row2' }, App.field('석차', classRank), App.field('동석차 인원', jointRank)),
+      h('div', { class: 'row2' }, App.field('수강자 수', studentCount), App.field('표준편차', stdDev)),
+      h('div', { class: 'row2' }, App.field('성취도', achievement), App.field('내 성취도 비율 (%)', achievementRate)),
+      h('details', { class: 'gr-rates' }, h('summary', null, '성취도별 비율 입력'), h('div', { class: 'gr-rate-grid' }, ...Object.entries(schoolRates).map(([name, input]) => App.field(name + ' (%)', input)))));
+    const mockFields = h('div', { class: 'gr-extra' },
+      h('div', { class: 'row2' }, App.field('표준점수', standardScore), App.field('백분위 (%)', percentile)),
+      h('div', { class: 'row2' }, App.field('전국 석차', mockRank), App.field('응시자 수', mockParticipants)),
+      h('details', { class: 'gr-rates' }, h('summary', null, '등급별 비율 입력'), h('div', { class: 'gr-rate-grid' }, ...Object.entries(mockRates).map(([name, input]) => App.field(name + '등급 (%)', input)))));
+    const drawExamFields = () => { schoolFields.hidden = exam.value === '모의고사'; mockFields.hidden = exam.value !== '모의고사'; };
+    exam.addEventListener('change', drawExamFields); drawExamFields();
     const memo = h('textarea', { rows: 2, placeholder: '틀린 이유, 다음에 고칠 점 등', value: g.memo || '' });
 
     const m = App.modal({
       title: isNew ? '성적 추가' : '성적 수정',
       body: [
         h('div', { class: 'row3' }, App.field('학년', grade), App.field('학기', sem), App.field('시험', exam)),
+        App.field('시험 날짜 (선택)', examDate),
         subject.el,
         h('div', { class: 'row2' }, App.field('점수 *', score), App.field('만점', full)),
         h('div', { class: 'row2' }, App.field('등급 (선택)', rank), App.field('평균 (선택)', avg)),
+        schoolFields, mockFields,
         App.field('메모 (선택)', memo),
       ],
       footer: [
@@ -54,8 +81,15 @@ const Grades = (() => {
       const fl = num(full.value) || 100;
       if (sc == null || sc < 0) { App.toast('점수를 입력해 주세요.'); score.focus(); return; }
       if (sc > fl) { App.toast('점수가 만점보다 커요.'); score.focus(); return; }
+      const rateValues = [...Object.values(schoolRates), ...Object.values(mockRates), achievementRate, percentile].map((input) => num(input.value)).filter((value) => value != null);
+      if (rateValues.some((value) => value < 0 || value > 100)) { App.toast('비율과 백분위는 0~100 사이로 입력해 주세요.'); return; }
       const rec = { id: g.id || uid(), grade: Number(grade.value), semester: Number(sem.value), exam: exam.value, subject: s, score: sc, full: fl,
-        rank: num(rank.value), avg: num(avg.value), memo: memo.value.trim(), created: g.created || Date.now() };
+        examDate: examDate.value, rank: num(rank.value), avg: num(avg.value), memo: memo.value.trim(), created: g.created || Date.now(),
+        classRank: num(classRank.value), jointRank: num(jointRank.value), studentCount: num(studentCount.value), stdDev: num(stdDev.value),
+        achievement: achievement.value, achievementRate: num(achievementRate.value),
+        standardScore: num(standardScore.value), percentile: num(percentile.value), mockRank: num(mockRank.value), mockParticipants: num(mockParticipants.value),
+        ...Object.fromEntries(Object.entries(schoolRates).map(([name, input]) => ['rate' + name, num(input.value)])),
+        ...Object.fromEntries(Object.entries(mockRates).map(([name, input]) => ['mockRate' + name, num(input.value)])) };
       const list = load().filter((x) => x.id !== rec.id);
       list.push(rec);
       save(list);
@@ -108,7 +142,7 @@ const Grades = (() => {
       // 시험별 묶음
       const map = new Map();
       list.forEach((g) => { const k = groupKey(g); if (!map.has(k)) map.set(k, { g: g.grade, s: g.semester, exam: g.exam, label: groupLabel(g), items: [] }); map.get(k).items.push(g); });
-      const groups = [...map.values()].sort((a, b) => a.g - b.g || a.s - b.s || EXAMS.indexOf(a.exam) - EXAMS.indexOf(b.exam));
+      const groups = [...map.values()].sort((a, b) => a.g - b.g || a.s - b.s || EXAMS.indexOf(a.exam) - EXAMS.indexOf(b.exam) || (a.items[0].examDate || '').localeCompare(b.items[0].examDate || ''));
       groups.forEach((x) => { x.avg = avgOf(x.items); x.items.sort((a, b) => a.subject.localeCompare(b.subject, 'ko')); });
 
       // 과목별 평균
@@ -116,6 +150,18 @@ const Grades = (() => {
       list.forEach((g) => { if (!bySubj.has(g.subject)) bySubj.set(g.subject, []); bySubj.get(g.subject).push(g); });
       const subj = [...bySubj.entries()].map(([name, arr]) => ({ name, avg: avgOf(arr), n: arr.length })).sort((a, b) => b.avg - a.avg);
       const last = groups[groups.length - 1];
+      const mockByDate = new Map();
+      list.filter((g) => g.exam === '모의고사' && g.percentile != null).forEach((g) => {
+        const key = g.examDate || `${g.grade}-${g.semester}-${g.created}`;
+        if (!mockByDate.has(key)) mockByDate.set(key, []);
+        mockByDate.get(key).push(g);
+      });
+      const mockTrend = [...mockByDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => ({
+        g: items[0].grade, s: items[0].semester, exam: date.slice(5) || '모의', label: `${date} 모의고사`,
+        avg: items.reduce((sum, g) => sum + g.percentile, 0) / items.length,
+      }));
+      const latestRates = list.slice().reverse().find((g) => (g.exam === '모의고사' ? Array.from({ length: 9 }, (_, i) => g['mockRate' + (i + 1)]) : 'ABCDE'.split('').map((x) => g['rate' + x])).some((value) => value != null));
+      const rates = latestRates ? (latestRates.exam === '모의고사' ? Array.from({ length: 9 }, (_, i) => [`${i + 1}등급`, latestRates['mockRate' + (i + 1)]]) : 'ABCDE'.split('').map((x) => [x, latestRates['rate' + x]])).filter(([, value]) => value != null) : [];
 
       stat.append(
         h('span', { class: 'pill', style: { '--c': '#ff6f91' } }, `전체 평균 ${fmt(avgOf(list))}%`),
@@ -128,10 +174,14 @@ const Grades = (() => {
           h('section', { class: 'gr-card' }, h('h3', null, '과목별 평균'),
             h('div', { class: 'gr-bars' }, subj.map((s) => h('div', { class: 'gr-bar', style: { '--c': colorFor(s.name) }, title: `${s.name} · ${s.n}회` },
               h('span', { class: 'gb-n' }, s.name), h('span', { class: 'gb-t' }, h('i', { style: { width: Math.max(2, Math.min(100, s.avg)) + '%' } })), h('b', null, fmt(s.avg))))))),
+        mockTrend.length ? h('section', { class: 'gr-card' }, h('h3', null, '모의고사 백분위 추이'), h('div', { class: 'gr-chart' }, trend(mockTrend))) : null,
+        rates.length ? h('section', { class: 'gr-card' }, h('h3', null, `${latestRates.subject} · ${latestRates.exam} 비율`),
+          h('div', { class: 'gr-bars' }, rates.map(([name, value]) => h('div', { class: 'gr-bar', style: { '--c': colorFor(latestRates.subject) } },
+            h('span', { class: 'gb-n' }, name), h('span', { class: 'gb-t' }, h('i', { style: { width: Math.max(2, value) + '%' } })), h('b', null, `${fmt(value)}%`))))) : null,
         ...groups.slice().reverse().map((gr) => h('section', { class: 'gr-card' },
           h('h3', null, gr.label, h('small', null, ` 평균 ${fmt(gr.avg)}%`)),
           h('div', { class: 'gr-scroll' }, h('table', { class: 'gr-table' },
-            h('thead', null, h('tr', null, ['과목', '점수', '백분율', '등급', '평균 대비', '메모'].map((t) => h('th', null, t)))),
+            h('thead', null, h('tr', null, ['과목', '점수', '백분율', '등급', '석차 / 동석차', '성취도 · 백분위', '표준점수', '평균 대비', '메모'].map((t) => h('th', null, t)))),
             h('tbody', null, gr.items.map((g) => {
               const diff = g.avg != null ? g.score - g.avg : null;
               const open = () => edit(g, redraw);
@@ -140,6 +190,9 @@ const Grades = (() => {
                 h('td', null, `${fmt(g.score)} / ${fmt(g.full)}`),
                 h('td', null, `${fmt(pct(g))}%`),
                 h('td', null, g.rank != null ? `${g.rank}등급` : '-'),
+                h('td', null, g.exam === '모의고사' ? (g.mockRank != null ? `${g.mockRank} / ${g.mockParticipants ?? '?'}` : '-') : (g.classRank != null ? `${g.classRank}${g.jointRank ? ` (동석차 ${g.jointRank})` : ''} / ${g.studentCount ?? '?'}` : '-')),
+                h('td', null, g.exam === '모의고사' ? (g.percentile != null ? `${fmt(g.percentile)}%` : '-') : (g.achievement ? `${g.achievement}${g.achievementRate != null ? ` · ${fmt(g.achievementRate)}%` : ''}` : '-')),
+                h('td', null, g.exam === '모의고사' && g.standardScore != null ? fmt(g.standardScore) : '-'),
                 h('td', { class: diff == null ? '' : diff >= 0 ? 'up' : 'down' }, diff == null ? '-' : `${diff >= 0 ? '+' : ''}${fmt(diff)}`),
                 h('td', { class: 'gr-memo' }, g.memo || ''));
             })))))));
