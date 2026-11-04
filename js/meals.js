@@ -18,6 +18,7 @@ const Meals = (() => {
         const next = new Set(Store.get('mealFavorites', []));
         if (next.has(id) || next.has(legacyId)) { next.delete(id); next.delete(legacyId); } else next.add(id);
         Store.set('mealFavorites', [...next]);
+        Store.set('mealFavoriteNames', { ...Store.get('mealFavoriteNames', {}), [id]: d.name });
         e.currentTarget.parentElement.classList.toggle('ml-marked', next.has(id));
         e.currentTarget.setAttribute('aria-pressed', String(next.has(id)));
       } }, '★'));
@@ -50,6 +51,16 @@ const Meals = (() => {
       const mine = new Set(Settings.get().allergies || []);
       const pick = () => Neis.pickSchool((sc) => { Store.set('mealSchool', sc); draw(); });
       const isMine = school && Settings.get().school && Settings.get().school.code === school.code;
+      const showFavorites = () => {
+        const names = { ...Store.get('mealFavoriteNames', {}) };
+        for (const [key, week] of cache) { if (!key.startsWith(`${school.code}|`)) continue; Object.values(week).flat().forEach((meal) => meal.dishes.forEach((dish) => {
+          names[`${school.code}|${dish.name.replace(/\s+/g, '').toLowerCase()}`] = dish.name;
+        })); }
+        const marked = Store.get('mealFavorites', []).filter((id) => id.startsWith(`${school.code}|`));
+        App.modal({ title: '즐겨찾기한 급식', body: marked.length
+          ? h('div', { class: 'ml-favorites' }, [...new Set(marked.map((id) => names[id] || id.split('|').at(-1)))].map((name) => h('div', null, '★ ', name)))
+          : h('p', { class: 'muted' }, '별표를 누른 급식이 아직 없어요.') });
+      };
 
       const strip = h('div', { class: 'ml-strip' });
       const detail = h('div', { class: 'ml-detail' });
@@ -64,7 +75,8 @@ const Meals = (() => {
           h('button', { class: 'btn', type: 'button', onclick: () => { sel = addDays(sel, -7); draw(); }, 'aria-label': '지난주' }, '◀'),
           h('b', { class: 'cal-label' }, `${ws.getMonth() + 1}월 ${ws.getDate()}일 ~ ${we.getMonth() + 1}월 ${we.getDate()}일`),
           h('button', { class: 'btn', type: 'button', onclick: () => { sel = addDays(sel, 7); draw(); }, 'aria-label': '다음주' }, '▶'),
-          h('button', { class: 'btn ghost', type: 'button', onclick: () => { sel = new Date(); draw(); } }, '오늘')),
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => { sel = new Date(); draw(); } }, '오늘'),
+          school ? h('button', { class: 'btn ghost', type: 'button', onclick: showFavorites }, '★ 즐겨찾기') : null),
         strip, detail,
         );
 

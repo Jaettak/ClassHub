@@ -6,6 +6,7 @@ const Timer = (() => {
   let ctx = null;
   let alarmTimer = null;
   let alarmBar = null;
+  let alarmSound = false;
   const baseTitle = document.title;
 
   const elapsed = () => (st ? st.before + (st.running ? (Date.now() - st.startedAt) / 1000 : 0) : 0);
@@ -19,9 +20,9 @@ const Timer = (() => {
   const log = () => Store.get('timerLog', []);
 
   function beep() {
-    const soundSettings = Store.get('settings', {}) || {};
-    if (soundSettings.timerSound === false || Number(soundSettings.soundVolume ?? 70) <= 0) return;
-    const volume = Math.min(1, Math.max(0, Number(soundSettings.soundVolume ?? 70) / 100));
+    const soundSettings = Settings.get();
+    if (!alarmSound || Number(soundSettings.soundVolume ?? 50) <= 0) return;
+    const volume = Math.min(1, Math.max(0, Number(soundSettings.soundVolume ?? 50) / 50)) * 1.25;
     try {
       ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
       [0, 0.35, 0.7].forEach((t) => {
@@ -40,18 +41,22 @@ const Timer = (() => {
     alarmTimer = null;
     if (alarmBar) alarmBar.remove();
     alarmBar = null;
+    document.body.classList.remove('timer-alerting');
+    alarmSound = false;
   }
 
-  function startAlarm(title) {
+  function startAlarm(info) {
     stopAlarm();
-    const settings = Store.get('settings', {}) || {};
-    if (settings.timerSound === false || Number(settings.soundVolume ?? 70) <= 0) return;
+    const settings = Settings.get();
+    alarmSound = info.alarmSound ?? (settings.timerSound !== false);
+    const visual = info.alarmVisual !== false;
+    if (!visual && !alarmSound) return;
     alarmBar = h('div', { class: 'timer-alarm', role: 'alert' },
-      h('b', null, `${title || '타이머'} 시간이 끝났어요`),
+      h('b', null, `${info.title || '타이머'} 시간이 끝났어요`),
       h('button', { class: 'btn primary', type: 'button', onclick: stopAlarm }, '타이머 끄기'));
     document.body.append(alarmBar);
-    beep();
-    alarmTimer = setInterval(beep, 1800);
+    if (visual) document.body.classList.add('timer-alerting');
+    if (alarmSound) { beep(); alarmTimer = setInterval(beep, 1800); }
   }
 
   function saveSession() {
@@ -78,9 +83,8 @@ const Timer = (() => {
     const info = { ...st };
     const sec = saveSession();
     clear();
-    if (auto) startAlarm(info.title);
-    const min = Math.max(1, Math.round(sec / 60));
-    App.toast(`${info.title || '타이머'} · ${min}분 기록했어요.`);
+    if (auto) startAlarm(info);
+    App.toast(`${info.title || '타이머'} · ${fmt(sec)} 기록했어요.`);
     if (info.evId) askDone(info);
     if (App.current === 'calendar') App.refresh();
   }
@@ -134,7 +138,7 @@ const Timer = (() => {
     if (st && !confirm('진행 중인 타이머가 있어요. 기록하고 새로 시작할까요?')) return;
     if (st) { saveSession(); clear(); }
     try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.resume) ctx.resume(); } catch (e) { /* 무시 */ }
-    st = { title: o.title || '', evId: o.evId || '', date: o.date || todayStr(), mode: o.mode, total: (o.minutes || 0) * 60, running: true, startedAt: Date.now(), before: 0 };
+    st = { title: o.title || '', evId: o.evId || '', date: o.date || todayStr(), mode: o.mode, total: o.seconds ?? ((o.minutes || 0) * 60), alarmSound: o.alarmSound, alarmVisual: o.alarmVisual, running: true, startedAt: Date.now(), before: 0 };
     persist(); mount();
   }
 
@@ -142,20 +146,26 @@ const Timer = (() => {
   function open(o) {
     o = o || {};
     const title = h('input', { type: 'text', value: o.title || '', placeholder: '예: 수학 숙제', maxLength: 40 });
-    const mins = h('input', { type: 'number', min: 1, max: 600, value: o.minutes || 25 });
+    const mins = h('input', { type: 'number', min: 0, max: 600, value: o.minutes ?? 25 });
+    const secs = h('input', { type: 'number', min: 0, max: 59, value: 0 });
+    const sound = h('input', { type: 'checkbox', checked: Settings.get().timerSound !== false });
+    const visual = h('input', { type: 'checkbox', checked: true });
     let mode = o.mode === 'up' ? 'up' : 'down';
     const seg = h('div', { class: 'seg' });
-    const minsField = App.field('시간 (분)', mins);
+    const timeFields = h('div', { class: 'row2 tm-duration' }, App.field('분', mins), App.field('초', secs));
+    const alertChoices = h('div', { class: 'tm-alert-choices' }, h('b', null, '종료 알림'), h('label', { class: 'check' }, sound, '소리'), h('label', { class: 'check' }, visual, '화면 표시'));
     const draw = () => {
       if (!o.mode) seg.replaceChildren(...[['down', '타이머'], ['up', '스톱워치']].map(([k, l]) => h('button', { type: 'button', class: 'seg-btn' + (mode === k ? ' on' : ''), onclick: () => { mode = k; draw(); } }, l)));
-      minsField.hidden = mode !== 'down';
+      timeFields.hidden = mode !== 'down';
+      alertChoices.hidden = mode !== 'down';
       if (typeof quick !== 'undefined') quick.hidden = mode !== 'down';
     };
     const quick = h('div', { class: 'chips tm-quick' }, [10, 25, 30, 45, 60].map((n) => h('button', { type: 'button', class: 'fchip', onclick: () => { mins.value = n; mode = 'down'; draw(); } }, `${n}분`)));
     draw();
     const m = App.modal({
       title: mode === 'up' ? '스톱워치 시작' : '타이머 시작',
-      body: [App.field('무엇을 할까요?', title), o.mode ? null : h('div', { class: 'field' }, h('span', null, '방식'), seg), minsField, quick,
+      body: [App.field('무엇을 할까요?', title), o.mode ? null : h('div', { class: 'field' }, h('span', null, '방식'), seg), timeFields, quick,
+        alertChoices,
         o.spent ? h('p', { class: 'hint' }, `이 일정에 지금까지 ${o.spent}분 공부했어요.`) : null],
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
@@ -163,10 +173,10 @@ const Timer = (() => {
       ],
     });
     function go() {
-      const n = Number(mins.value);
-      if (mode === 'down' && !(n >= 1)) { App.toast('시간을 1분 이상으로 적어 주세요.'); return; }
+      const n = Number(mins.value), s = Number(secs.value);
+      if (mode === 'down' && (!Number.isInteger(n) || !Number.isInteger(s) || n < 0 || n > 600 || s < 0 || s > 59 || n * 60 + s < 1)) { App.toast('시간을 1초 이상으로 적어 주세요.'); return; }
       m.close();
-      start({ title: title.value.trim(), evId: o.evId, date: o.date, mode, minutes: n });
+      start({ title: title.value.trim(), evId: o.evId, date: o.date, mode, seconds: n * 60 + s, alarmSound: sound.checked, alarmVisual: visual.checked });
     }
     m.el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') go(); });
     setTimeout(() => title.focus(), 50);

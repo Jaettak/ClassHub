@@ -379,7 +379,8 @@ const Calendar = (() => {
       const ro = R - lane * w;
       const ri = ro - w;
       const rm = (ro + ri) / 2;
-      const fs = L > 1 ? 11 : 13;
+      const arcLength = (ang(x.f) - ang(x.s)) * rm;
+      const fs = Math.max(8, Math.min(L > 1 ? 11 : 14, Math.floor(arcLength / 2.4)));
       const mid = (ang(x.s) + ang(x.f)) / 2;
       if ((ang(x.f) - ang(x.s)) * rm < fs + 4) return;
       const max = Math.max(1, Math.floor((ro - ri - 6) / fs));
@@ -413,10 +414,11 @@ const Calendar = (() => {
     const angle = (minutes) => Math.PI + Math.max(0, Math.min(1440, minutes)) / 1440 * Math.PI;
     const point = (radius, a) => [C + radius * Math.cos(a), Y + radius * Math.sin(a)];
     const f = (n) => n.toFixed(2);
-    const svg = sv('svg', { viewBox: '0 0 420 240', class: 'home-semi-svg', role: 'img', 'aria-label': `${longDate(d)} 반원 일정표` });
-    svg.append(sv('path', { d: `M${C - outer} ${Y} A${outer} ${outer} 0 0 1 ${C + outer} ${Y}`, fill: 'none', stroke: '#edf2fb', 'stroke-width': outer - inner }));
+    const svg = sv('svg', { viewBox: '18 24 384 205', class: 'home-semi-svg', role: 'img', 'aria-label': `${longDate(d)} 반원 일정표` });
+    const baseRadius = (outer + inner) / 2;
+    svg.append(sv('path', { d: `M${C - baseRadius} ${Y} A${baseRadius} ${baseRadius} 0 0 1 ${C + baseRadius} ${Y}`, fill: 'none', stroke: '#edf2fb', 'stroke-width': outer - inner }));
     for (let k = 0; k <= 24; k += 6) {
-      const [x, y] = point(outer + 17, angle(k * 60));
+      const [x, y] = point(outer + 23, angle(k * 60));
       svg.append(sv('text', { x: f(x), y: f(y), class: 'pie-hr', 'text-anchor': 'middle' }, `${k}시`));
     }
     const lanes = Math.min(4, Math.max(1, ...evs.map((x) => x.lane + 1)));

@@ -1,16 +1,40 @@
 // 설정: 학교 정보, NEIS 키, 알레르기, 화면, 백업, 초기화
 const Settings = (() => {
-  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, uiSound: true, soundVolume: 70 };
+  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, uiSound: true, soundVolume: 50 };
   const SCALE = { small: '15px', normal: '16px', large: '18px' };
+  const DEVICE = ['fontScale', 'reduceMotion', 'timerSound', 'uiSound', 'soundVolume'];
+  const local = () => {
+    try {
+      const saved = localStorage.getItem('classhub:deviceSettings');
+      if (saved) return JSON.parse(saved);
+      const legacy = Store.get('settings', {}) || {};
+      const snapshot = Object.fromEntries(DEVICE.filter((key) => key !== 'soundVolume' && key in legacy).map((key) => [key, legacy[key]]));
+      localStorage.setItem('classhub:deviceSettings', JSON.stringify(snapshot));
+      return snapshot;
+    } catch (_) { return {}; }
+  };
 
-  const get = () => ({ ...DEFAULTS, ...(Store.get('settings', {}) || {}) });
-  const save = (patch) => { Store.set('settings', { ...get(), ...patch }); apply(); };
+  const get = () => {
+    const shared = { ...(Store.get('settings', {}) || {}) };
+    DEVICE.forEach((key) => delete shared[key]);
+    return { ...DEFAULTS, ...shared, ...local() };
+  };
+  const save = (patch) => {
+    const shared = { ...(Store.get('settings', {}) || {}) };
+    const device = { ...local() };
+    DEVICE.forEach((key) => { if (key in patch) device[key] = patch[key]; delete shared[key]; });
+    Object.entries(patch).forEach(([key, value]) => { if (!DEVICE.includes(key)) shared[key] = value; });
+    localStorage.setItem('classhub:deviceSettings', JSON.stringify(device));
+    Store.set('settings', shared); apply();
+  };
 
   function apply() {
     const s = get();
-    document.documentElement.style.fontSize = SCALE[s.fontScale] || SCALE.normal;
+    const mobile = matchMedia('(max-width: 640px), (max-height: 520px) and (max-width: 950px)').matches;
+    document.documentElement.style.fontSize = mobile ? ({ small: '13px', normal: '14px', large: '16px' })[s.fontScale] || '14px' : SCALE[s.fontScale] || SCALE.normal;
     document.body.classList.toggle('reduce-motion', !!s.reduceMotion);
   }
+  window.addEventListener('resize', apply);
 
   function section(title, ...kids) {
     return h('section', { class: 'set-sec' }, h('h4', null, title), ...kids);
@@ -49,12 +73,12 @@ const Settings = (() => {
     // 화면
     const scaleSeg = h('div', { class: 'seg' });
     const drawScale = () => scaleSeg.replaceChildren(...[['small', '작게'], ['normal', '보통'], ['large', '크게']].map(([k, l]) => h('button', { type: 'button', class: 'seg-btn' + (draft.fontScale === k ? ' on' : ''),
-      onclick: () => { draft.fontScale = k; document.documentElement.style.fontSize = SCALE[k]; drawScale(); } }, l)));
+      onclick: () => { draft.fontScale = k; document.documentElement.style.fontSize = matchMedia('(max-width: 640px), (max-height: 520px) and (max-width: 950px)').matches ? ({ small: '13px', normal: '14px', large: '16px' })[k] : SCALE[k]; drawScale(); } }, l)));
     drawScale();
     const motion = h('input', { type: 'checkbox', checked: !!draft.reduceMotion });
     const sound = h('input', { type: 'checkbox', checked: draft.timerSound !== false });
     const uiSound = h('input', { type: 'checkbox', checked: draft.uiSound !== false });
-    const volume = h('input', { type: 'range', min: 0, max: 100, step: 5, value: draft.soundVolume ?? 70, 'aria-label': '소리 크기' });
+    const volume = h('input', { type: 'range', min: 0, max: 100, step: 5, value: draft.soundVolume ?? 50, 'aria-label': '소리 크기' });
     const volumeLabel = h('output', null, `${volume.value}%`);
     volume.addEventListener('input', () => { volumeLabel.textContent = `${volume.value}%`; });
     const viewBox = section('화면 설정',

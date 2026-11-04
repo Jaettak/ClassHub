@@ -187,6 +187,10 @@ const App = (() => {
             h('span', { class: 'brand-name', 'aria-label': 'ClassHub' },
               [...'Class'].map((letter, i) => h('span', { style: { '--i': i }, 'aria-hidden': 'true' }, letter)),
               [...'Hub'].map((letter, i) => h('b', { style: { '--i': i + 5 }, 'aria-hidden': 'true' }, letter)))),
+          h('button', { class: 'nav-fold', type: 'button', 'aria-label': '탭 메뉴 접기 또는 펼치기', onclick: (e) => {
+            document.body.classList.toggle('nav-collapsed');
+            e.currentTarget.textContent = document.body.classList.contains('nav-collapsed') ? '탭 펼치기' : '탭 접기';
+          } }, document.body.classList.contains('nav-collapsed') ? '탭 펼치기' : '탭 접기'),
           navTabs(key)),
         page);
       view.render(page);
@@ -197,6 +201,12 @@ const App = (() => {
   }
 
   function refresh() { route(); }
+
+  window.ClassHubBack = () => {
+    if (modalStack.length) { modalStack[modalStack.length - 1].close(); return true; }
+    if (location.hash !== '#home') { location.hash = '#home'; return true; }
+    return false;
+  };
 
   function download(filename, blobOrUrl) {
     const url = typeof blobOrUrl === 'string' ? blobOrUrl : URL.createObjectURL(blobOrUrl);
@@ -241,9 +251,9 @@ const App = (() => {
 (() => {
   let audio;
   document.addEventListener('click', (event) => {
-    const target = event.target.closest('a[href^="#"], .btn.primary, .bm, .ck, .nt-check, .nt-card, .ml-mark, .fchip, .timer-page-card');
-    const settings = Store.get('settings', {}) || {};
-    if (!target || settings.uiSound === false || Number(settings.soundVolume ?? 70) <= 0) return;
+    const target = event.target.closest('button, a, [role="button"], summary');
+    const settings = Settings.get();
+    if (!target || target.disabled || settings.uiSound === false || Number(settings.soundVolume ?? 50) <= 0) return;
     try {
       audio = audio || new (window.AudioContext || window.webkitAudioContext)();
       if (audio.state === 'suspended') audio.resume();
@@ -252,7 +262,7 @@ const App = (() => {
       const navigate = target.matches('a[href^="#"], .bm, .home-card');
       const from = select ? 610 : navigate ? 480 : 540;
       osc.type = 'sine'; osc.frequency.setValueAtTime(from, t); osc.frequency.exponentialRampToValueAtTime(from * (select ? 1.18 : 1.12), t + 0.07);
-      gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(Math.min(0.045, 0.034 * Number(settings.soundVolume ?? 70) / 70), t + 0.012);
+      gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(Math.min(0.113, 0.05625 * Number(settings.soundVolume ?? 50) / 50), t + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.105);
       osc.connect(gain); gain.connect(audio.destination); osc.start(t); osc.stop(t + 0.11);
     } catch (_) { /* 소리를 낼 수 없는 브라우저에서는 조용히 동작 */ }

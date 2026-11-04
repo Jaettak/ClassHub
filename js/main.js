@@ -60,7 +60,7 @@ const Home = (() => {
           e.checkable !== false ? h('button', { type: 'button', class: 'ck sm' + (e.done ? ' on' : ''), role: 'checkbox', 'aria-checked': String(!!e.done), 'aria-label': `${e.title} 완료 표시`, title: e.done ? '완료 취소' : '완료로 표시', onclick: () => { Calendar.setDone(e.id, e.date, !e.done); drawSide(); } }) : null,
           h('button', { class: 'home-event-open', type: 'button', onclick: () => Calendar.showEvent(e, drawSide) }, h('span', null, `${e.start}~${e.end}`), h('b', null, e.title)))))
           : h('p', { class: 'muted' }, '등록된 일정이 없어요.'),
-        Notes.forDate(ds).length ? h('div', { class: 'home-day-notes' }, h('b', null, '이 날의 메모'), Notes.forDate(ds).map((n) => h('button', { type: 'button', onclick: () => Notes.show(n, drawSide) }, n.title || n.body))) : null].filter(Boolean));
+        Notes.forDate(ds).length ? h('div', { class: 'home-day-notes' }, h('b', null, '이 날의 메모'), Notes.forDate(ds).map((n) => h('button', { type: 'button', style: { '--c': n.color || '#ffe7a3' }, onclick: () => Notes.show(n, drawSide) }, n.title || n.body))) : null].filter(Boolean));
     }
     function selectSide(next) {
       sideMode = next; Store.set('homeSideMode', next);

@@ -125,17 +125,28 @@ const Notes = (() => {
         ordered.forEach((x, i) => { x.sortOrder = i; });
         save(ordered); redraw();
       };
+      const folderButton = (id, name) => h('button', { class: 'nt-folder' + (selectedFolder === id ? ' on' : ''), type: 'button',
+        onclick: () => { selectedFolder = id; redraw(); },
+        ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); },
+        ondragleave: (e) => e.currentTarget.classList.remove('drag-over'),
+        ondrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+          const noteId = e.dataTransfer.getData('text/plain');
+          if (!noteId) return;
+          save(load().map((n) => n.id === noteId ? { ...n, folderId: id, updatedAt: Date.now() } : n));
+          selectedFolder = id; redraw(); App.toast(`${name}에 넣었어요.`);
+        } }, name);
       folderBar.replaceChildren(
         h('button', { class: 'nt-folder' + (selectedFolder === '*' ? ' on' : ''), type: 'button', onclick: () => { selectedFolder = '*'; redraw(); } }, '전체'),
-        h('button', { class: 'nt-folder' + (selectedFolder === '' ? ' on' : ''), type: 'button', onclick: () => { selectedFolder = ''; redraw(); } }, '기본 보관함'),
-        ...folders().map((f) => h('button', { class: 'nt-folder' + (selectedFolder === f.id ? ' on' : ''), type: 'button', onclick: () => { selectedFolder = f.id; redraw(); } }, f.name)),
+        folderButton('', '기본 보관함'),
+        ...folders().map((f) => folderButton(f.id, f.name)),
         ...(selectedFolder && selectedFolder !== '*' ? [h('button', { class: 'nt-folder-manage', type: 'button', onclick: manageFolder }, '보관함 관리')] : []));
       grid.replaceChildren();
       if (!list.length) {
         grid.append(h('div', { class: 'empty-box' }, all.length ? '표시할 메모가 없어요.' : '아직 메모가 없어요.'));
         return;
       }
-      list.forEach((n) => grid.append(h('div', { role: 'button', tabIndex: 0, draggable: true, class: 'nt-card', style: { '--c': n.color },
+      list.forEach((n) => {
+        const card = h('div', { role: 'button', tabIndex: 0, draggable: true, class: 'nt-card', style: { '--c': n.color },
         onclick: (e) => { if (!e.target.closest('.nt-delete')) show(n, redraw); },
         onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) show(n, redraw); },
         ondragstart: (e) => { e.dataTransfer.setData('text/plain', n.id); e.dataTransfer.effectAllowed = 'move'; },
@@ -143,9 +154,12 @@ const Notes = (() => {
         ondrop: (e) => { e.preventDefault(); move(e.dataTransfer.getData('text/plain'), n.id); } },
         h('div', { class: 'nt-top' },
           h('h4', null, n.title || '제목 없음'), n.pinned ? h('span', { class: 'badge' }, '고정') : null,
-          h('button', { class: 'nt-delete', type: 'button', title: '휴지통으로 이동', 'aria-label': `${n.title || '메모'} 휴지통으로 이동`, onclick: (e) => { e.stopPropagation(); trash(n.id, redraw); } }, '×')),
+          viewMode === 'list' ? null : h('button', { class: 'nt-delete', type: 'button', title: '휴지통으로 이동', 'aria-label': `${n.title || '메모'} 휴지통으로 이동`, onclick: (e) => { e.stopPropagation(); trash(n.id, redraw); } }, '×')),
         n.body ? h('p', null, n.body) : null,
-        h('small', null, n.dates?.length ? `${n.dates.length}개 날짜` : n.dateEnd ? `${n.date} ~ ${n.dateEnd}` : n.date ? `일정 ${n.date}` : new Date(n.updatedAt).toLocaleDateString('ko-KR')))));
+        h('small', null, n.dates?.length ? `${n.dates.length}개 날짜` : n.dateEnd ? `${n.date} ~ ${n.dateEnd}` : n.date ? `일정 ${n.date}` : new Date(n.updatedAt).toLocaleDateString('ko-KR')));
+        grid.append(viewMode === 'list' ? h('div', { class: 'nt-list-row' }, card,
+          h('button', { class: 'nt-list-delete', type: 'button', title: '휴지통으로 이동', 'aria-label': `${n.title || '메모'} 휴지통으로 이동`, onclick: () => trash(n.id, redraw) }, '×')) : card);
+      });
     };
     function addFolder() {
       const name = h('input', { type: 'text', maxLength: 30, placeholder: '보관함 이름' });

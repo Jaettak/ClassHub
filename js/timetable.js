@@ -80,7 +80,7 @@ const Timetable = (() => {
         });
         if (t.lunch?.start && t.lunch?.end && !list.some((e) => e.date === ds && e.sourceBreak === 'lunch')) {
           list.push({ id: uid(), date: ds, start: t.lunch.start, end: t.lunch.end,
-            title: '점심시간', memo: '', color: '#ffba4a', checkable: false, sourceTerm: term.id, sourceBreak: 'lunch', done: false });
+            title: '점심시간', memo: '', color: '#65768e', checkable: false, sourceTerm: term.id, sourceBreak: 'lunch', done: false });
           added++;
         }
       }
