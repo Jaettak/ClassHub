@@ -1055,6 +1055,7 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
   .tl-row, .tl-seg { grid-template-columns: 36px repeat(var(--n, 7), minmax(0, 1fr)); }
   .tl-ev { font-size: .7rem; padding: 2px; }
 }
-.side-box.wide-pie .home-pie-view { padding-right: 0; align-items: flex-end; }
-.side-box.wide-pie .home-pie-half svg { object-position: bottom center; }
+.side-box.wide-pie { padding-bottom: 6px; }
+.side-box.wide-pie .home-pie-view { padding-right: 80px; align-items: flex-end; }
+.side-box.wide-pie .home-pie-half svg { object-position: bottom center; transform: translateY(12px); }
 .auth-actions { display: flex; gap: 8px; flex-wrap: wrap; }
