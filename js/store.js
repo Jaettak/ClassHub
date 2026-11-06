@@ -89,7 +89,7 @@ const Store = (() => {
     async mergeAll(data) {
       if (!data || data.app !== 'ClassHub' || !data.kv || typeof data.kv !== 'object' || Array.isArray(data.kv)) throw new Error('ClassHub 백업 파일이 아니에요.');
       const next = clone(cache);
-      const maps = new Set(['subjectColors', 'lessonDayNotes']);
+      const maps = new Set(['subjectColors', 'subjectAutoColors', 'subjectRooms', 'subjectTeachers', 'lessonDayNotes', 'mealFavoriteNames']);
       const itemId = (v) => v && typeof v === 'object' ? String(v.id ?? v.at ?? JSON.stringify(v)) : String(v);
       for (const [key, old] of Object.entries(data.kv)) {
         const current = next[key];

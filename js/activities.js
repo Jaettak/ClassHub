@@ -78,6 +78,7 @@ const Activities = (() => {
         App.field('생기부에 쓴 내용', cv),
         h('label', { class: 'check' }, cvDone, ' 생기부에 기록됐어요'),
         App.field('심화 메모', memo),
+        act.sourceDetails ? h('details', { class: 'school-source-detail' }, h('summary', null, '가져온 생기부 원문과 추가 항목'), h('pre', null, JSON.stringify(act.sourceDetails, null, 2))) : null,
       ],
       footer: [
         !isNew ? h('button', { class: 'btn danger', type: 'button', onclick: () => {
@@ -95,7 +96,7 @@ const Activities = (() => {
       if (!noDate.checked && !date.value) { App.toast('날짜를 선택하거나 “날짜 표기 안 함”을 체크해 주세요.'); return; }
       const sim = similarTo(t, act.id);
       if (sim.length && !confirm(`비슷한 활동이 있어요: "${sim[0].title}" (${sim[0].date || '날짜 없음'})\n그래도 저장할까요?`)) return;
-      const rec = {
+      const rec = { ...act,
         id: act.id || uid(), title: t, type: type.value, date: noDate.checked ? '' : date.value,
         grade: grade.value, semester: sem.value, desc: desc.value.trim(), cv: cv.value.trim(),
         cvDone: cvDone.checked, memo: memo.value.trim(), created: act.created || Date.now(),
@@ -114,7 +115,7 @@ const Activities = (() => {
     const q = f.q.trim().toLowerCase();
     let list = load().filter((a) => (!f.type || a.type === f.type) && (!f.sem || String(a.semester) === f.sem)
       && (!f.grade || String(a.grade) === f.grade) && (!f.cv || (f.cv === 'done') === !!a.cvDone)
-      && (!q || [a.title, a.desc, a.cv, a.memo].some((s) => String(s || '').toLowerCase().includes(q))));
+      && (!q || [a.title, a.subject, a.desc, a.cv, a.memo].some((s) => String(s || '').toLowerCase().includes(q))));
     const dir = f.order === 'asc' ? 1 : -1;
     list = list.sort((a, b) => {
       if (!a.date || !b.date) return (a.date ? -1 : 0) + (b.date ? 1 : 0) || a.created - b.created;
@@ -127,10 +128,10 @@ const Activities = (() => {
     const t = TYPES[a.type] || TYPES.etc;
     return h('button', { type: 'button', class: 'act-card', style: { '--c': t.color }, onclick: () => edit(a, after) },
       h('div', { class: 'act-top' },
-        h('span', { class: 'badge' }, t.label),
+        h('span', { class: 'badge' }, a.sourceDetails?.type || t.label),
         h('span', { class: 'act-date' }, a.date || '날짜 없음'),
         h('span', { class: 'cv-state ' + (a.cvDone ? 'ok' : 'no') }, a.cvDone ? '생기부 기록함' : '생기부 미기록')),
-      h('h4', null, a.title),
+      h('h4', null, a.subject ? `${a.subject} · ${a.title}` : a.title),
       h('div', { class: 'act-sem' }, semLabel(a)),
       a.desc ? h('p', { class: 'act-desc' }, a.desc) : null,
       a.cv ? h('p', { class: 'act-cv' }, h('b', null, '생기부 '), a.cv) : null,
@@ -138,6 +139,7 @@ const Activities = (() => {
   }
 
   function render(root) {
+    root.append(SchoolData.tools('activities'));
     const listBox = h('div', { class: 'act-list' });
     const stat = h('div', { class: 'stat' });
     const redraw = () => {
@@ -162,7 +164,7 @@ const Activities = (() => {
       const groups = [];
       const idx = new Map();
       list.forEach((a) => {
-        const key = filters.group === 'type' ? (TYPES[a.type] || TYPES.etc).label : semLabel(a);
+        const key = filters.group === 'subject' ? (a.subject || '과목 없음') : filters.group === 'type' ? (TYPES[a.type] || TYPES.etc).label : semLabel(a);
         if (!idx.has(key)) { idx.set(key, groups.length); groups.push({ key, items: [] }); }
         groups[idx.get(key)].items.push(a);
       });
@@ -185,7 +187,7 @@ const Activities = (() => {
         sel('grade', [['', '모든 학년'], ['1', '1학년'], ['2', '2학년'], ['3', '3학년']]),
         sel('sem', [['', '모든 학기'], ['1', '1학기'], ['2', '2학기']]),
         sel('cv', [['', '생기부 전체'], ['done', '기록함'], ['todo', '미기록']]),
-        sel('group', [['sem', '학기별'], ['type', '종류별'], ['none', '전체 목록']]),
+        sel('group', [['sem', '학기별'], ['subject', '과목별'], ['type', '종류별'], ['none', '전체 목록']]),
         sel('order', [['desc', '최신순'], ['asc', '오래된순']])),
       listBox));
     redraw();

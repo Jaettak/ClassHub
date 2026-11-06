@@ -1,16 +1,16 @@
 // Firebase 인증 및 레코드 단위 Firestore 동기화. PDF 캡처와 이미지는 로컬 전용.
 const Cloud = (() => {
-  const ARRAY_KEYS = new Set(['events', 'activities', 'grades', 'notes', 'noteFolders', 'ttFriends', 'timerLog', 'timetableTerms', 'mealFavorites']);
-  const MAP_KEYS = new Set(['lessonDayNotes', 'subjectColors', 'mealFavoriteNames']);
+  const ARRAY_KEYS = new Set(['events', 'examPeriods', 'activities', 'grades', 'schoolReportExtras', 'schoolImportPackages', 'notes', 'noteFolders', 'ttFriends', 'timerLog', 'timetableTerms', 'mealFavorites', 'studyPages', 'whiteboards', 'schoolPlaces', 'subjectCatalog', 'hiddenSubjects']);
+  const MAP_KEYS = new Set(['lessonDayNotes', 'subjectColors', 'subjectAutoColors', 'subjectRooms', 'subjectTeachers', 'mealFavoriteNames']);
   const LOCAL_KEYS = new Set(['captures']);
-  const keys = ['timetable', 'timetableTerms', 'ttFriends', 'subjectColors', 'events', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'notes', 'noteFolders', 'notesViewMode', 'settings', 'mealSchool', 'mealFavorites', 'mealFavoriteNames', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
+  const keys = ['timetable', 'timetableTerms', 'ttFriends', 'subjectCatalog', 'hiddenSubjects', 'subjectColors', 'subjectAutoColors', 'subjectRooms', 'subjectTeachers', 'events', 'examPeriods', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'schoolReportExtras', 'schoolImportPackages', 'notes', 'noteFolders', 'notesViewMode', 'studyPages', 'whiteboards', 'schoolPlaces', 'settings', 'mealSchool', 'mealFavorites', 'mealFavoriteNames', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
   let auth, firestore, user = null, unsubscribe = null, ready = false, configured = false, syncing = false, remote = {}, queue = [], loaded = false, guest = false;
   let refreshTimer = null;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const opKey = (key, id) => key + '|' + id;
   const docId = (key, id) => key + '__' + encodeURIComponent(String(id));
   const outboxKey = () => 'classhub:outbox:' + user.uid;
-  const arrayId = (key, item, index) => key === 'mealFavorites' ? String(item) : key === 'timerLog' ? String(item.at || index) : String(item.id || index);
+  const arrayId = (key, item, index) => ['mealFavorites', 'subjectCatalog', 'hiddenSubjects'].includes(key) ? String(item) : key === 'timerLog' ? String(item.at || index) : String(item.id || index);
   function entries(key, value) {
     if (ARRAY_KEYS.has(key)) return new Map((value || []).map((v, i) => [arrayId(key, v, i), { value: v, order: i }]));
     if (MAP_KEYS.has(key)) return new Map(Object.entries(value || {}).map(([id, v]) => [id, { value: v }]));

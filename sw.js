@@ -1,11 +1,11 @@
-const CACHE = 'classhub-static-2026-11-04c';
+const CACHE = 'classhub-static-2026-11-07c';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './assets/logo.svg', './assets/logo.png', './lib/pdf.min.js', './lib/pdf.worker.min.js',
   './js/firebase-config.js', './js/store.js', './js/icons.js', './js/app.js',
   './js/neis.js', './js/timer.js', './js/settings.js', './js/cloud.js',
   './js/timetable.js', './js/calendar.js', './js/activities.js',
-  './js/grades.js', './js/meals.js', './js/notes.js', './js/pdfcapture.js', './js/main.js'
+  './js/grades.js', './js/meals.js', './js/notes.js', './js/pdfcapture.js', './js/creative.js', './js/schooldata.js', './js/subjects.js', './js/main.js'
 ];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)).then(() => self.skipWaiting()));

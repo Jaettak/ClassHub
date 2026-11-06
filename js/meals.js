@@ -56,17 +56,25 @@ const Meals = (() => {
         for (const [key, week] of cache) { if (!key.startsWith(`${school.code}|`)) continue; Object.values(week).flat().forEach((meal) => meal.dishes.forEach((dish) => {
           names[`${school.code}|${dish.name.replace(/\s+/g, '').toLowerCase()}`] = dish.name;
         })); }
-        const marked = Store.get('mealFavorites', []).filter((id) => id.startsWith(`${school.code}|`));
-        App.modal({ title: '즐겨찾기한 급식', body: marked.length
-          ? h('div', { class: 'ml-favorites' }, [...new Set(marked.map((id) => names[id] || id.split('|').at(-1)))].map((name) => h('div', null, '★ ', name)))
-          : h('p', { class: 'muted' }, '별표를 누른 급식이 아직 없어요.') });
+        const body = h('div', { class: 'ml-favorites' });
+        const refresh = () => {
+          const marked = Store.get('mealFavorites', []).filter((id) => id.startsWith(`${school.code}|`));
+          body.replaceChildren(...(marked.length ? marked.map((id) => h('div', null,
+            h('span', null, '★ ', names[id] || id.split('|').at(-1)),
+            h('button', { class: 'ml-favorite-delete', type: 'button', 'aria-label': `${names[id] || id} 즐겨찾기 해제`, onclick: () => {
+              Store.set('mealFavorites', Store.get('mealFavorites', []).filter((x) => x !== id));
+              refresh(); draw();
+            } }, '×'))) : [h('p', { class: 'muted' }, '별표를 누른 급식이 아직 없어요.') ]));
+        };
+        refresh();
+        App.modal({ title: '즐겨찾기한 급식', body });
       };
 
       const strip = h('div', { class: 'ml-strip' });
       const detail = h('div', { class: 'ml-detail' });
       panel.replaceChildren(
         h('div', { class: 'title-row' },
-          h('h1', { class: 'page-title' }, '급식 관리'),
+          h('h1', { class: 'page-title' }, '급식'),
           h('div', { class: 'ml-school' },
             school ? h('b', { class: 'set-school' }, school.name) : null,
             h('button', { class: 'btn', type: 'button', onclick: pick }, school ? '학교 바꾸기' : '학교 찾기'),

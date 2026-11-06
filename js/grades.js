@@ -64,6 +64,7 @@ const Grades = (() => {
         h('div', { class: 'row2' }, App.field('등급 (선택)', rank), App.field('평균 (선택)', avg)),
         schoolFields, mockFields,
         App.field('메모 (선택)', memo),
+        g.sourceDetails ? h('details', { class: 'school-source-detail' }, h('summary', null, '가져온 성적표 원문과 추가 항목'), h('pre', null, JSON.stringify(g.sourceDetails, null, 2))) : null,
       ],
       footer: [
         !isNew ? h('button', { class: 'btn danger', type: 'button', onclick: () => {
@@ -83,7 +84,7 @@ const Grades = (() => {
       if (sc > fl) { App.toast('점수가 만점보다 커요.'); score.focus(); return; }
       const rateValues = [...Object.values(schoolRates), ...Object.values(mockRates), achievementRate, percentile].map((input) => num(input.value)).filter((value) => value != null);
       if (rateValues.some((value) => value < 0 || value > 100)) { App.toast('비율과 백분위는 0~100 사이로 입력해 주세요.'); return; }
-      const rec = { id: g.id || uid(), grade: Number(grade.value), semester: Number(sem.value), exam: exam.value, subject: s, score: sc, full: fl,
+      const rec = { ...g, id: g.id || uid(), grade: Number(grade.value), semester: Number(sem.value), exam: exam.value, subject: s, score: sc, full: fl,
         examDate: examDate.value, rank: num(rank.value), avg: num(avg.value), memo: memo.value.trim(), created: g.created || Date.now(),
         classRank: num(classRank.value), jointRank: num(jointRank.value), studentCount: num(studentCount.value), stdDev: num(stdDev.value),
         achievement: achievement.value, achievementRate: num(achievementRate.value),
@@ -126,6 +127,7 @@ const Grades = (() => {
   }
 
   function render(root) {
+    root.append(SchoolData.tools('grades'));
     const body = h('div', { class: 'gr-body' });
     const stat = h('div', { class: 'stat' });
 
@@ -211,6 +213,10 @@ const Grades = (() => {
         sel('sem', [['', '모든 학기'], ['1', '1학기'], ['2', '2학기']])),
       body));
     redraw();
+    const extras = Store.get('schoolReportExtras', []);
+    if (extras.length) root.append(h('details', { class: 'school-import-tools' }, h('summary', null, `점수가 없는 성적표 기록 ${extras.length}개`),
+      h('div', { class: 'school-source-list' }, extras.map((item) => h('details', { class: 'school-source-detail' },
+        h('summary', null, `${item.subject || '과목 없음'} · ${item.exam || ''}`), h('pre', null, JSON.stringify(item.sourceDetails, null, 2)))))));
   }
 
   return { render };

@@ -33,7 +33,9 @@ const Timetable = (() => {
 
   // 홈·달력에서 쓰는 특정 날짜의 내 수업 목록
   function lessonsFor(date) {
-    return Store.get('events', []).filter((e) => e.schoolLesson && e.date === dateStr(date))
+    const ds = dateStr(date);
+    const rows = typeof Calendar !== 'undefined' ? Calendar.byDate(ds) : Store.get('events', []).filter((e) => e.date === ds);
+    return rows.filter((e) => e.schoolLesson)
       .sort((a, b) => a.start.localeCompare(b.start))
       .map((e) => ({ ...e, period: e.period, subject: e.subject || e.title, displayTitle: e.title.replace(/\s*\(\d+교시\)$/, ''), teacher: e.teacher || '' }));
   }
@@ -73,7 +75,7 @@ const Timetable = (() => {
           const time = validTimes(t, p), slot = `${ds}|${p + 1}`;
           if (!c?.subject || !time || occupied.has(slot)) return;
           list.push({ id: uid(), date: ds, start: time.start, end: time.end, title: `${c.subject} (${p + 1}교시)`,
-            subject: c.subject, period: p + 1, teacher: c.teacher || '', color: colorFor(c.subject),
+            subject: c.subject, period: p + 1, teacher: c.teacher || Store.get('subjectTeachers', {})[c.subject]?.[0] || '', room: c.room || Store.get('subjectRooms', {})[c.subject] || '', color: colorFor(c.subject),
             memo: oldLessonNotes[`${ds}|class-${col}-${p}`] || '',
             schoolLesson: true, checkable: false, sourceTerm: term.id, done: false });
           occupied.add(slot); added++;
@@ -99,8 +101,38 @@ const Timetable = (() => {
       return { start, end, row: h('div', { class: 'tt-period-time-row' },
         h('strong', null, `${i + 1}교시`), start, h('span', null, '~'), end) };
     });
+    const autoStart = h('input', { type: 'time', value: inputs[0]?.start.value || '09:00' });
+    const classLength = h('input', { type: 'number', min: 1, max: 180, value: 50 });
+    const breakLength = h('input', { type: 'number', min: 0, max: 120, value: 10 });
+    const lunchAfter = h('input', { type: 'number', min: 0, max: t.periods, value: t.lunch?.afterPeriod || Math.min(4, t.periods) });
+    const lunchLength = h('input', { type: 'number', min: 0, max: 180, value: t.lunch ? Math.max(0, (Number(t.lunch.end.slice(0, 2)) * 60 + Number(t.lunch.end.slice(3))) - (Number(t.lunch.start.slice(0, 2)) * 60 + Number(t.lunch.start.slice(3)))) : 60 });
+    let autoLunch = null;
+    let autoUsed = false;
+    const autoFill = () => {
+      const [hh, mm] = autoStart.value.split(':').map(Number);
+      const lesson = Number(classLength.value), rest = Number(breakLength.value), lunch = Number(lunchLength.value), after = Number(lunchAfter.value);
+      if (!autoStart.value || ![lesson, rest, lunch, after].every(Number.isFinite) || lesson < 1 || rest < 0 || lunch < 0 || after < 0 || after > t.periods) return App.toast('자동 입력 시간을 확인해 주세요.');
+      if (hh * 60 + mm + t.periods * lesson + Math.max(0, t.periods - 1) * rest + (after ? lunch : 0) >= 1440) return App.toast('마지막 수업이 자정을 넘어요. 시간을 줄여 주세요.');
+      autoUsed = true;
+      const time = (n) => `${pad(Math.floor(n / 60))}:${pad(n % 60)}`;
+      let minute = hh * 60 + mm;
+      inputs.forEach(({ start, end }, i) => {
+        if (minute + lesson >= 1440) return;
+        start.value = time(minute); end.value = time(minute + lesson); minute += lesson;
+        if (i + 1 === after && lunch) minute += lunch; else minute += rest;
+      });
+      if (after && lunch) {
+        const before = inputs[after - 1].end.value;
+        autoLunch = { afterPeriod: after, start: before, end: time(Number(before.slice(0, 2)) * 60 + Number(before.slice(3)) + lunch) };
+      } else autoLunch = null;
+    };
     const m = App.modal({ title: '교시별 수업 시간', wide: true,
       body: [h('p', { class: 'hint' }, '각 교시의 시작·종료 시간을 정한 뒤 “기간 일정에 추가” 버튼을 누르면 해당 기간의 수업이 일정에 저장돼요. 비워둔 교시는 추가되지 않아요.'),
+        h('div', { class: 'tt-auto-time' }, h('b', null, '자동 입력'),
+          h('div', { class: 'row2' }, App.field('첫 수업 시작', autoStart), App.field('수업 시간(분)', classLength)),
+          h('div', { class: 'row2' }, App.field('쉬는 시간(분)', breakLength), App.field('점심 시간(분)', lunchLength)),
+          App.field('점심은 몇 교시 뒤 (0이면 없음)', lunchAfter),
+          h('button', { class: 'btn', type: 'button', onclick: autoFill }, '아래 교시 시간 자동 채우기')),
         h('div', { class: 'tt-period-times' }, inputs.map((x) => x.row))],
       footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {
@@ -113,6 +145,7 @@ const Timetable = (() => {
             }
           }
           t.periodTimes = next;
+          if (autoUsed) t.lunch = autoLunch;
           save(); m.close(); done(); App.toast('교시별 시간을 저장했어요. 기간을 지정해 일정에 추가해 주세요.');
         } }, '저장')],
     });
@@ -121,7 +154,8 @@ const Timetable = (() => {
   function editCell(t, save, d, p, done) {
     const cur = t.cells[d][p] || { subject: '', teacher: '' };
     const subject = App.subjectField('과목', cur.subject);
-    const teacher = h('input', { type: 'text', value: cur.teacher || '', placeholder: '예: 김하늘', maxLength: 20 });
+    const teacher = h('input', { type: 'text', value: cur.teacher || Store.get('subjectTeachers', {})[cur.subject]?.[0] || '', placeholder: '예: 김하늘', maxLength: 20 });
+    const room = h('input', { type: 'text', value: cur.room || Store.get('subjectRooms', {})[cur.subject] || '', placeholder: '예: 2학년 3반', maxLength: 40 });
     const picker = h('input', { type: 'color', value: colorFor(cur.subject || ''), 'aria-label': '과목 색상 선택' });
     const swatches = h('div', { class: 'tt-color-swatches' }, PALETTE.map((hex) =>
       h('button', { type: 'button', class: 'tt-swatch', style: { background: hex }, title: hex,
@@ -138,12 +172,15 @@ const Timetable = (() => {
     // 같은 과목을 전에 적은 적이 있으면 선생님 이름을 채워 준다
     subject.onPick((s) => {
       updatePicker(s);
+      room.value = Store.get('subjectRooms', {})[s] || '';
       if (teacher.value.trim() || !s) return;
+      const savedTeacher = Store.get('subjectTeachers', {})[s]?.[0];
+      if (savedTeacher) { teacher.value = savedTeacher; return; }
       for (const col of t.cells) for (const c of col) if (c && c.subject === s && c.teacher) { teacher.value = c.teacher; return; }
     });
     const m = App.modal({
       title: `${t.days[d]}요일 ${p + 1}교시`,
-      body: [subject.el, App.field('선생님 (선택)', teacher), App.field('과목 색상', colorControls)],
+      body: [subject.el, App.field('선생님 (선택)', teacher), App.field('기본 교실 (선택)', room), App.field('과목 색상', colorControls)],
       footer: [
         cur.subject ? h('button', { class: 'btn danger', type: 'button', onclick: () => { t.cells[d][p] = null; save(); m.close(); done(); } }, '지우기') : null,
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
@@ -152,8 +189,12 @@ const Timetable = (() => {
     });
     function submit() {
       const s = subject.value();
-      t.cells[d][p] = s ? { subject: s, teacher: teacher.value.trim() } : null;
-      if (s) storeColor(s);
+      t.cells[d][p] = s ? { subject: s, teacher: teacher.value.trim(), room: room.value.trim() } : null;
+      if (s) {
+        storeColor(s); Store.set('subjectRooms', { ...Store.get('subjectRooms', {}), [s]: room.value.trim() });
+        const teachers = Store.get('subjectTeachers', {}), name = teacher.value.trim();
+        if (name) Store.set('subjectTeachers', { ...teachers, [s]: [...new Set([...(teachers[s] || []), name])] });
+      }
       save();
       m.close();
       done();
@@ -221,9 +262,9 @@ const Timetable = (() => {
         h('div', { class: 'set-row' }, nameEl, h('button', { class: 'btn', type: 'button', onclick: () => Neis.pickSchool((sc) => { school = sc; drawName(); }) }, '학교 찾기')),
         h('div', { class: 'row2' }, App.field('학년', grade), App.field('반', cls)),
         App.field('NEIS 인증키', apiKey),
-        h('p', { class: 'hint' }, '인증키 없이 조회하면 NEIS가 5건만 보여 줘서 전체 교시를 가져올 수 없어요. 인증키는 이 기기에만 저장돼요.'),
+        h('p', { class: 'hint tt-import-help' }, '인증키 없이 조회하면 NEIS가 5건만 보여 줘서 전체 교시를 가져올 수 없어요. 인증키는 이 기기에만 저장돼요.'),
         h('a', { class: 'btn ghost', href: 'https://open.neis.go.kr/portal/guide/apiGuidePage.do', target: '_blank', rel: 'noopener noreferrer' }, '인증키 발급 안내'),
-        h('p', { class: 'hint' }, '이번 주 학급 시간표를 NEIS(공식)에서 가져와 지금 시간표를 덮어써요. 고등학교는 선택과목이 반마다 달라 내 시간표와 다를 수 있으니, 불러온 뒤 직접 고쳐 주세요.'),
+        h('p', { class: 'hint tt-import-help' }, '이번 주 학급 시간표를 NEIS(공식)에서 가져와 지금 시간표를 덮어써요. 고등학교는 선택과목이 반마다 달라 내 시간표와 다를 수 있으니, 불러온 뒤 직접 고쳐 주세요.'),
         info,
       ],
       footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'), go],
@@ -302,16 +343,34 @@ const Timetable = (() => {
         input.disabled = auto.checked;
         return { name, input, auto, line };
       });
-      const m = App.modal({ title: '과목별 색상 설정',
+      const m = App.modal({ title: '과목 관리',
         body: [h('p', { class: 'hint' }, '과목 색상을 바꾸면 같은 과목이 시간표·홈·일정 관리·성적 분석에 동일하게 표시돼요.'),
-          h('div', { class: 'tt-color-list' }, edits.map((item) => item.line))],
+          h('div', { class: 'tt-color-list' }, edits.map((item) => {
+            const room = h('input', { type: 'text', value: Store.get('subjectRooms', {})[item.name] || '', placeholder: '기본 교실', maxLength: 40, 'aria-label': `${item.name} 기본 교실` });
+            const remove = h('button', { class: 'btn danger', type: 'button', onclick: () => {
+              if (!confirm(`${item.name} 과목을 현재 시간표에서 지울까요? 이미 일정에 추가된 과거 수업은 유지돼요.`)) return;
+              remove.closest('.tt-subject-manage').remove();
+              item.deleted = true;
+            } }, '과목 삭제');
+            item.room = room;
+            return h('div', { class: 'tt-subject-manage' }, item.line, room, remove);
+          }))],
         footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
           h('button', { class: 'btn primary', type: 'button', onclick: () => {
             const colors = { ...Store.get('subjectColors', {}) };
-            for (const { name, input, auto } of edits) {
+            const rooms = { ...Store.get('subjectRooms', {}) };
+            for (const { name, input, auto, room, deleted } of edits) {
+              if (deleted) { delete colors[name]; delete rooms[name]; continue; }
               if (auto.checked) delete colors[name]; else colors[name] = input.value;
+              rooms[name] = room.value.trim();
             }
             Store.set('subjectColors', colors);
+            Store.set('subjectRooms', rooms);
+            if (edits.some((item) => item.deleted)) {
+              const tt = loadMe();
+              tt.cells.forEach((col) => col.forEach((cell, i) => { if (edits.some((item) => item.deleted && cell?.subject === item.name)) col[i] = null; }));
+              Store.set('timetable', tt);
+            }
             m.close(); draw(); App.toast('과목 색상을 저장했어요.');
           } }, '저장')],
       });
@@ -364,7 +423,6 @@ const Timetable = (() => {
           h('button', { class: 'btn', type: 'button', onclick: () => openPeriodTimes(t, save, draw) }, '교시별 시간 설정'),
           h('button', { class: 'btn', type: 'button', onclick: () => editLunch(t, save, draw) }, '점심시간 설정'),
           !friend ? h('button', { class: 'btn primary', type: 'button', onclick: () => applyPeriod(t, draw) }, '기간 일정에 추가') : null,
-          h('button', { class: 'btn', type: 'button', onclick: openSubjectColors }, '과목별 색상'),
           h('button', { class: 'btn', type: 'button', onclick: () => importFromSchool(t, save, draw) }, '학교 시간표 불러오기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: reset }, '기본값으로'),
           friend ? h('button', { class: 'btn ghost', type: 'button', onclick: renameFriend }, '이름 바꾸기') : null,
@@ -435,7 +493,7 @@ const Timetable = (() => {
     }
 
     draw();
-    root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '시간표'), wrap));
+    root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '시간표'), wrap), SchoolData.tools('timetable'));
   }
 
   return { render, lessonsFor, calendarLessons };

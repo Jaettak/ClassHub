@@ -6,15 +6,28 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
+const CLASSHUB_VERSION = 'v2.0.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
+  if (!name) return PALETTE[0];
   // 사용자 지정 과목 색상은 시간표·홈·일정 관리·성적 분석에 공통 적용한다.
   const custom = Store.get('subjectColors', {});
   if (custom && Object.prototype.hasOwnProperty.call(custom, name) && /^#[0-9a-fA-F]{6}$/.test(custom[name])) return custom[name];
-  let hash = 0;
-  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return PALETTE[hash % PALETTE.length];
+  const auto = Store.get('subjectAutoColors', {});
+  if (auto[name]) return auto[name];
+  const used = new Set([...Object.values(custom || {}), ...Object.values(auto)].map((c) => String(c).toLowerCase()));
+  const hex = (h, s, l) => {
+    const f = (n) => {
+      const k = (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+  };
+  const candidates = [...PALETTE, ...Array.from({ length: 72 }, (_, i) => hex((i * 137.508) % 360, .68, i % 3 === 0 ? .46 : .57))];
+  const picked = candidates.find((c) => !used.has(c.toLowerCase())) || PALETTE[0];
+  Store.set('subjectAutoColors', { ...auto, [name]: picked });
+  return picked;
 }
 
 function h(tag, props, ...kids) {
@@ -50,7 +63,7 @@ function sv(tag, attrs, ...kids) {
 
 const App = (() => {
   const views = {};
-  const ORDER = ['home', 'wrong', 'timetable', 'calendar', 'activities', 'grades', 'meals', 'notes', 'timer'];
+  const ORDER = ['home', 'wrong', 'timetable', 'subjects', 'calendar', 'activities', 'grades', 'meals', 'notes', 'study', 'whiteboard', 'schoolmap', 'timer', 'settings'];
   let current = null;
   const modalStack = [];
 
@@ -110,18 +123,21 @@ const App = (() => {
   });
 
   function field(label, input, hint) {
-    return h('label', { class: 'field' }, h('span', null, label), input, hint ? h('small', null, hint) : null);
+    return h('div', { class: 'field' }, h('label', { class: 'field-label' }, h('span', null, label), input),
+      hint ? h('details', { class: 'context-help' }, h('summary', null, '도움말'), h('div', null, hint)) : null);
   }
 
   // 이전에 입력한 과목 목록 (시간표 + 오답노트)
   function knownSubjects() {
     const set = new Set();
+    Store.get('subjectCatalog', []).forEach((name) => set.add(name));
     const tt = Store.get('timetable', null);
     if (tt && tt.cells) tt.cells.forEach((col) => col.forEach((c) => { if (c && c.subject) set.add(c.subject); }));
     Store.get('ttFriends', []).forEach((f) => f.cells.forEach((col) => col.forEach((c) => { if (c && c.subject) set.add(c.subject); })));
     Store.get('captures', []).forEach((c) => { if (c.subject) set.add(c.subject); });
     Store.get('grades', []).forEach((g) => { if (g.subject) set.add(g.subject); });
-    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+    const hidden = new Set(Store.get('hiddenSubjects', []));
+    return [...set].filter((name) => !hidden.has(name)).sort((a, b) => a.localeCompare(b, 'ko'));
   }
 
   // 기존 과목 선택 또는 새 과목 직접 입력. { el, value(), onPick(fn) }
@@ -152,19 +168,35 @@ const App = (() => {
   }
 
   function navTabs(active) {
-    return h('nav', { class: 'tabs' }, ORDER.filter((n) => views[n]).map((n) => h('a', { href: '#' + n, class: n === active ? 'active' : '' },
-      h('span', { class: 'tab-ico' }, icon(views[n].icon)), h('span', { class: 'tab-txt' }, views[n].label))));
+    const enabled = Settings.get().enabledTabs;
+    const names = ORDER.filter((n) => views[n] && n !== 'home' && n !== 'settings' && (!Array.isArray(enabled) || enabled.includes(n)));
+    const layout = (className, max, minRows) => {
+      const count = names.length, rows = Math.min(count, Math.max(minRows, Math.ceil(count / max))) || 0;
+      let index = 0;
+      return h('div', { class: 'nav-layout ' + className }, Array.from({ length: rows }, (_, row) => {
+        const size = Math.floor(count / rows) + (row < count % rows ? 1 : 0);
+        const cells = names.slice(index, index += size);
+        return h('div', { class: 'nav-row', style: { '--row-count': size } }, cells.map((n) => h('a', { href: '#' + n, class: n === active ? 'active' : '' },
+          h('span', { class: 'tab-ico' }, icon(views[n].icon)), h('span', { class: 'tab-txt' }, views[n].label))));
+      }));
+    };
+    return h('nav', { class: 'tabs' }, layout('desktop', 7, 2), layout('tablet', 5, 2), layout('phone', 3, 1));
   }
 
   const HELP = {
-    wrong: 'PDF에서 오답을 캡처하고 과목별로 정리할 수 있어요. PDF와 이미지는 이 브라우저에 저장돼요.',
+    wrong: 'PDF 캡처, 사진, 손그림, 글 또는 문제 번호로 오답을 정리할 수 있어요. 원본과 이미지는 이 브라우저에 저장돼요.',
     timetable: '교시와 과목을 정한 뒤 적용 기간을 선택해 일정에 추가하세요. 추가한 수업은 일정에서 날짜별로 수정할 수 있어요.',
-    calendar: '월·주·일 화면을 오가며 일정을 확인하세요. 날짜를 연결한 메모도 하루 화면에서 볼 수 있어요.',
+    calendar: '월·주·일 화면을 오가며 일정을 확인하세요. 여러 날짜 일정과 시험기간, 날짜별 메모를 입력할 수 있어요.',
     activities: '학교 활동과 기록할 내용을 모아 관리할 수 있어요.',
     grades: '과목별 시험 점수를 기록하고 성적 변화를 확인할 수 있어요.',
     meals: '학교를 선택해 급식을 확인하세요. 별을 누른 메뉴는 같은 음식이 다시 나올 때 표시돼요.',
     notes: '메모를 보관함별로 정리하고 드래그해 순서를 바꿀 수 있어요. 삭제한 메모는 휴지통에서 복원할 수 있어요.',
-    timer: '타이머나 스톱워치를 선택해 공부 시간을 기록하세요. 기록은 해당 날짜의 일정 화면에서도 확인할 수 있어요.',
+    timer: '타이머와 스톱워치로 공부 시간을 기록하세요. 스톱워치 구간 기록은 최근 기록에서 펼쳐 볼 수 있어요.',
+    settings: '학교, 화면, 소리, 메모 정리, 홈 탭 순서와 개인 정보 잠금을 설정할 수 있어요.',
+    schoolmap: '층별 학교 지도를 보고 마커와 장소 이름을 관리하세요. 원본 파일은 이 기기에 저장돼요.',
+    study: '과목·단원별 텍스트와 그림 필기를 저장하세요. 그림은 이 기기에 저장돼요.',
+    whiteboard: '펜과 도형으로 자유롭게 그리고 그림을 이 기기에 저장하세요.',
+    subjects: '과목 이름, 색상과 기본 교실을 관리하세요. 과목을 지워도 과거 일정은 유지됩니다.',
   };
 
   function route() {
@@ -172,7 +204,9 @@ const App = (() => {
     const name = (location.hash || '#home').slice(1);
     const view = views[name] || views.home;
     const key = views[name] ? name : 'home';
+    if (current && current !== key && Settings.protectedTab(current)) Settings.lock();
     current = key;
+    if (!Timer.active()) document.title = `ClassHub - 학교생활 통합 관리 · ${CLASSHUB_VERSION}`;
     const app = document.getElementById('app');
     app.replaceChildren();
     app.className = 'view-' + key;
@@ -191,9 +225,14 @@ const App = (() => {
             document.body.classList.toggle('nav-collapsed');
             e.currentTarget.textContent = document.body.classList.contains('nav-collapsed') ? '탭 펼치기' : '탭 접기';
           } }, document.body.classList.contains('nav-collapsed') ? '탭 펼치기' : '탭 접기'),
-          navTabs(key)),
+          navTabs(key),
+          h('button', { class: 'top-settings', type: 'button', onclick: openSettings, title: '설정', 'aria-label': '설정 열기' }, icon('settings'))),
         page);
-      view.render(page);
+      if (Settings.locked(key)) page.append(h('section', { class: 'panel private-gate' },
+        h('h1', { class: 'page-title' }, `${view.label} 잠금`),
+        h('p', null, '개인 기록을 보려면 비밀번호를 입력하세요.'),
+        h('button', { class: 'btn primary', type: 'button', onclick: () => Settings.unlock(key, route) }, '잠금 해제')));
+      else view.render(page);
       contextualHelp(page);
       page.prepend(h('div', { class: 'view-help-row' }, h('button', { class: 'view-help', type: 'button', 'aria-label': `${view.label} 도움말`, onclick: () => modal({ title: `${view.label} 도움말`, body: h('p', { class: 'help-copy' }, HELP[key] || '') }) }, '?')));
     }

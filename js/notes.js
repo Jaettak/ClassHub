@@ -8,6 +8,18 @@ const Notes = (() => {
   const folders = () => Store.get('noteFolders', []);
   const active = () => load().filter((n) => !n.deletedAt);
   let selectedFolder = '*';
+  function cleanupExpired() {
+    const days = Number(Settings.get().notesAutoTrashDays || 0);
+    if (!Number.isInteger(days) || days < 1) return;
+    const cutoff = dateStr(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - days));
+    let changed = false;
+    const next = load().map((n) => {
+      const lastDate = n.dates?.length ? [...n.dates].sort().at(-1) : n.dateEnd || n.date;
+      if (!n.deletedAt && !n.autoTrashExempt && lastDate && lastDate < cutoff) { changed = true; return { ...n, deletedAt: Date.now() }; }
+      return n;
+    });
+    if (changed) save(next);
+  }
 
   function trash(id, after = () => {}) {
     const list = load();
@@ -76,6 +88,10 @@ const Notes = (() => {
     const drawSw = () => swatches.replaceChildren(...COLORS.map((c) => h('button', { type: 'button', class: 'sw' + (c === color ? ' on' : ''), style: { background: c }, 'aria-label': '색상 선택',
       onclick: () => { color = c; drawSw(); } })));
     drawSw();
+    folder.addEventListener('change', () => {
+      const folderColor = folders().find((f) => f.id === folder.value)?.color;
+      if (folderColor) { color = folderColor; drawSw(); }
+    });
     const pin = h('input', { type: 'checkbox', checked: pinned, onchange: () => { pinned = pin.checked; } });
     const m = App.modal({
       title: isNew ? '새 메모' : '메모 수정',
@@ -102,6 +118,7 @@ const Notes = (() => {
   }
 
   function render(root) {
+    cleanupExpired();
     let viewMode = Store.get('notesViewMode', 'cards');
     const grid = h('div', { class: 'nt-grid' });
     const folderBar = h('div', { class: 'nt-folders' });
@@ -125,7 +142,7 @@ const Notes = (() => {
         ordered.forEach((x, i) => { x.sortOrder = i; });
         save(ordered); redraw();
       };
-      const folderButton = (id, name) => h('button', { class: 'nt-folder' + (selectedFolder === id ? ' on' : ''), type: 'button',
+      const folderButton = (id, name, color) => h('button', { class: 'nt-folder' + (selectedFolder === id ? ' on' : ''), type: 'button', style: { '--folder-color': color || '#e8efff' },
         onclick: () => { selectedFolder = id; redraw(); },
         ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); },
         ondragleave: (e) => e.currentTarget.classList.remove('drag-over'),
@@ -138,7 +155,7 @@ const Notes = (() => {
       folderBar.replaceChildren(
         h('button', { class: 'nt-folder' + (selectedFolder === '*' ? ' on' : ''), type: 'button', onclick: () => { selectedFolder = '*'; redraw(); } }, '전체'),
         folderButton('', '기본 보관함'),
-        ...folders().map((f) => folderButton(f.id, f.name)),
+        ...folders().map((f) => folderButton(f.id, f.name, f.color)),
         ...(selectedFolder && selectedFolder !== '*' ? [h('button', { class: 'nt-folder-manage', type: 'button', onclick: manageFolder }, '보관함 관리')] : []));
       grid.replaceChildren();
       if (!list.length) {
@@ -163,12 +180,13 @@ const Notes = (() => {
     };
     function addFolder() {
       const name = h('input', { type: 'text', maxLength: 30, placeholder: '보관함 이름' });
-      const m = App.modal({ title: '새 메모 보관함', body: App.field('이름', name), footer: [
+      const color = h('input', { type: 'color', value: COLORS[0], 'aria-label': '보관함 색상' });
+      const m = App.modal({ title: '새 메모 보관함', body: [App.field('이름', name), App.field('보관함 색상', color)], footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {
           if (!name.value.trim()) return App.toast('이름을 입력해 주세요.');
           const id = uid();
-          Store.set('noteFolders', [...folders(), { id, name: name.value.trim() }]);
+          Store.set('noteFolders', [...folders(), { id, name: name.value.trim(), color: color.value }]);
           selectedFolder = id; m.close(); redraw();
         } }, '만들기') ] });
       name.focus();
@@ -177,7 +195,14 @@ const Notes = (() => {
       const current = folders().find((f) => f.id === selectedFolder);
       if (!current) return;
       const name = h('input', { type: 'text', value: current.name, maxLength: 30 });
-      const m = App.modal({ title: '보관함 관리', body: App.field('이름', name), footer: [
+      const color = h('input', { type: 'color', value: current.color || COLORS[0], 'aria-label': '보관함 색상' });
+      const m = App.modal({ title: '보관함 관리', body: [App.field('이름', name), App.field('보관함 색상', color),
+        h('button', { class: 'btn', type: 'button', onclick: () => {
+          if (!confirm(`이 보관함의 메모 색을 모두 ${color.value}로 바꿀까요?`)) return;
+          save(load().map((n) => n.folderId === current.id ? { ...n, color: color.value, updatedAt: Date.now() } : n));
+          Store.set('noteFolders', folders().map((f) => f.id === current.id ? { ...f, color: color.value } : f));
+          m.close(); redraw(); App.toast('보관함 메모의 색을 바꿨어요.');
+        } }, '이 보관함 메모 색 모두 바꾸기')], footer: [
         h('button', { class: 'btn danger', type: 'button', onclick: () => {
           if (!confirm('보관함을 지울까요? 안의 메모는 기본 보관함으로 이동해요.')) return;
           Store.set('noteFolders', folders().filter((f) => f.id !== current.id));
@@ -187,7 +212,7 @@ const Notes = (() => {
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {
           if (!name.value.trim()) return App.toast('이름을 입력해 주세요.');
-          Store.set('noteFolders', folders().map((f) => f.id === current.id ? { ...f, name: name.value.trim() } : f));
+          Store.set('noteFolders', folders().map((f) => f.id === current.id ? { ...f, name: name.value.trim(), color: color.value } : f));
           m.close(); redraw();
         } }, '이름 저장') ] });
       name.focus();
@@ -199,7 +224,7 @@ const Notes = (() => {
           h('span', null, n.title || n.body || '제목 없음'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => {
             const records = load(); const note = records.find((x) => x.id === n.id);
-            if (note) { delete note.deletedAt; save(records); }
+            if (note) { delete note.deletedAt; note.autoTrashExempt = true; save(records); }
             m.close(); redraw(); openTrash();
           } }, '복원'),
           h('button', { class: 'btn danger', type: 'button', onclick: () => {
