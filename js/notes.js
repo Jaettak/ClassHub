@@ -142,20 +142,16 @@ const Notes = (() => {
         ordered.forEach((x, i) => { x.sortOrder = i; });
         save(ordered); redraw();
       };
-      const folderButton = (id, name, color) => h('button', { class: 'nt-folder' + (selectedFolder === id ? ' on' : ''), type: 'button', style: { '--folder-color': color || '#e8efff' },
-        onclick: () => { selectedFolder = id; redraw(); },
-        ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); },
-        ondragleave: (e) => e.currentTarget.classList.remove('drag-over'),
-        ondrop: (e) => { e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+      const folderSelect = h('select', { class: 'nt-folder-select', 'aria-label': '메모 보관함 선택', onchange: (e) => { selectedFolder = e.currentTarget.value; redraw(); },
+        ondragover: (e) => { if (selectedFolder !== '*') e.preventDefault(); },
+        ondrop: (e) => { if (selectedFolder === '*') return; e.preventDefault();
           const noteId = e.dataTransfer.getData('text/plain');
           if (!noteId) return;
-          save(load().map((n) => n.id === noteId ? { ...n, folderId: id, updatedAt: Date.now() } : n));
-          selectedFolder = id; redraw(); App.toast(`${name}에 넣었어요.`);
-        } }, name);
+          save(load().map((n) => n.id === noteId ? { ...n, folderId: selectedFolder, updatedAt: Date.now() } : n));
+          redraw(); App.toast('보관함에 넣었어요.');
+        } }, [['*', '전체'], ['', '기본 보관함'], ...folders().map((f) => [f.id, f.name])].map(([id, name]) => h('option', { value: id, selected: selectedFolder === id }, name)));
       folderBar.replaceChildren(
-        h('button', { class: 'nt-folder' + (selectedFolder === '*' ? ' on' : ''), type: 'button', onclick: () => { selectedFolder = '*'; redraw(); } }, '전체'),
-        folderButton('', '기본 보관함'),
-        ...folders().map((f) => folderButton(f.id, f.name, f.color)),
+        folderSelect,
         ...(selectedFolder && selectedFolder !== '*' ? [h('button', { class: 'nt-folder-manage', type: 'button', onclick: manageFolder }, '보관함 관리')] : []));
       grid.replaceChildren();
       if (!list.length) {
@@ -249,8 +245,8 @@ const Notes = (() => {
         h('h1', { class: 'page-title' }, '메모'),
         h('div', { class: 'nt-actions' },
           h('button', { class: 'btn', type: 'button', onclick: addFolder }, '＋ 보관함'),
-          h('button', { class: 'btn ghost', type: 'button', onclick: openTrash }, '휴지통'),
-          h('button', { class: 'btn primary', type: 'button', onclick: () => edit({}, redraw) }, '＋ 새 메모'))),
+          h('button', { class: 'btn primary', type: 'button', onclick: () => edit({}, redraw) }, '＋ 새 메모'),
+          h('button', { class: 'trash-icon-btn', type: 'button', onclick: openTrash, title: '메모 휴지통', 'aria-label': '메모 휴지통' }, icon('trash')))),
       active().some((n) => n.done) ? h('button', { class: 'btn ghost nt-legacy-done', type: 'button', onclick: removeCompleted }, '완료 표시된 메모 한꺼번에 삭제') : null,
       folderBar,
       h('div', { class: 'nt-view-switch', role: 'group', 'aria-label': '메모 보기 방식' },

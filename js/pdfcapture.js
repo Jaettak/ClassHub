@@ -32,6 +32,8 @@ const PdfCapture = (() => {
     const undone = [];
     const tool = { name: 'pen', color: '#e53935', size: 4 };
     const background = h('input', { type: 'color', value: rec.background || '#ffffff', 'aria-label': '배경색' });
+    const drawingWidth = h('input', { type: 'number', min: 400, max: 4000, step: 100, 'aria-label': '오답 그림 너비' });
+    const drawingHeight = h('input', { type: 'number', min: 300, max: 4000, step: 100, 'aria-label': '오답 그림 높이' });
     let cur = null;
     let ta = null;
     let selection = null, clipboard = null, selectedPatch = null;
@@ -257,6 +259,7 @@ const PdfCapture = (() => {
       Object.entries(toolBtns).forEach(([k, b]) => b.classList.toggle('on', k === n));
       shapePicker.main.classList.toggle('on', shapePicker.choices.includes(n));
       canvas.style.cursor = n === 'text' ? 'text' : n === 'select' ? 'default' : 'crosshair';
+      if (n !== 'select') { selection = null; selectedPatch = null; frame.hide(); }
     };
     for (const key of Object.keys(DrawTools.labels).filter((key) => !shapePicker.choices.includes(key))) toolBtns[key] = DrawTools.button(key, () => setTool(key));
     toolBtns.pen.classList.add('on');
@@ -275,21 +278,45 @@ const PdfCapture = (() => {
       }
       if (!selection || selection.w < 2 || selection.h < 2) return App.toast('먼저 영역을 드래그해 선택하세요.');
       if (action === 'copy' || action === 'cut') clipboard = captureSelection();
-      if (action === 'move') { promoteSelection(); redraw(); frame.show(selection); return; }
       if (action === 'cut' || action === 'delete') {
         if (selectedPatch) ann.splice(ann.indexOf(selectedPatch), 1);
         else ann.push({ t: 'cover', x: selection.x, y: selection.y, w: selection.w, h: selection.h });
-        selectedPatch = null; selection = null; frame.hide(); undone.length = 0; redraw();
+        selectedPatch = null; undone.length = 0; redraw();
+        if (action === 'delete') { selection = null; frame.hide(); } else frame.show(selection);
       } else App.toast('영역을 복사했어요. 붙여넣기를 누르세요.');
     } }, label);
+    const selectionActions = h('div', { class: 'draw-selection-actions', hidden: true }, selectAction('복사', 'copy'), selectAction('붙여넣기', 'paste'), selectAction('잘라내기', 'cut'), selectAction('선택 삭제', 'delete'));
+    frame.setActions(selectionActions);
+    const resizeDrawing = () => {
+      const w = Math.max(400, Math.min(4000, Number(drawingWidth.value) || canvas.width));
+      const h = Math.max(300, Math.min(4000, Number(drawingHeight.value) || canvas.height));
+      if (w === canvas.width && h === canvas.height) return;
+      const sx = w / canvas.width, sy = h / canvas.height;
+      ann.forEach((a) => {
+        if (a.p) a.p = a.p.map(([x, y]) => [x * sx, y * sy]);
+        if ('x' in a) a.x *= sx;
+        if ('y' in a) a.y *= sy;
+        if ('w' in a) a.w *= sx;
+        if ('h' in a) a.h *= sy;
+      });
+      canvas.width = w; canvas.height = h; drawingWidth.value = w; drawingHeight.value = h;
+      const blank = document.createElement('canvas'); blank.width = w; blank.height = h;
+      blank.getContext('2d').fillStyle = '#ffffff'; blank.getContext('2d').fillRect(0, 0, w, h);
+      rec.base = blank.toDataURL('image/png');
+      selection = null; selectedPatch = null; frame.hide(); undone.length = 0; redraw();
+    };
     const bar = h('div', { class: 'ed-tools' },
-      h('div', { class: 'draw-tool-buttons' }, Object.values(toolBtns), shapePicker.el),
-      h('div', { class: 'draw-selection-actions' }, selectAction('옮기기', 'move'), selectAction('복사', 'copy'), selectAction('붙여넣기', 'paste'), selectAction('잘라내기', 'cut'), selectAction('선택 삭제', 'delete')),
+      h('div', { class: 'draw-toolbar-row' }, h('div', { class: 'draw-tool-buttons' }, Object.values(toolBtns), shapePicker.el)),
+      h('div', { class: 'draw-toolbar-row' },
       h('label', { class: 'creative-color-label' }, '펜 색', color), quick, h('label', { class: 'size' }, '크기', size),
       h('label', { class: 'creative-color-label' }, '보드 색', background),
+      rec.sourceType === 'drawing' ? h('label', { class: 'creative-size-label' }, '너비', drawingWidth) : null,
+      rec.sourceType === 'drawing' ? h('label', { class: 'creative-size-label' }, '높이', drawingHeight) : null,
+      rec.sourceType === 'drawing' ? h('button', { class: 'btn', type: 'button', onclick: resizeDrawing }, '크기 적용') : null),
+      h('div', { class: 'draw-toolbar-row' },
       h('button', { type: 'button', class: 'btn', title: '이전', 'aria-label': '이전', onclick: () => { commitText(); if (ann.length) { const last = ann.pop(), batch = [last]; if (last.group && ann.at(-1)?.group === last.group) batch.unshift(ann.pop()); undone.push(batch); selection = null; selectedPatch = null; frame.hide(); } redraw(); } }, '↶'),
       h('button', { type: 'button', class: 'btn', title: '이후', 'aria-label': '이후', onclick: () => { if (undone.length) ann.push(...undone.pop()); redraw(); } }, '↷'),
-      h('button', { type: 'button', class: 'btn ghost', onclick: () => { if (ann.length && confirm('쓴 내용을 모두 지울까요?')) { commitText(); ann.length = 0; redraw(); } } }, '모두 지우기'));
+      h('button', { type: 'button', class: 'btn ghost', onclick: () => { if (ann.length && confirm('쓴 내용을 모두 지울까요?')) { commitText(); ann.length = 0; redraw(); } } }, '모두 지우기')));
 
     const flatten = async () => { commitText(); await Promise.all([...patchImages.values()].map((image) => image.decode().catch(() => {}))); redraw(false); return canvas.toDataURL('image/png'); };
 
@@ -321,7 +348,7 @@ const PdfCapture = (() => {
       ],
     });
     canvas.style.cursor = 'crosshair';
-    img.onload = () => { canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; redraw(); };
+    img.onload = () => { canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; drawingWidth.value = canvas.width; drawingHeight.value = canvas.height; redraw(); };
     img.src = rec.base;
     background.addEventListener('input', redraw);
   }
@@ -566,11 +593,11 @@ const PdfCapture = (() => {
         subjects.length ? h('div', { class: 'chips filter-chips' }, ['', ...subjects].map((s) => h('button', { type: 'button', class: 'fchip' + (s === subjFilter ? ' on' : ''),
           onclick: () => { subjFilter = s; drawGallery(); } }, s || '전체'))) : null),
         h('div', { class: 'cap-folder-bar' },
-          [['*', '전체'], ['', '기본 보관함'], ...folders().map((item) => [item.id, item.name])].map(([id, name]) => h('button', { class: 'fchip' + (folderFilter === id ? ' on' : ''), type: 'button', onclick: () => { folderFilter = id; drawGallery(); },
-            ondragover: (event) => { if (id !== '*') event.preventDefault(); }, ondrop: (event) => { if (id === '*') return; event.preventDefault(); const captureId = event.dataTransfer.getData('text/classhub-capture'); if (!captureId) return; Store.set('captures', captures().map((item) => item.id === captureId ? { ...item, folderId: id } : item)); drawGallery(); } }, name)),
+          h('select', { class: 'cap-folder-select', 'aria-label': '오답노트 보관함 선택', onchange: (event) => { folderFilter = event.currentTarget.value; drawGallery(); },
+            ondragover: (event) => { if (folderFilter !== '*') event.preventDefault(); }, ondrop: (event) => { if (folderFilter === '*') return; event.preventDefault(); const captureId = event.dataTransfer.getData('text/classhub-capture'); if (!captureId) return; Store.set('captures', captures().map((item) => item.id === captureId ? { ...item, folderId: folderFilter } : item)); drawGallery(); } },
+            [['*', '전체'], ['', '기본 보관함'], ...folders().map((item) => [item.id, item.name])].map(([id, name]) => h('option', { value: id, selected: folderFilter === id }, name))),
           h('button', { class: 'btn', type: 'button', onclick: addFolder }, '＋ 보관함'),
-          folderFilter && folderFilter !== '*' ? h('button', { class: 'btn ghost', type: 'button', onclick: manageFolder }, '보관함 관리') : null,
-          h('button', { class: 'btn ghost', type: 'button', onclick: openTrash }, `휴지통 ${captures().length - all.length}`)));
+          folderFilter && folderFilter !== '*' ? h('button', { class: 'btn ghost', type: 'button', onclick: manageFolder }, '보관함 관리') : null));
       if (!list.length) { gallery.append(h('div', { class: 'empty-box' }, all.length ? '이 과목의 오답이 없어요.' : 'PDF, 사진, 손그림 또는 문제 번호로 오답을 추가해 보세요.')); return; }
       const grouped = new Map();
       list.forEach((c) => {
@@ -618,7 +645,8 @@ const PdfCapture = (() => {
           h('button', { type: 'button', class: 'btn', onclick: () => imageInput.click() }, '＋ 사진 올리기'),
           h('button', { type: 'button', class: 'btn', onclick: () => cameraInput.click() }, '사진 찍기'),
           h('button', { type: 'button', class: 'btn', onclick: () => openEditor({ base: blankBase(), title: '', sourceType: 'drawing', ann: [] }, drawGallery) }, '직접 그리기'),
-          h('button', { type: 'button', class: 'btn ghost', onclick: () => addReference(drawGallery) }, '문제 번호만'))),
+          h('button', { type: 'button', class: 'btn ghost', onclick: () => addReference(drawGallery) }, '문제 번호만'),
+          h('button', { type: 'button', class: 'trash-icon-btn', onclick: openTrash, title: '오답노트 휴지통', 'aria-label': '오답노트 휴지통' }, icon('trash')))),
       fileInput, imageInput, cameraInput, dropzone, pdfSection, gallery);
     root.append(dropTarget);
     drawStage();

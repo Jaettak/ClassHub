@@ -249,7 +249,8 @@ const Timer = (() => {
 
 App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
   const panel = h('section', { class: 'panel timer-page' },
-    h('h1', { class: 'page-title' }, '타이머'),
+    h('div', { class: 'title-row' }, h('h1', { class: 'page-title' }, '타이머'),
+      h('button', { class: 'trash-icon-btn', type: 'button', title: '타이머 기록 휴지통', 'aria-label': '타이머 기록 휴지통', onclick: () => openTrash() }, icon('trash'))),
     h('div', { class: 'timer-mode-grid' },
       h('button', { class: 'timer-page-card', type: 'button', onclick: () => Timer.open({ mode: 'down' }) }, icon('timer'), h('h2', null, '타이머'), h('span', null, '정해 둔 시간만큼 집중하기')),
       h('button', { class: 'timer-page-card', type: 'button', onclick: () => Timer.open({ mode: 'up' }) }, icon('timer'), h('h2', null, '스톱워치'), h('span', null, '공부한 시간 재기'))),
@@ -268,7 +269,7 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
       } }, '×'))) : [h('p', { class: 'muted' }, '아직 타이머 기록이 없어요.') ]));
   };
   drawLogs();
-  panel.querySelector('.timer-history').before(h('button', { class: 'btn ghost', type: 'button', onclick: () => {
+  const openTrash = () => {
     const body = h('div', { class: 'timer-trash' });
     const refresh = () => {
       const deleted = Store.get('timerLog', []).filter((x) => x.deletedAt);
@@ -287,6 +288,6 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
       if (!confirm('휴지통의 기록을 모두 영구 삭제할까요?')) return;
       Store.set('timerLog', Store.get('timerLog', []).filter((x) => !x.deletedAt)); refresh();
     } }, '휴지통 비우기')] });
-  } }, '기록 휴지통'));
+  };
   root.append(panel);
 } });

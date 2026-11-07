@@ -1283,4 +1283,127 @@ body.timer-native-pip .timer-alarm { position: fixed; inset: 0; width: 100%; hei
 .row2 > .field { min-width: 0; }
 button, a, [role='button'], summary { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; touch-action: manipulation; }
 @media (prefers-reduced-motion: reduce) { .side-box .bm, .side-box .bm::after { transition: none; } }
+
+/* 로컬 검토판: 탭, 그림 도구, 보관함과 휴지통 */
+.home-card.coral { background: linear-gradient(135deg, #8998ae, #667994); }
+.home-card.mint { background: linear-gradient(135deg, #c39769, #a87545); }
+.home-card.slate { background: linear-gradient(135deg, #50b7d8, #277fa8); }
+.timer-mode-grid .timer-page-card { background: #fff; border-color: var(--line); }
+.timer-mode-grid .timer-page-card:hover, .timer-mode-grid .timer-page-card:focus-visible { background: #f6fbff; border-color: #80add9; outline-color: #80add9; }
+.timer-mode-grid { margin-bottom: 28px; }
+.creative-entry-card { min-height: 300px; background: #fff; }
+.draw-selection-actions[hidden] { display: none; }
+.creative-size-label { display: inline-flex; align-items: center; gap: 5px; font-size: .85rem; font-weight: 800; }
+.creative-size-label input { width: 82px; padding: 6px; }
+.trash-icon-btn { display: inline-grid; place-items: center; flex: none; width: 39px; height: 39px; border: 1px solid #efc5c9; border-radius: 12px; background: #fff7f7; cursor: pointer; }
+.trash-icon-btn:hover, .trash-icon-btn:focus-visible { background: #ffeaea; outline: 2px solid #edb1b7; }
+.trash-icon-btn .ico, .trash-icon-btn svg { display: block; width: 25px; height: 25px; }
+.nt-folder-select, .cap-folder-select { min-width: 165px; max-width: min(100%, 250px); }
+.creative-trash-list { display: grid; gap: 8px; }
+.creative-trash-row { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.creative-trash-row b { flex: 1; }
+.home-note-modal { display: grid; gap: 7px; }
+.home-note-modal .btn { background: color-mix(in srgb, var(--c) 75%, white); justify-content: flex-start; text-align: left; }
+.home-day-notes-open { width: 100%; text-align: left; justify-content: flex-start; }
+.tt-lunch-row .tt-period-time { font-size: .67rem; font-weight: 600; color: #446c80; }
+.tt-lunch-row td { font-size: .9rem; }
+.topbar .brand-mark { width: 62px; height: 45px; }
+.topbar .brand-name { font-size: 1.5rem; }
+.topbar { padding-bottom: 14px; }
+.topbar .nav-fold { display: grid; place-items: center; position: absolute; left: 50%; bottom: -17px; z-index: 2; transform: translateX(-50%); width: 48px; height: 19px; margin: 0; padding: 0; border: 2px solid var(--line); border-top: 0; border-radius: 0 0 13px 13px; background: #fff; cursor: pointer; }
+.topbar .nav-fold::after { content: ''; display: block; width: 8px; height: 8px; border: solid #51617d; border-width: 0 2px 2px 0; transform: translateY(-2px) rotate(45deg); }
+body.nav-collapsed .topbar .nav-fold::after { transform: translateY(3px) rotate(225deg); }
+body.nav-collapsed .topbar .tabs { display: none !important; }
+@media (min-width: 1001px) { .home-cards { align-self: start; min-height: 0; overflow-y: auto; overscroll-behavior: contain; grid-auto-rows: minmax(88px, 96px); padding: 2px 8px 2px 2px; scrollbar-gutter: stable; } }
+@media (max-width: 640px) {
+  .topbar .top-settings { top: 8px; transform: none; }
+  .topbar .brand-mark { width: 54px; height: 39px; }
+  .topbar .brand-name { font-size: 1.25rem; }
+  .view-wrong .dropzone { display: none !important; }
+  .cal-head .cal-nav > .ym { flex: 0 0 auto; min-width: 150px; max-width: 100%; }
+  .cal-head .cal-nav > .ym select { min-width: 0; max-width: none; font-size: .8rem; padding: 5px 3px; }
+  .cal-head .cal-nav > .ym select:first-child { width: 86px; }
+  .cal-head .cal-nav > .ym select:last-child { width: 58px; }
+  .home-topline .home-logo { align-self: center; min-height: 190px; }
+}
+@media (hover: none) {
+  button:not(:disabled):active, a:active { filter: brightness(.94); transition: filter .03s; }
+  .btn:active:not(:disabled), .home-card:active, .creative-entry-card:active { transform: scale(.97); transition-duration: .06s; }
+}
+
+/* 로컬 검토판: 같은 높이의 홈 카드와 선택 영역 도구 */
+.trash-icon-btn { background: #fff; border-color: #d7dde6; }
+.trash-icon-btn:hover, .trash-icon-btn:focus-visible { background: #f3f5f8; outline-color: #aeb9c8; }
+.draw-selection-actions { position: absolute; z-index: 9; width: max-content; max-width: min(310px, calc(100% - 16px)); padding: 5px; border: 1px solid #cbd6e5; border-radius: 10px; background: #fff; box-shadow: 0 5px 16px #263b6429; }
+.draw-selection-actions[hidden] { display: none; }
+.draw-selection-actions .btn { min-height: 30px; padding: 3px 7px; font-size: .73rem; }
+.creative-wrap, .ed-wrap { padding-bottom: 50px; }
+.creative-tools, .ed-tools { display: flex; flex-direction: column; align-items: stretch; gap: 7px; }
+.draw-toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; width: 100%; }
+.draw-toolbar-row + .draw-toolbar-row { padding-top: 7px; border-top: 1px solid #e7ebf2; }
+.tt-cell-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-saved-choice { display: grid; gap: 6px; width: 100%; }
+.tt-saved-choice select, .tt-saved-choice input { width: 100%; min-width: 0; }
+.tt-saved-choice select[hidden] { display: none; }
+.topbar .top-settings { top: 8px; right: 10px; transform: none; }
+.topbar .brand-mark { width: 68px; height: 50px; }
+.topbar .brand-name { font-size: 1.62rem; }
+.topbar .nav-fold { bottom: -16px; width: 40px; height: 16px; border: 0; border-radius: 0 0 8px 8px; background: #fff; box-shadow: none; }
+.topbar .nav-fold { border: 1px solid #c2cbda; border-top: 0; }
+.topbar .nav-fold::before { content: ''; position: absolute; top: -3px; left: 0; right: 0; height: 4px; background: #fff; }
+.topbar .nav-fold::after { width: 7px; height: 7px; transform: translateY(2px) rotate(225deg); }
+body.nav-collapsed .topbar { height: 0; min-height: 0; padding: 0; border: 0; background: transparent; backdrop-filter: none; box-shadow: none; gap: 0; }
+body.nav-collapsed .topbar .brand, body.nav-collapsed .topbar .top-settings { display: none; }
+body.nav-collapsed .topbar .nav-fold { top: 0; bottom: auto; }
+body.nav-collapsed .topbar .nav-fold::after { transform: translateY(-2px) rotate(45deg); }
+.home-logo { container-type: inline-size; max-width: 260px; min-width: 0; overflow: hidden; }
+.home-logo .logo-books { max-width: 100%; margin-inline: auto; }
+.home-logo .logo-books svg { max-width: 100%; overflow: hidden; }
+.home-logo .logo-name { max-width: 100%; font-size: clamp(1.35rem, 14cqw, 2.55rem); }
+.home-schedule-preview h3 { text-align: center; padding-top: 4px; margin-bottom: 12px; }
+.home-schedule-lesson { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 1001px) {
+  .home { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  .home-side { container-type: inline-size; height: 100%; }
+  .home-topline { flex: 0 0 auto; height: min(260px, 52cqw); min-height: 0; align-items: stretch; }
+  .home-topline .home-logo { flex: 0 0 min(260px, 52cqw); width: min(260px, 52cqw); height: 100%; max-width: none; aspect-ratio: 1; }
+  .home-schedule-preview { display: flex; flex-direction: column; height: 100%; min-width: 0; overflow: hidden; }
+  .home-schedule-list { flex: 1; min-height: 0; max-height: none; overflow-y: auto; }
+  .home-side .side-box { flex: 1 1 auto; min-height: 0; }
+  .home-cards { height: 100%; }
+  .side-scroll .side-lessons { display: none; }
+}
+@media (min-width: 641px) and (max-width: 1000px) {
+  .home-side { --tablet-card-size: min(320px, 42cqw); container-type: inline-size; flex-wrap: wrap; align-items: stretch; }
+  .home-side .home-exam-banner { flex: 0 0 100%; }
+  .home-topline { display: flex; flex: 0 0 var(--tablet-card-size); width: var(--tablet-card-size); height: var(--tablet-card-size); min-height: 0; justify-content: center; }
+  .home-topline .home-logo { flex: 0 0 100%; width: 100%; max-width: none; height: 100%; aspect-ratio: 1; align-self: stretch; padding: 16px; }
+  .home-side .side-box { flex: 1 1 0; min-width: 0; height: var(--tablet-card-size); }
+  .home-schedule-preview { display: none; }
+}
+@media (max-width: 640px) {
+  .home-side { container-type: inline-size; align-items: stretch; }
+  .home-topline { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; height: calc((100cqw - 10px) / 2); min-height: 0; }
+  .home-topline .home-logo { grid-column: 1; grid-row: 1; width: 100%; max-width: none; height: 100%; min-height: 0; aspect-ratio: 1; align-self: stretch; padding: 12px; }
+  .home-schedule-preview { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; align-self: stretch; width: 100%; height: 100%; padding: 10px; overflow: hidden; }
+  .home-schedule-preview h3 { font-size: .83rem; margin-bottom: 6px; padding-top: 0; }
+  .home-schedule-list { flex: 1; min-height: 0; max-height: none; overflow-y: auto; }
+  .home-schedule-lesson { padding: 5px 6px; font-size: .75rem; }
+  .home-side .side-box { height: clamp(300px, 38vh, 360px); min-height: 300px; }
+  .side-box.wide-pie .side-scroll { overflow-x: auto; overflow-y: hidden; }
+  .side-box.wide-pie .home-pie-view { min-width: 280px; }
+  .side-box.wide-pie .home-semi-svg .pie-hr { font-size: 14px; }
+  .side-box.wide-pie .home-semi-svg .pie-c1 { font-size: 28px; }
+  .side-box.wide-pie .home-semi-svg .pie-c3 { font-size: 16px; }
+  .side-scroll .side-lessons { display: none; }
+}
+.side-box .bm { transform: none; transition: height .48s cubic-bezier(.22, 1, .36, 1), filter .3s ease; }
+.side-box .bm::after { display: none; }
+.side-box .bm.r { height: 49px; }
+.side-box .bm.b { height: 43px; }
+.side-box .bm.r:hover, .side-box .bm.r:focus-visible { height: 57px; transform: none; }
+.side-box .bm.b:hover, .side-box .bm.b:focus-visible { height: 51px; transform: none; }
+.side-box .bm.r[aria-pressed="true"] { height: 64px; }
+.side-box .bm.b[aria-pressed="true"] { height: 58px; }
+@media (prefers-reduced-motion: reduce) { .side-box .bm { transition: none; } }
 .auth-actions { display: flex; gap: 8px; flex-wrap: wrap; }

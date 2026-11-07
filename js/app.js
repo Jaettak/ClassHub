@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.0.0';
+const CLASSHUB_VERSION = 'v2.1.9';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -169,7 +169,9 @@ const App = (() => {
 
   function navTabs(active) {
     const enabled = Settings.get().enabledTabs;
-    const names = ORDER.filter((n) => views[n] && n !== 'home' && n !== 'settings' && (!Array.isArray(enabled) || enabled.includes(n)));
+    const order = Settings.get().tabOrder || [];
+    const names = ORDER.filter((n) => views[n] && n !== 'home' && n !== 'settings' && (!Array.isArray(enabled) || enabled.includes(n)))
+      .sort((a, b) => (order.indexOf(a) < 0 ? 999 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 999 : order.indexOf(b)));
     const layout = (className, max, minRows) => {
       const count = names.length, rows = Math.min(count, Math.max(minRows, Math.ceil(count / max))) || 0;
       let index = 0;
@@ -221,10 +223,9 @@ const App = (() => {
             h('span', { class: 'brand-name', 'aria-label': 'ClassHub' },
               [...'Class'].map((letter, i) => h('span', { style: { '--i': i }, 'aria-hidden': 'true' }, letter)),
               [...'Hub'].map((letter, i) => h('b', { style: { '--i': i + 5 }, 'aria-hidden': 'true' }, letter)))),
-          h('button', { class: 'nav-fold', type: 'button', 'aria-label': '탭 메뉴 접기 또는 펼치기', onclick: (e) => {
+          h('button', { class: 'nav-fold', type: 'button', 'aria-label': '탭 메뉴 접기 또는 펼치기', onclick: () => {
             document.body.classList.toggle('nav-collapsed');
-            e.currentTarget.textContent = document.body.classList.contains('nav-collapsed') ? '탭 펼치기' : '탭 접기';
-          } }, document.body.classList.contains('nav-collapsed') ? '탭 펼치기' : '탭 접기'),
+          } }),
           navTabs(key),
           h('button', { class: 'top-settings', type: 'button', onclick: openSettings, title: '설정', 'aria-label': '설정 열기' }, icon('settings'))),
         page);

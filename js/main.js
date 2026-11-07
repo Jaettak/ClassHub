@@ -25,7 +25,7 @@ const Home = (() => {
     const nextExam = Settings.protectedTab('calendar') ? null : Calendar.nextExam();
     let sideMode = Store.get('homeSideMode', 'list');
 
-    const order = Settings.get().homeCardOrder || [];
+    const order = Settings.get().tabOrder || Settings.get().homeCardOrder || [];
     const enabled = Settings.get().enabledTabs;
     const sortedCards = CARDS.filter((c) => !Array.isArray(enabled) || enabled.includes(c.to)).sort((a, b) => (order.indexOf(a.to) < 0 ? 999 : order.indexOf(a.to)) - (order.indexOf(b.to) < 0 ? 999 : order.indexOf(b.to)));
     const cards = h('div', { class: 'home-cards' }, sortedCards.map((c) => h(c.to ? 'a' : 'button', c.to ? { class: 'home-card ' + c.cls, href: '#' + c.to } : { class: 'home-card ' + c.cls, type: 'button', onclick: App.openSettings },
@@ -47,6 +47,17 @@ const Home = (() => {
 
     const sideScroll = todayBox.querySelector('.side-scroll');
     function changeDate(n) { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + n); drawSide(); }
+    function openDayNotes(ds) {
+      const body = h('div', { class: 'nt-completed home-note-modal' });
+      const refreshNotes = () => {
+        const notes = Notes.forDate(ds);
+        body.replaceChildren(...(notes.length
+          ? notes.map((n) => h('button', { class: 'btn ghost', style: { '--c': n.color || '#fff4b8' }, type: 'button', onclick: () => Notes.show(n, () => { refreshNotes(); drawSide(); }) }, n.title || n.body))
+          : [h('p', { class: 'muted' }, '이 날의 메모가 없어요.')]));
+      };
+      refreshNotes();
+      App.modal({ title: `${ds} 메모`, body });
+    }
     function drawSide() {
       const ds = dateStr(selectedDate), lessons = Settings.protectedTab('timetable') ? [] : Timetable.lessonsFor(selectedDate), dayEvents = Calendar.byDate(ds).filter((e) => !e.schoolLesson && !e.sourceBreak);
       todayBox.querySelector('h3').replaceChildren(
@@ -57,14 +68,12 @@ const Home = (() => {
           h('div', { class: 'home-pie-full' }, Calendar.homePie(selectedDate)),
           h('div', { class: 'home-pie-half' }, Calendar.homeSemi(selectedDate))),
         h('div', { class: 'home-pie-actions' },
-          Settings.protectedTab('notes') ? null : h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 메모`, body: Notes.forDate(ds).length
-            ? h('div', { class: 'nt-completed home-note-modal' }, Notes.forDate(ds).map((n) => h('button', { class: 'btn ghost', style: { '--c': n.color || '#fff4b8' }, type: 'button', onclick: () => Notes.show(n, drawSide) }, n.title || n.body)))
-            : h('p', { class: 'muted' }, '이 날의 메모가 없어요.') }) }, '메모 보기'),
+          Settings.protectedTab('notes') ? null : h('button', { class: 'btn ghost', type: 'button', onclick: () => openDayNotes(ds) }, '메모 보기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 전체 일정`, body: h('div', { class: 'home-pie-large' }, Calendar.homePie(selectedDate)), wide: true }) }, '전체 보기')));
       sideScroll.replaceChildren(...[
         Settings.protectedTab('timetable') ? null : lessons.length ? h('div', { class: 'chips side-lessons' }, lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher, onclick: () => Calendar.showEvent(l, drawSide) }, `${l.period} ${l.displayTitle}`)))
           : h('p', { class: 'muted' }, '입력된 수업이 없어요.'),
-        !Settings.protectedTab('notes') && Notes.forDate(ds).length ? h('details', { class: 'home-day-notes' }, h('summary', null, `이 날의 메모 ${Notes.forDate(ds).length}개`), Notes.forDate(ds).map((n) => h('button', { type: 'button', style: { '--c': n.color || '#ffe7a3' }, onclick: () => Notes.show(n, drawSide) }, n.title || n.body))) : null,
+        !Settings.protectedTab('notes') && Notes.forDate(ds).length ? h('button', { class: 'home-day-notes-open btn ghost', type: 'button', onclick: () => openDayNotes(ds) }, `이 날의 메모 ${Notes.forDate(ds).length}개 보기`) : null,
         Settings.protectedTab('calendar') ? null : dayEvents.length ? h('ul', { class: 'mini-list' }, dayEvents.map((e) => h('li', { style: { '--c': e.color } },
           e.checkable !== false ? h('button', { type: 'button', class: 'ck sm' + (e.done ? ' on' : ''), role: 'checkbox', 'aria-checked': String(!!e.done), 'aria-label': `${e.title} 완료 표시`, title: e.done ? '완료 취소' : '완료로 표시', onclick: () => { Calendar.setDone(e.id, e.date, !e.done); drawSide(); } }) : null,
           h('button', { class: 'home-event-open', type: 'button', onclick: () => Calendar.showEvent(e, drawSide) }, h('span', null, `${e.start}~${e.end}`), h('b', null, e.title)))))
@@ -101,17 +110,18 @@ const Home = (() => {
         h('div', { class: 'home-topline' },
           !Settings.protectedTab('timetable') ? h('div', { class: 'home-schedule-preview' },
             h('h3', null, '오늘 시간표'),
-            Timetable.lessonsFor(now).length ? h('div', { class: 'home-schedule-list' }, Timetable.lessonsFor(now).map((lesson) => h('button', { type: 'button', class: 'home-schedule-lesson', style: { '--c': colorFor(lesson.subject) }, onclick: () => Calendar.showEvent(lesson, () => App.refresh()) }, `${lesson.period}교시 · ${lesson.displayTitle}`)))
+            Timetable.lessonsFor(now).length ? h('div', { class: 'home-schedule-list' }, Timetable.lessonsFor(now).map((lesson) => h('button', { type: 'button', class: 'home-schedule-lesson', style: { '--c': colorFor(lesson.subject) }, onclick: () => Calendar.showEvent(lesson, () => App.refresh()) }, `${lesson.period}. ${lesson.displayTitle}`)))
               : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')) : null, logo),
         Settings.protectedTab('calendar') ? null : todayBox)));
     sideObserver = new ResizeObserver(() => {
-      if (todayBox.isConnected && matchMedia('(min-width: 1100px) and (min-height: 700px)').matches) cards.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - cards.getBoundingClientRect().top)}px`;
+      if (todayBox.isConnected && matchMedia('(min-width: 1001px)').matches) cards.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - cards.getBoundingClientRect().top)}px`;
       else cards.style.height = '';
       const width = todayBox.clientWidth, height = todayBox.clientHeight;
       const wide = todayBox.classList.contains('wide-pie');
       // 카드 자체의 크기를 사용한다. 그래프 모양이 바뀌어도 기준 크기는 흔들리지 않는다.
       const ratio = width / Math.max(1, height);
-      const next = height < 350 && ratio > (wide ? 1.55 : 1.75);
+      const diameter = Math.min(width - 32, height - 140);
+      const next = diameter < (wide ? 290 : 260) || height < 350 && ratio > (wide ? 1.55 : 1.75);
       if (next !== wide) todayBox.classList.toggle('wide-pie', next);
     });
     sideObserver.observe(todayBox);

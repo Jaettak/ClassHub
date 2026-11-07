@@ -154,8 +154,19 @@ const Timetable = (() => {
   function editCell(t, save, d, p, done) {
     const cur = t.cells[d][p] || { subject: '', teacher: '' };
     const subject = App.subjectField('과목', cur.subject);
-    const teacher = h('input', { type: 'text', value: cur.teacher || Store.get('subjectTeachers', {})[cur.subject]?.[0] || '', placeholder: '예: 김하늘', maxLength: 20 });
-    const room = h('input', { type: 'text', value: cur.room || Store.get('subjectRooms', {})[cur.subject] || '', placeholder: '예: 2학년 3반', maxLength: 40 });
+    const teacher = h('input', { type: 'text', value: cur.teacher || Store.get('subjectTeachers', {})[cur.subject]?.[0] || '', placeholder: '직접 입력', maxLength: 20 });
+    const room = h('input', { type: 'text', value: cur.room || Store.get('subjectRooms', {})[cur.subject] || '', placeholder: '직접 입력', maxLength: 40 });
+    const teacherChoices = h('select', { 'aria-label': '저장한 선생님 선택', onchange: (event) => { if (event.currentTarget.value) teacher.value = event.currentTarget.value; } });
+    const roomChoices = h('select', { 'aria-label': '저장한 교실 선택', onchange: (event) => { if (event.currentTarget.value) room.value = event.currentTarget.value; } });
+    const refreshChoices = (name) => {
+      const teachers = Store.get('subjectTeachers', {})[name] || [];
+      const rooms = [...new Set([...(Store.get('subjectRoomOptions', {})[name] || []), ...(Store.get('subjectRooms', {})[name] ? [Store.get('subjectRooms', {})[name]] : [])])];
+      teacherChoices.replaceChildren(h('option', { value: '' }, '저장한 선생님 선택'), ...teachers.map((value) => h('option', { value }, value)));
+      roomChoices.replaceChildren(h('option', { value: '' }, '저장한 교실 선택'), ...rooms.map((value) => h('option', { value }, value)));
+      teacherChoices.hidden = !teachers.length;
+      roomChoices.hidden = !rooms.length;
+    };
+    refreshChoices(cur.subject);
     const picker = h('input', { type: 'color', value: colorFor(cur.subject || ''), 'aria-label': '과목 색상 선택' });
     const swatches = h('div', { class: 'tt-color-swatches' }, PALETTE.map((hex) =>
       h('button', { type: 'button', class: 'tt-swatch', style: { background: hex }, title: hex,
@@ -169,18 +180,15 @@ const Timetable = (() => {
       Store.set('subjectColors', colors);
     }
 
-    // 같은 과목을 전에 적은 적이 있으면 선생님 이름을 채워 준다
     subject.onPick((s) => {
       updatePicker(s);
+      refreshChoices(s);
       room.value = Store.get('subjectRooms', {})[s] || '';
-      if (teacher.value.trim() || !s) return;
-      const savedTeacher = Store.get('subjectTeachers', {})[s]?.[0];
-      if (savedTeacher) { teacher.value = savedTeacher; return; }
-      for (const col of t.cells) for (const c of col) if (c && c.subject === s && c.teacher) { teacher.value = c.teacher; return; }
+      teacher.value = Store.get('subjectTeachers', {})[s]?.[0] || '';
     });
     const m = App.modal({
       title: `${t.days[d]}요일 ${p + 1}교시`,
-      body: [subject.el, App.field('선생님 (선택)', teacher), App.field('기본 교실 (선택)', room), App.field('과목 색상', colorControls)],
+      body: [subject.el, App.field('선생님 (선택)', h('div', { class: 'tt-saved-choice' }, teacherChoices, teacher)), App.field('교실 (선택)', h('div', { class: 'tt-saved-choice' }, roomChoices, room)), App.field('과목 색상', colorControls)],
       footer: [
         cur.subject ? h('button', { class: 'btn danger', type: 'button', onclick: () => { t.cells[d][p] = null; save(); m.close(); done(); } }, '지우기') : null,
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
@@ -191,7 +199,14 @@ const Timetable = (() => {
       const s = subject.value();
       t.cells[d][p] = s ? { subject: s, teacher: teacher.value.trim(), room: room.value.trim() } : null;
       if (s) {
-        storeColor(s); Store.set('subjectRooms', { ...Store.get('subjectRooms', {}), [s]: room.value.trim() });
+        storeColor(s);
+        const roomName = room.value.trim();
+        if (roomName) {
+          const roomOptions = Store.get('subjectRoomOptions', {});
+          Store.set('subjectRoomOptions', { ...roomOptions, [s]: [...new Set([...(roomOptions[s] || []), roomName])] });
+          const defaults = Store.get('subjectRooms', {});
+          if (!defaults[s]) Store.set('subjectRooms', { ...defaults, [s]: roomName });
+        }
         const teachers = Store.get('subjectTeachers', {}), name = teacher.value.trim();
         if (name) Store.set('subjectTeachers', { ...teachers, [s]: [...new Set([...(teachers[s] || []), name])] });
       }
@@ -405,14 +420,16 @@ const Timetable = (() => {
             if (c) {
               td.style.setProperty('--c', colorFor(c.subject));
               const f = fitName(c.subject);
-              td.title = c.teacher ? `${c.subject} · ${c.teacher}` : c.subject;
+              const teacherName = c.teacher || Store.get('subjectTeachers', {})[c.subject]?.[0] || '';
+              const roomName = c.room || Store.get('subjectRooms', {})[c.subject] || '';
+              td.title = [c.subject, teacherName, roomName].filter(Boolean).join(' · ');
               td.append(h('b', { style: { fontSize: f.size + 'em' } }, f.shown));
-              if (c.teacher) td.append(h('small', null, c.teacher));
+              if (teacherName || roomName) td.append(h('small', { class: 'tt-cell-meta' }, [teacherName, roomName].filter(Boolean).join(' · ')));
             } else td.append(h('span', { class: 'plus' }, '+'));
             return td;
           })));
         if (t.lunch?.afterPeriod === p + 1) rows.push(h('tr', { class: 'tt-lunch-row' },
-          h('th', { class: 'period' }, '점심시간', h('small', null, `${t.lunch.start}~${t.lunch.end}`)),
+          h('th', { class: 'period' }, '점심시간', h('small', { class: 'tt-period-time' }, `${t.lunch.start}~${t.lunch.end}`)),
           t.days.map(() => h('td', null, '식사 및 휴식'))));
       }
       wrap.append(...[
@@ -427,7 +444,7 @@ const Timetable = (() => {
           h('button', { class: 'btn ghost', type: 'button', onclick: reset }, '기본값으로'),
           friend ? h('button', { class: 'btn ghost', type: 'button', onclick: renameFriend }, '이름 바꾸기') : null,
           friend ? h('button', { class: 'btn danger', type: 'button', onclick: removeFriend }, '이 친구 삭제') : null),
-        friend ? h('p', { class: 'hint' }, `${friend.name}의 시간표예요. 친구 시간표는 홈·달력의 수업 표시에는 쓰이지 않아요.`) : null,
+        friend ? h('details', { class: 'context-help' }, h('summary', null, '도움말'), h('div', null, `${friend.name}의 시간표예요. 친구 시간표는 홈·달력의 수업 표시에는 쓰이지 않아요.`)) : null,
         h('div', { class: 'tt-scroll' }, h('table', { class: 'tt' }, h('thead', null, head), h('tbody', null, rows))),
         !friend && Store.get('timetableTerms', []).length ? h('div', { class: 'tt-term-list' },
           h('b', null, '적용한 기간'), Store.get('timetableTerms', []).map((term) => h('button', { class: 'btn ghost', type: 'button', onclick: () => showTerm(term) }, `${term.name} · ${term.start} ~ ${term.end}`))) : null].filter(Boolean));

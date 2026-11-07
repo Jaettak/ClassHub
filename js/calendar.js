@@ -494,7 +494,7 @@ const Calendar = (() => {
   // ---------- 하루 원 그래프 (방학 생활계획표처럼) ----------
   function pie(d, redraw) {
     const ds = dateStr(d);
-    const evs = layout(byDate(ds).filter((e) => !e.schoolLesson && !e.sourceBreak));
+    const evs = layout(byDate(ds).filter((e) => !e.sourceBreak && (e.schoolLesson ? !Settings.protectedTab('timetable') : !Settings.protectedTab('calendar'))));
     const C = 210; const R = 168; const r = 80;
     const L = Math.min(4, Math.max(1, ...evs.map((x) => x.lane + 1)));
     const w = (R - r) / L;
@@ -555,17 +555,19 @@ const Calendar = (() => {
       svg.append(sv('circle', { cx: f(x0), cy: f(y0), r: 5, class: 'pie-now-dot' }));
     }
 
-    const doneN = evs.filter((x) => x.e.checkable !== false && x.e.done).length;
+    const realEvents = evs.filter((x) => !x.e.schoolLesson);
+    const lessonCount = evs.length - realEvents.length;
+    const doneN = realEvents.filter((x) => x.e.checkable !== false && x.e.done).length;
     svg.append(
       sv('text', { x: C, y: C - 14, class: 'pie-c1', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, `${d.getMonth() + 1}월 ${d.getDate()}일`),
       sv('text', { x: C, y: C + 14, class: 'pie-c2', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, ds === todayStr() ? `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}` : `${WEEK[d.getDay()]}요일`),
-      sv('text', { x: C, y: C + 36, class: 'pie-c3', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, evs.length ? `일정 ${evs.length}개 · 완료 ${doneN}` : '일정 없음'));
+      sv('text', { x: C, y: C + 36, class: 'pie-c3', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, realEvents.length ? `일정 ${realEvents.length}개 · 완료 ${doneN}` : lessonCount ? `수업 ${lessonCount}개` : '일정 없음'));
     return svg;
   }
 
   // 가로로 긴 홈 북마크에서는 24시간을 반원에 펼쳐 표시한다.
   function semiPie(d, redraw) {
-    const ds = dateStr(d), evs = layout(byDate(ds).filter((e) => !e.schoolLesson && !e.sourceBreak));
+    const ds = dateStr(d), evs = layout(byDate(ds).filter((e) => !e.sourceBreak && (e.schoolLesson ? !Settings.protectedTab('timetable') : !Settings.protectedTab('calendar'))));
     const C = 210, Y = 205, outer = 162, inner = 96;
     const angle = (minutes) => Math.PI + Math.max(0, Math.min(1440, minutes)) / 1440 * Math.PI;
     const point = (radius, a) => [C + radius * Math.cos(a), Y + radius * Math.sin(a)];
@@ -592,7 +594,8 @@ const Calendar = (() => {
       svg.append(sv('line', { x1: f(x0), y1: f(y0), x2: f(x1), y2: f(y1), class: 'pie-now' }), sv('circle', { cx: f(x1), cy: f(y1), r: 6, class: 'pie-now-dot' }));
       svg.append(sv('text', { x: C, y: Y - 20, class: 'pie-c1', 'text-anchor': 'middle' }, `${pad(now.getHours())}:${pad(now.getMinutes())}`));
     } else svg.append(sv('text', { x: C, y: Y - 20, class: 'pie-c1', 'text-anchor': 'middle' }, `${d.getMonth() + 1}월 ${d.getDate()}일`));
-    svg.append(sv('text', { x: C, y: Y + 2, class: 'pie-c3', 'text-anchor': 'middle' }, `${evs.length}개 일정`));
+    const eventCount = evs.filter((x) => !x.e.schoolLesson).length;
+    svg.append(sv('text', { x: C, y: Y + 2, class: 'pie-c3', 'text-anchor': 'middle' }, eventCount ? `일정 ${eventCount}개` : evs.length ? `수업 ${evs.length}개` : '일정 없음'));
     return svg;
   }
 
@@ -696,12 +699,12 @@ const Calendar = (() => {
       const dayNotes = Notes.forDate(ds);
       const open = pieOpen();
       const label = h('b', { class: 'cal-label' }, longDate(focus));
-      const pieEvents = evs.filter((e) => !e.schoolLesson && !e.sourceBreak);
+      const pieEvents = evs.filter((e) => !e.sourceBreak && (e.schoolLesson ? !Settings.protectedTab('timetable') : !Settings.protectedTab('calendar')));
       const legend = pieEvents.length
         ? h('ul', { class: 'pie-legend' }, pieEvents.map((e) => h('li', { class: e.done ? 'done' : '' },
           ckBtn(e, drawDay, true),
           h('button', { type: 'button', class: 'lg-main', style: { '--c': e.color }, onclick: () => showEvent(e, drawDay) },
-            h('i', null), h('span', { class: 'lg-t' }, range(e)), h('b', null, e.rep ? `↻ ${e.title}` : e.title)))))
+            h('i', null), h('span', { class: 'lg-t' }, range(e)), h('b', null, e.schoolLesson ? `수업 · ${e.title}` : e.rep ? `↻ ${e.title}` : e.title)))))
         : null;
       const pieCard = open
         ? h('div', { class: 'pie-card' }, h('div', { class: 'pie-card-head' }, h('b', null, '하루 일정 원 그래프'), pieBtn()), pie(focus, drawDay), legend)

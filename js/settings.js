@@ -1,8 +1,8 @@
 // 설정: 학교 정보, NEIS 키, 알레르기, 화면, 백업, 초기화
 const Settings = (() => {
-  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, uiSound: true, soundVolume: 50, notesAutoTrashDays: 0, homeCardOrder: [], privateLockEnabled: true };
+  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, uiSound: true, soundVolume: 50, notesAutoTrashDays: 0, tabOrder: [], privateLockEnabled: true };
   const SCALE = { small: '15px', normal: '16px', large: '18px' };
-  const DEVICE = ['fontScale', 'reduceMotion', 'timerSound', 'uiSound', 'soundVolume'];
+  const DEVICE = ['fontScale', 'reduceMotion', 'timerSound', 'uiSound', 'soundVolume', 'tabOrder', 'enabledTabs'];
   const unlocked = new Set();
   const protectedTabs = new Set(['wrong', 'timetable', 'subjects', 'calendar', 'activities', 'grades', 'meals', 'notes', 'study', 'whiteboard', 'schoolmap', 'timer']);
   const lockTabs = () => get().privateLockTabs || (get().privateLockEnabled === false ? [] : ['activities', 'grades']);
@@ -43,9 +43,18 @@ const Settings = (() => {
   const local = () => {
     try {
       const saved = localStorage.getItem('classhub:deviceSettings');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const snapshot = JSON.parse(saved);
+        const legacy = Store.get('settings', {}) || {};
+        let migrated = false;
+        if (!Array.isArray(snapshot.tabOrder)) { snapshot.tabOrder = legacy.tabOrder || legacy.homeCardOrder || []; migrated = true; }
+        if (!Array.isArray(snapshot.enabledTabs) && Array.isArray(legacy.enabledTabs)) { snapshot.enabledTabs = legacy.enabledTabs; migrated = true; }
+        if (migrated) localStorage.setItem('classhub:deviceSettings', JSON.stringify(snapshot));
+        return snapshot;
+      }
       const legacy = Store.get('settings', {}) || {};
       const snapshot = Object.fromEntries(DEVICE.filter((key) => key !== 'soundVolume' && key in legacy).map((key) => [key, legacy[key]]));
+      snapshot.tabOrder = legacy.tabOrder || legacy.homeCardOrder || [];
       localStorage.setItem('classhub:deviceSettings', JSON.stringify(snapshot));
       return snapshot;
     } catch (_) { return {}; }
@@ -55,13 +64,14 @@ const Settings = (() => {
     const shared = { ...(Store.get('settings', {}) || {}) };
     DEVICE.forEach((key) => delete shared[key]);
     const result = { ...DEFAULTS, ...shared, ...local() };
-    for (const key of ['homeCardOrder', 'enabledTabs', 'privateLockTabs']) if (Array.isArray(result[key])) result[key] = [...new Set(result[key].map((item) => item === 'school' ? 'schoolmap' : item))];
+    for (const key of ['tabOrder', 'enabledTabs', 'privateLockTabs']) if (Array.isArray(result[key])) result[key] = [...new Set(result[key].map((item) => item === 'school' ? 'schoolmap' : item))];
     return result;
   };
   const save = (patch) => {
     const shared = { ...(Store.get('settings', {}) || {}) };
     const device = { ...local() };
     DEVICE.forEach((key) => { if (key in patch) device[key] = patch[key]; delete shared[key]; });
+    delete shared.homeCardOrder;
     Object.entries(patch).forEach(([key, value]) => { if (!DEVICE.includes(key)) shared[key] = value; });
     localStorage.setItem('classhub:deviceSettings', JSON.stringify(device));
     Store.set('settings', shared); apply();
@@ -133,7 +143,7 @@ const Settings = (() => {
       '설정한 기간이 지나면 연결된 날짜가 있는 메모만 휴지통으로 옮겨요. 휴지통에서 복원할 수 있어요.'));
     const cardNames = [['wrong', '오답노트'], ['timetable', '시간표'], ['subjects', '과목 관리'], ['calendar', '일정 관리'], ['activities', '활동 관리'], ['grades', '성적 관리'], ['meals', '급식'], ['notes', '메모'], ['study', '필기 공간'], ['whiteboard', '화이트보드'], ['schoolmap', '학교 지도'], ['timer', '타이머']];
     const cardOrder = [...cardNames.map(([id]) => id)].sort((a, b) => {
-      const order = draft.homeCardOrder || [];
+      const order = draft.tabOrder || [];
       return (order.indexOf(a) < 0 ? 999 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 999 : order.indexOf(b));
     });
     const cardList = h('div', { class: 'set-card-order' });
@@ -142,9 +152,9 @@ const Settings = (() => {
       h('button', { class: 'btn ghost', type: 'button', disabled: i === 0, 'aria-label': `${id} 위로`, onclick: () => { [cardOrder[i - 1], cardOrder[i]] = [cardOrder[i], cardOrder[i - 1]]; drawCards(); } }, '↑'),
       h('button', { class: 'btn ghost', type: 'button', disabled: i === cardOrder.length - 1, 'aria-label': `${id} 아래로`, onclick: () => { [cardOrder[i + 1], cardOrder[i]] = [cardOrder[i], cardOrder[i + 1]]; drawCards(); } }, '↓'))));
     drawCards();
-    const homeBox = section('메인 탭 버튼 순서', h('button', { class: 'btn', type: 'button', onclick: () => {
+    const homeBox = section('탭 순서', h('button', { class: 'btn', type: 'button', onclick: () => {
       drawCards();
-      const dialog = App.modal({ title: '메인 탭 버튼 순서', body: cardList, footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
+      const dialog = App.modal({ title: '탭 순서', body: cardList, footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
     } }, '버튼 순서 바꾸기'));
     const lockChoices = cardNames.map(([id, label]) => ({ id, input: h('input', { type: 'checkbox', checked: (draft.privateLockTabs || (draft.privateLockEnabled === false ? [] : ['activities', 'grades'])).includes(id) }), label }));
     const lockOptions = h('div', { class: 'set-lock-tabs' }, lockChoices.map(({ input, label }) => h('label', { class: 'check' }, input, label)));
@@ -203,7 +213,7 @@ const Settings = (() => {
     const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, notesBox, homeBox, enabledBox, lockBox, backupBox, resetBox, versionBox);
     const commit = () => {
       save({ school: draft.school, grade: grade.value.trim(), cls: cls.value.trim(), allergies: draft.allergies.slice().sort((a, b) => a - b),
-        fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value), notesAutoTrashDays: Number(cleanupDays.value), homeCardOrder: cardOrder.slice(), enabledTabs: enabledChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockTabs: lockChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockEnabled: true });
+        fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value), notesAutoTrashDays: Number(cleanupDays.value), tabOrder: cardOrder.slice(), enabledTabs: enabledChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockTabs: lockChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockEnabled: true });
       if (!sound.checked) Timer.stopAlarm();
       m.close(); App.toast('설정을 저장했어요.'); App.route();
     };
