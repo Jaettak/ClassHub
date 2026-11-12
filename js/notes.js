@@ -8,6 +8,7 @@ const Notes = (() => {
   const folders = () => Store.get('noteFolders', []);
   const active = () => load().filter((n) => !n.deletedAt);
   let selectedFolder = '*';
+  let sortMode = localStorage.getItem('classhub-note-sort') || 'manual';
   function cleanupExpired() {
     const days = Number(Settings.get().notesAutoTrashDays || 0);
     if (!Number.isInteger(days) || days < 1) return;
@@ -82,7 +83,7 @@ const Notes = (() => {
     };
     mode.addEventListener('change', drawMode);
     drawDates(); drawMode();
-    let color = n.color || COLORS[0];
+    let color = n.color || folders().find((f) => f.id === (n.folderId || selectedFolder))?.color || COLORS[active().length % COLORS.length];
     let pinned = !!n.pinned;
     const swatches = h('div', { class: 'swatches' });
     const drawSw = () => swatches.replaceChildren(...COLORS.map((c) => h('button', { type: 'button', class: 'sw' + (c === color ? ' on' : ''), style: { background: c }, 'aria-label': '색상 선택',
@@ -119,28 +120,105 @@ const Notes = (() => {
 
   function render(root) {
     cleanupExpired();
+    const trashCutoff = Date.now() - 30 * 86400000;
+    if (load().some((n) => n.deletedAt && n.deletedAt < trashCutoff)) save(load().filter((n) => !n.deletedAt || n.deletedAt >= trashCutoff));
     let viewMode = Store.get('notesViewMode', 'cards');
     const grid = h('div', { class: 'nt-grid' });
     const folderBar = h('div', { class: 'nt-folders' });
+    let move = () => {}, dragId = '', dropIntent = null, insertionLine = null, suppressClickUntil = 0;
+    const clearIntent = () => {
+      insertionLine?.remove(); insertionLine = null; dropIntent = null;
+      grid.querySelectorAll('.drop-swap').forEach((node) => node.classList.remove('drop-swap'));
+    };
+    const hit = (x, y, sourceId) => {
+      const point = document.elementFromPoint(x, y);
+      if (!point || !grid.contains(point)) return null;
+      const direct = point.closest('.nt-card[data-note-id]');
+      if (direct?.dataset.noteId === sourceId) return null;
+      if (direct) {
+        const r = direct.getBoundingClientRect();
+        const rx = (x - r.left) / r.width, ry = (y - r.top) / r.height;
+        const edges = viewMode === 'list'
+          ? [{ distance: ry, placement: 'before', axis: 'horizontal' }, { distance: 1 - ry, placement: 'after', axis: 'horizontal' }]
+          : [{ distance: rx, placement: 'before', axis: 'vertical' }, { distance: 1 - rx, placement: 'after', axis: 'vertical' },
+            { distance: ry, placement: 'before', axis: 'horizontal' }, { distance: 1 - ry, placement: 'after', axis: 'horizontal' }];
+        const nearest = edges.sort((a, b) => a.distance - b.distance)[0];
+        return nearest.distance < .19 ? { target: direct, placement: nearest.placement, axis: nearest.axis }
+          : { target: direct, placement: 'swap' };
+      }
+      return [...grid.querySelectorAll('.nt-card[data-note-id]')].filter((card) => card.dataset.noteId !== sourceId)
+        .flatMap((card) => {
+          const r = card.getBoundingClientRect();
+          const horizontal = viewMode === 'list';
+          return ['before', 'after'].map((placement) => {
+            const edge = horizontal ? placement === 'before' ? r.top : r.bottom : placement === 'before' ? r.left : r.right;
+            const distance = horizontal ? Math.hypot(y - edge, Math.max(r.left - x, 0, x - r.right))
+              : Math.hypot(x - edge, Math.max(r.top - y, 0, y - r.bottom));
+            return { target: card, placement, axis: horizontal ? 'horizontal' : 'vertical', distance };
+          });
+        }).sort((a, b) => a.distance - b.distance)[0] || null;
+    };
+    const showIntent = (intent) => {
+      clearIntent();
+      if (!intent) return;
+      dropIntent = intent;
+      if (intent.placement === 'swap') { intent.target.classList.add('drop-swap'); return; }
+      const r = intent.target.getBoundingClientRect();
+      insertionLine = h('div', { class: 'nt-drop-insertion', style: intent.axis === 'vertical'
+        ? { left: `${intent.placement === 'before' ? r.left - 4 : r.right + 1}px`, top: `${r.top}px`, width: '4px', height: `${r.height}px` }
+        : { left: `${r.left}px`, top: `${intent.placement === 'before' ? r.top - 4 : r.bottom + 1}px`, width: `${r.width}px`, height: '4px' } });
+      document.body.append(insertionLine);
+    };
+    grid.addEventListener('dragover', (event) => {
+      if (!dragId) return;
+      const intent = hit(event.clientX, event.clientY, dragId);
+      if (intent) { event.preventDefault(); showIntent(intent); }
+    });
+    grid.addEventListener('drop', (event) => {
+      if (!dragId) return;
+      event.preventDefault();
+      const intent = hit(event.clientX, event.clientY, dragId) || dropIntent;
+      const source = dragId; dragId = ''; clearIntent();
+      if (intent) move(source, intent.target.dataset.noteId, intent.placement);
+    });
     const redraw = () => {
       grid.classList.toggle('list', viewMode === 'list');
       const all = active();
       const s = q.trim().toLowerCase();
       const sortNotes = (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
-        (Number.isFinite(a.sortOrder) && Number.isFinite(b.sortOrder) ? a.sortOrder - b.sortOrder : b.updatedAt - a.updatedAt);
+        (sortMode === 'date-asc' ? String(a.date || a.dates?.[0] || '').localeCompare(String(b.date || b.dates?.[0] || '')) : 0) ||
+        (sortMode === 'date-desc' ? String(b.date || b.dates?.[0] || '').localeCompare(String(a.date || a.dates?.[0] || '')) : 0) ||
+        (sortMode === 'folder' ? String(folders().find((f) => f.id === a.folderId)?.name || '').localeCompare(String(folders().find((f) => f.id === b.folderId)?.name || ''), 'ko') : 0) ||
+        (sortMode === 'name' ? String(a.title || '').localeCompare(String(b.title || ''), 'ko') : 0) ||
+        (sortMode === 'recent' ? (b.updatedAt || 0) - (a.updatedAt || 0) : 0) ||
+        (Number.isFinite(a.sortOrder) && Number.isFinite(b.sortOrder) ? a.sortOrder - b.sortOrder : (b.updatedAt || 0) - (a.updatedAt || 0));
       const list = all.filter((n) => (selectedFolder === '*' || (n.folderId || '') === selectedFolder) &&
         (!s || `${n.title} ${n.body}`.toLowerCase().includes(s))).sort(sortNotes);
-      const move = (id, targetId) => {
-        const ordered = load().sort(sortNotes);
-        const from = ordered.findIndex((x) => x.id === id), to = ordered.findIndex((x) => x.id === targetId);
+      move = (id, targetId, placement) => {
+        const ids = list.map((note) => note.id);
+        const from = ids.indexOf(id), to = ids.indexOf(targetId);
         if (from < 0 || to < 0 || from === to) return;
-        const targetPinned = ordered[to].pinned;
-        const [item] = ordered.splice(from, 1);
-        item.pinned = targetPinned;
-        item.folderId = ordered[to]?.folderId || '';
-        ordered.splice(to, 0, item);
-        ordered.forEach((x, i) => { x.sortOrder = i; });
-        save(ordered); redraw();
+        if (placement === 'swap') [ids[from], ids[to]] = [ids[to], ids[from]];
+        else {
+          ids.splice(from, 1);
+          const target = ids.indexOf(targetId);
+          ids.splice(target + (placement === 'after' ? 1 : 0), 0, id);
+        }
+        const saved = load();
+        const byId = new Map(saved.map((note) => [note.id, note]));
+        const visible = new Set(ids);
+        const pinnedSlots = list.map((note) => !!note.pinned);
+        let nextVisible = 0;
+        const ordered = saved.filter((note) => !note.deletedAt).sort(sortNotes).map((note) => {
+          if (!visible.has(note.id)) return note;
+          const changed = byId.get(ids[nextVisible]);
+          changed.pinned = pinnedSlots[nextVisible++];
+          return changed;
+        });
+        ordered.forEach((note, index) => { note.sortOrder = index; });
+        sortMode = 'manual'; localStorage.setItem('classhub-note-sort', sortMode);
+        const sortSelect = root.querySelector('[aria-label="메모 정렬"]'); if (sortSelect) sortSelect.value = sortMode;
+        save(saved); redraw();
       };
       const folderSelect = h('select', { class: 'nt-folder-select', 'aria-label': '메모 보관함 선택', onchange: (e) => { selectedFolder = e.currentTarget.value; redraw(); },
         ondragover: (e) => { if (selectedFolder !== '*') e.preventDefault(); },
@@ -159,16 +237,33 @@ const Notes = (() => {
         return;
       }
       list.forEach((n) => {
-        const card = h('div', { role: 'button', tabIndex: 0, draggable: true, class: 'nt-card', style: { '--c': n.color },
-        onclick: (e) => { if (!e.target.closest('.nt-delete')) show(n, redraw); },
+        let touchDrag = null, ghost = null;
+        const card = h('div', { role: 'button', tabIndex: 0, draggable: true, class: 'nt-card', 'data-note-id': n.id, style: { '--c': n.color },
+        onclick: (e) => { if (Date.now() < suppressClickUntil || e.target.closest('.nt-delete,.nt-drag-handle')) return; show(n, redraw); },
         onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) show(n, redraw); },
-        ondragstart: (e) => { e.dataTransfer.setData('text/plain', n.id); e.dataTransfer.effectAllowed = 'move'; },
-        ondragover: (e) => e.preventDefault(),
-        ondrop: (e) => { e.preventDefault(); move(e.dataTransfer.getData('text/plain'), n.id); } },
+        ondragstart: (e) => { if (e.target.closest('.nt-drag-handle')) { e.preventDefault(); return; } dragId = n.id; e.dataTransfer.setData('text/plain', n.id); e.dataTransfer.effectAllowed = 'move'; },
+        ondragend: () => { dragId = ''; clearIntent(); } },
         h('div', { class: 'nt-top' },
           h('h4', null, n.title || '제목 없음'), n.pinned ? h('span', { class: 'badge' }, '고정') : null,
+          h('span', { class: 'nt-drag-handle', title: '메모 순서 이동', 'aria-label': '메모 순서 이동', onpointerdown: (event) => {
+            if (event.pointerType === 'mouse') return;
+            event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId);
+            touchDrag = { x: event.clientX, y: event.clientY };
+          }, onpointermove: (event) => {
+            if (!touchDrag) return;
+            if (!ghost && Math.hypot(event.clientX - touchDrag.x, event.clientY - touchDrag.y) < 6) return;
+            if (!ghost) { ghost = card.cloneNode(true); ghost.classList.add('nt-drag-ghost'); document.body.append(ghost); card.classList.add('dragging'); }
+            ghost.style.left = `${event.clientX}px`; ghost.style.top = `${event.clientY}px`;
+            showIntent(hit(event.clientX, event.clientY, n.id));
+          }, onpointerup: (event) => {
+            if (!touchDrag) return;
+            const intent = ghost ? hit(event.clientX, event.clientY, n.id) || dropIntent : null;
+            if (ghost) { ghost.remove(); card.classList.remove('dragging'); suppressClickUntil = Date.now() + 400; }
+            ghost = null; touchDrag = null; clearIntent();
+            if (intent) move(n.id, intent.target.dataset.noteId, intent.placement);
+          }, onpointercancel: () => { ghost?.remove(); ghost = null; touchDrag = null; card.classList.remove('dragging'); clearIntent(); } }, '⋮⋮'),
           viewMode === 'list' ? null : h('button', { class: 'nt-delete', type: 'button', title: '휴지통으로 이동', 'aria-label': `${n.title || '메모'} 휴지통으로 이동`, onclick: (e) => { e.stopPropagation(); trash(n.id, redraw); } }, '×')),
-        n.body ? h('p', null, n.body) : null,
+        n.body && viewMode !== 'list' ? h('p', null, n.body) : null,
         h('small', null, n.dates?.length ? `${n.dates.length}개 날짜` : n.dateEnd ? `${n.date} ~ ${n.dateEnd}` : n.date ? `일정 ${n.date}` : new Date(n.updatedAt).toLocaleDateString('ko-KR')));
         grid.append(viewMode === 'list' ? h('div', { class: 'nt-list-row' }, card,
           h('button', { class: 'nt-list-delete', type: 'button', title: '휴지통으로 이동', 'aria-label': `${n.title || '메모'} 휴지통으로 이동`, onclick: () => trash(n.id, redraw) }, '×')) : card);
@@ -251,7 +346,9 @@ const Notes = (() => {
       folderBar,
       h('div', { class: 'nt-view-switch', role: 'group', 'aria-label': '메모 보기 방식' },
         ...[['cards', '네모 보기'], ['list', '줄 보기']].map(([mode, label]) => h('button', { class: 'btn' + (viewMode === mode ? ' on' : ''), type: 'button', 'aria-pressed': String(viewMode === mode), onclick: () => { viewMode = mode; Store.set('notesViewMode', mode); App.refresh(); } }, label))),
-      h('div', { class: 'filters' }, h('input', { type: 'search', placeholder: '메모 검색', value: q, oninput: (e) => { q = e.target.value; redraw(); } })),
+      h('div', { class: 'filters' }, h('input', { type: 'search', placeholder: '메모 검색', value: q, oninput: (e) => { q = e.target.value; redraw(); } }),
+        h('select', { 'aria-label': '메모 정렬', onchange: (e) => { sortMode = e.target.value; localStorage.setItem('classhub-note-sort', sortMode); redraw(); } },
+          [['manual', '직접 정렬'], ['recent', '최근 수정순'], ['date-asc', '날짜 빠른순'], ['date-desc', '날짜 늦은순'], ['folder', '보관함순'], ['name', '이름순']].map(([value, label]) => h('option', { value, selected: sortMode === value }, label)))),
       grid));
     redraw();
   }

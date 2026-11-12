@@ -1,10 +1,10 @@
-const CACHE = 'classhub-static-v2.1.9';
+const CACHE = 'classhub-static-v2.2.0';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
-  './assets/logo.svg', './assets/logo.png', './lib/pdf.min.js', './lib/pdf.worker.min.js',
-  './js/firebase-config.js', './js/store.js', './js/icons.js', './js/app.js',
+  './assets/logo.svg', './assets/logo.png', './assets/easter-fall.wav', './lib/pdf.min.js', './lib/pdf.worker.min.js',
+  './js/firebase-config.js', './js/store.js', './js/icons.js', './js/app.js', './js/curriculum2022.js',
   './js/neis.js', './js/timer.js', './js/settings.js', './js/cloud.js',
-  './js/timetable.js', './js/calendar.js', './js/activities.js',
+  './js/timetable.js', './js/holidays.js', './js/calendar.js', './js/activities.js',
   './js/grades.js', './js/meals.js', './js/notes.js', './js/pdfcapture.js', './js/creative.js', './js/schooldata.js', './js/subjects.js', './js/main.js'
 ];
 self.addEventListener('install', (event) => {

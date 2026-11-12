@@ -13,7 +13,7 @@ const ICONS = {
   grades: '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="7" y="7" width="50" height="50" rx="14" fill="#ff6f91"/><rect x="14" y="14" width="36" height="36" rx="9" fill="#fff"/><rect x="19" y="33" width="8" height="12" rx="3" fill="#ffb22e"/><rect x="30" y="26" width="8" height="19" rx="3" fill="#2eb86a"/><rect x="41" y="19" width="6" height="26" rx="3" fill="#2f6bff"/></svg>',
   meals: '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="6" y="10" width="52" height="46" rx="13" fill="#18bfd1"/><path d="M6 23A13 13 0 0 1 19 10H45A13 13 0 0 1 58 23V25H6Z" fill="#0e9db0"/><rect x="12" y="30" width="18" height="21" rx="6" fill="#fff"/><rect x="34" y="30" width="18" height="10" rx="5" fill="#ffd36b"/><rect x="34" y="42" width="18" height="9" rx="4.5" fill="#8fe3ae"/></svg>',
   notes: '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="6" width="48" height="52" rx="13" fill="#ffc93c"/><path d="M36 58V49A9 9 0 0 1 45 40H56Z" fill="#e0a500"/><rect x="16" y="17" width="32" height="5" rx="2.5" fill="#fff"/><rect x="16" y="27" width="32" height="5" rx="2.5" fill="#fff"/><rect x="16" y="37" width="16" height="5" rx="2.5" fill="#fff"/></svg>',
-  timer: '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="11" y="12" width="42" height="46" rx="14" fill="#4bb7dc"/><circle cx="32" cy="35" r="17" fill="#fff"/><path d="M32 23V35L40 40" fill="none" stroke="#228daf" stroke-width="4.5" stroke-linecap="round"/><rect x="25" y="5" width="14" height="9" rx="4" fill="#ffd25b"/><circle cx="32" cy="35" r="3" fill="#32a5cc"/></svg>',
+  timer: '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="11" y="12" width="42" height="46" rx="14" fill="#64b9eb"/><circle cx="32" cy="35" r="17" fill="#fff"/><path d="M32 23V35L40 40" fill="none" stroke="#307fba" stroke-width="4.5" stroke-linecap="round"/><rect x="25" y="5" width="14" height="9" rx="4" fill="#ffd25b"/><circle cx="32" cy="35" r="3" fill="#388fd0"/></svg>',
   trash: '<svg viewBox="0 0 64 64" aria-hidden="true"><rect x="14" y="17" width="36" height="40" rx="8" fill="#9ca4b0"/><path d="M11 15h42" stroke="#727d8b" stroke-width="6" stroke-linecap="round"/><rect x="24" y="7" width="16" height="8" rx="4" fill="#727d8b"/><path d="M26 27v20M38 27v20" stroke="#fff" stroke-width="4" stroke-linecap="round"/></svg>',
   settings: '<svg viewBox="0 0 64 64" aria-hidden="true"><g fill="#8a97b8"><rect x="27.5" y="4" width="9" height="16" rx="3.5"/><rect x="27.5" y="4" width="9" height="16" rx="3.5" transform="rotate(45 32 32)"/><rect x="27.5" y="4" width="9" height="16" rx="3.5" transform="rotate(90 32 32)"/><rect x="27.5" y="4" width="9" height="16" rx="3.5" transform="rotate(135 32 32)"/><rect x="27.5" y="4" width="9" height="16" rx="3.5" transform="rotate(180 32 32)"/><rect x="27.5" y="4" width="9" height="16" rx="3.5" transform="rotate(225 32 32)"/><rect x="27.5" y="4" width="9" height="16" rx="3.5" transform="rotate(270 32 32)"/><rect x="27.5" y="4" width="9" height="16" rx="3.5" transform="rotate(315 32 32)"/><circle cx="32" cy="32" r="21"/></g><circle cx="32" cy="32" r="9" fill="#fff"/></svg>',
   books: '<svg viewBox="200 235 850 610" aria-hidden="true"><defs><clipPath id="ci-b"><rect x="295" y="250" width="725" height="220" rx="62"/></clipPath><clipPath id="ci-g"><rect x="250" y="468" width="730" height="170" rx="52"/></clipPath><clipPath id="ci-o"><rect x="215" y="637" width="823" height="195" rx="62"/></clipPath></defs>' +
@@ -39,9 +39,11 @@ const DrawTools = (() => {
     triangle: '<path d="M16 5 29 26H3Z"/>',
     ellipse: '<ellipse cx="16" cy="16" rx="12" ry="9"/>',
     text: '<path d="M5 7h22M16 7v19M11 26h10"/>',
-    eraser: '<path d="m4 20 13-15 11 10-11 13H9l-5-8Z"/><path d="m11 12 11 11"/>'
+    eraser: '<path d="m4 20 13-15 11 10-11 13H9l-5-8Z"/><path d="m11 12 11 11"/>',
+    fill: '<path d="m6 13 10-10 12 12-10 10Z"/><path d="M20 25h9M5 27h12"/>',
+    eyedropper: '<path d="m8 21 13-13 4 4-13 13H8Z"/><path d="m19 6 3-3 7 7-3 3"/>'
   };
-  const labels = { select: '선택', pen: '펜', marker: '마커', line: '직선', rect: '사각형', triangle: '삼각형', ellipse: '타원', text: '글자', eraser: '지우개' };
+  const labels = { select: '선택', pen: '펜', marker: '마커', line: '직선', rect: '사각형', triangle: '삼각형', ellipse: '타원', text: '글자', eraser: '지우개', fill: '채우기', eyedropper: '스포이드' };
   function button(key, onclick) {
     const glyph = h('span', { class: 'draw-tool-icon', 'aria-hidden': 'true' });
     glyph.innerHTML = `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round">${paths[key]}</svg>`;
@@ -72,10 +74,36 @@ const DrawTools = (() => {
     ctx.quadraticCurveTo(prev[0], prev[1], (prev[0] + now[0]) / 2, (prev[1] + now[1]) / 2);
     ctx.stroke(); ctx.restore();
   }
-  function selectionFrame(wrap, canvas, onMove, onRotate) {
+  function floodFill(ctx, x, y, hex, opacity = 1) {
+    const w = ctx.canvas.width, h = ctx.canvas.height;
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    const image = ctx.getImageData(0, 0, w, h), data = image.data, start = (y * w + x) * 4;
+    const old = [data[start], data[start + 1], data[start + 2], data[start + 3]];
+    const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const next = rgb.map((value, i) => Math.round(old[i] * (1 - opacity) + value * opacity));
+    if (next.every((value, i) => value === old[i])) return;
+    const same = (p) => data[p] === old[0] && data[p + 1] === old[1] && data[p + 2] === old[2] && data[p + 3] === old[3];
+    const seen = new Uint8Array(w * h), queue = [y * w + x];
+    seen[y * w + x] = 1;
+    const add = (index) => { if (!seen[index]) { seen[index] = 1; queue.push(index); } };
+    while (queue.length) {
+      const index = queue.pop(), p = index * 4;
+      if (!same(p)) continue;
+      data[p] = next[0]; data[p + 1] = next[1]; data[p + 2] = next[2]; data[p + 3] = 255;
+      const col = index % w, row = Math.floor(index / w);
+      if (col > 0) add(index - 1);
+      if (col + 1 < w) add(index + 1);
+      if (row > 0) add(index - w);
+      if (row + 1 < h) add(index + w);
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  function selectionFrame(wrap, canvas, onMove, onRotate, onScale) {
     const move = h('button', { class: 'draw-select-handle move', type: 'button', title: '선택 영역 이동', 'aria-label': '선택 영역 이동' }, '✥');
     const rotate = h('button', { class: 'draw-select-handle rotate', type: 'button', title: '선택 영역 회전', 'aria-label': '선택 영역 회전' }, '↻');
-    const frame = h('div', { class: 'draw-select-frame', hidden: true }, move, rotate);
+    const scale = h('button', { class: 'draw-select-handle scale', type: 'button', title: '선택 영역 크기 변경', 'aria-label': '선택 영역 크기 변경' }, '↘');
+    const frame = h('div', { class: 'draw-select-frame', hidden: true }, move, rotate, scale);
     wrap.append(frame);
     let rect = null, actions = null;
     function show(next) {
@@ -104,16 +132,90 @@ const DrawTools = (() => {
         const angle0 = Math.atan2(sy - cy, sx - cx);
         const drag = (e) => {
           if (kind === 'move') onMove((e.clientX - sx) * scaleX, (e.clientY - sy) * scaleY, start);
-          else onRotate(Math.atan2(e.clientY - cy, e.clientX - cx) - angle0, start);
+          else if (kind === 'rotate') onRotate(Math.atan2(e.clientY - cy, e.clientX - cx) - angle0, start);
+          else onScale?.((e.clientX - sx) * scaleX, (e.clientY - sy) * scaleY, start);
         };
         const end = () => { handle.removeEventListener('pointermove', drag); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end); };
         handle.addEventListener('pointermove', drag); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
       });
     }
-    bind(move, 'move'); bind(rotate, 'rotate');
+    bind(move, 'move'); bind(rotate, 'rotate'); bind(scale, 'scale');
     const onResize = () => { if (frame.isConnected && rect) show(rect); else if (!frame.isConnected) window.removeEventListener('resize', onResize); };
     window.addEventListener('resize', onResize);
     return { show, hide: () => show(null), setActions: (element) => { actions = element; wrap.append(element); show(rect); } };
   }
-  return { button, labels, shapePicker, smoothPath, liveSegment, selectionFrame };
+  function zoomControls(wrap, canvas) {
+    let zoom = 1, pinch = null;
+    const label = h('span', { class: 'draw-zoom-value' }, '100%');
+    const apply = () => {
+      const style = getComputedStyle(wrap);
+      const usable = wrap.clientWidth - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0) - 2;
+      const base = Math.min(Math.max(1, usable), canvas.width || 1100);
+      canvas.style.maxWidth = 'none';
+      canvas.style.width = `${Math.round(base * zoom)}px`;
+      label.textContent = `${Math.round(zoom * 100)}%`;
+      wrap.dispatchEvent(new Event('draw-zoom-change'));
+    };
+    const set = (value) => { zoom = Math.max(.5, Math.min(3, Math.round(value * 100) / 100)); apply(); };
+    const distance = (touches) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    wrap.addEventListener('touchstart', (e) => { if (e.touches.length === 2) pinch = { distance: distance(e.touches), zoom }; }, { passive: true });
+    wrap.addEventListener('touchmove', (e) => { if (pinch && e.touches.length === 2) { e.preventDefault(); set(pinch.zoom * distance(e.touches) / pinch.distance); } }, { passive: false });
+    wrap.addEventListener('touchend', (e) => { if (e.touches.length < 2) pinch = null; }, { passive: true });
+    const observer = new ResizeObserver(() => { if (wrap.isConnected) apply(); else observer.disconnect(); });
+    observer.observe(wrap);
+    requestAnimationFrame(apply);
+    return h('div', { class: 'draw-zoom-controls', role: 'group', 'aria-label': '그림 확대 축소' },
+      h('button', { class: 'btn', type: 'button', 'aria-label': '그림 축소', onclick: () => set(zoom - .25) }, '−'), label,
+      h('button', { class: 'btn', type: 'button', 'aria-label': '그림 확대', onclick: () => set(zoom + .25) }, '+'));
+  }
+  function drawWithSymmetry(ctx, symmetry, render) {
+    render();
+    if (!symmetry) return;
+    const { x, y, angle, fold } = symmetry;
+    const reflect = () => { ctx.translate(x, y); ctx.rotate(angle); ctx.scale(-1, 1); ctx.rotate(-angle); ctx.translate(-x, -y); };
+    ctx.save(); reflect(); render(); ctx.restore();
+    if (fold === 4) {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI); ctx.translate(-x, -y); render(); reflect(); render(); ctx.restore();
+    }
+  }
+  function guideControls(wrap, canvas) {
+    let rulerOn = false, symmetryOn = false;
+    const rulerAngle = h('input', { type: 'range', min: 0, max: 180, value: 0, 'aria-label': '자 각도' });
+    const symmetryAngle = h('input', { type: 'range', min: -90, max: 90, value: 0, 'aria-label': '대칭축 각도' });
+    const axisX = h('input', { type: 'range', min: 0, max: 100, value: 50, 'aria-label': '대칭축 가로 위치' });
+    const axisY = h('input', { type: 'range', min: 0, max: 100, value: 50, 'aria-label': '대칭축 세로 위치' });
+    const fold = h('select', { 'aria-label': '대칭 방식' }, h('option', { value: 2 }, '좌우 대칭'), h('option', { value: 4 }, '4분할 대칭'));
+    const ruler = h('div', { class: 'draw-ruler-guide', hidden: true });
+    const axis = h('div', { class: 'draw-symmetry-guide', hidden: true });
+    const guideLayer = h('div', { class: 'draw-guide-layer', 'aria-hidden': 'true' }, ruler, axis);
+    wrap.append(guideLayer);
+    const rulerButton = h('button', { class: 'btn', type: 'button', 'aria-pressed': 'false', onclick: () => { rulerOn = !rulerOn; rulerButton.classList.toggle('on', rulerOn); rulerButton.setAttribute('aria-pressed', rulerOn); update(); } }, '자');
+    const symmetryButton = h('button', { class: 'btn', type: 'button', 'aria-pressed': 'false', onclick: () => { symmetryOn = !symmetryOn; symmetryButton.classList.toggle('on', symmetryOn); symmetryButton.setAttribute('aria-pressed', symmetryOn); update(); } }, '대칭');
+    const rulerFields = h('div', { class: 'draw-guide-field', hidden: true }, '자 각도 ', rulerAngle, h('output', { class: 'draw-guide-angle' }, '0°'));
+    const rulerReset = h('button', { class: 'btn ghost', type: 'button', onclick: () => { rulerAngle.value = 0; update(); } }, '자 초기화');
+    rulerFields.append(rulerReset);
+    const symmetryFields = h('div', { class: 'draw-guide-fields', hidden: true }, h('label', null, '축 각도', symmetryAngle), h('label', null, '가로', axisX), h('label', null, '세로', axisY), fold);
+    symmetryFields.append(h('button', { class: 'btn ghost', type: 'button', onclick: () => { symmetryAngle.value = 0; axisX.value = 50; axisY.value = 50; fold.value = 2; update(); } }, '대칭축 초기화'));
+    function update() {
+      const c = canvas.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+      const left = c.left - w.left + wrap.scrollLeft, top = c.top - w.top + wrap.scrollTop;
+      ruler.hidden = !rulerOn; axis.hidden = !symmetryOn; rulerFields.hidden = !rulerOn; symmetryFields.hidden = !symmetryOn;
+      Object.assign(guideLayer.style, { left: `${left}px`, top: `${top}px`, width: `${c.width}px`, height: `${c.height}px` });
+      const diameter = Math.ceil(Math.hypot(c.width, c.height) * 2);
+      Object.assign(ruler.style, { left: `${(c.width - diameter) / 2}px`, top: `${(c.height - diameter) / 2}px`, width: `${diameter}px`, height: `${diameter}px`, transform: `rotate(${rulerAngle.value}deg)` });
+      const x = c.width * Number(axisX.value) / 100, y = c.height * Number(axisY.value) / 100;
+      Object.assign(axis.style, { left: `${x}px`, top: `${y - diameter / 2}px`, height: `${diameter}px`, transform: `rotate(${symmetryAngle.value}deg)` });
+      axis.classList.toggle('fourfold', Number(fold.value) === 4);
+      rulerFields.querySelector('output').textContent = `${rulerAngle.value}°`;
+    }
+    [rulerAngle, symmetryAngle, axisX, axisY, fold].forEach((input) => input.addEventListener('input', update));
+    const observer = new ResizeObserver(() => { if (wrap.isConnected) update(); else observer.disconnect(); }); observer.observe(wrap);
+    wrap.addEventListener('draw-zoom-change', update);
+    requestAnimationFrame(update);
+    return { el: h('div', { class: 'draw-guide-controls' }, rulerButton, rulerFields, symmetryButton, symmetryFields),
+      project(start, point) { if (!rulerOn) return point; const a = Number(rulerAngle.value) * Math.PI / 180, dx = point[0] - start[0], dy = point[1] - start[1], length = dx * Math.cos(a) + dy * Math.sin(a); return [start[0] + length * Math.cos(a), start[1] + length * Math.sin(a)]; },
+      symmetry() { return symmetryOn ? { x: canvas.width * Number(axisX.value) / 100, y: canvas.height * Number(axisY.value) / 100, angle: Number(symmetryAngle.value) * Math.PI / 180, fold: Number(fold.value) } : null; },
+      rulerOn: () => rulerOn };
+  }
+  return { button, labels, shapePicker, smoothPath, liveSegment, floodFill, selectionFrame, zoomControls, drawWithSymmetry, guideControls };
 })();

@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.1.9';
+const CLASSHUB_VERSION = 'v2.2.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -63,7 +63,7 @@ function sv(tag, attrs, ...kids) {
 
 const App = (() => {
   const views = {};
-  const ORDER = ['home', 'wrong', 'timetable', 'subjects', 'calendar', 'activities', 'grades', 'meals', 'notes', 'study', 'whiteboard', 'schoolmap', 'timer', 'settings'];
+  const ORDER = ['home', 'grades', 'calendar', 'notes', 'timetable', 'meals', 'timer', 'wrong', 'study', 'activities', 'subjects', 'whiteboard', 'schoolmap', 'settings'];
   let current = null;
   const modalStack = [];
 
@@ -160,8 +160,15 @@ const App = (() => {
     sel.addEventListener('change', sync);
     text.hidden = true;
     if (!list.length) { sel.value = NEW; text.hidden = false; }
+    const official = h('button', { class: 'btn ghost', type: 'button', onclick: () => Curriculum2022.pick((row) => {
+      if (![...sel.options].some((option) => option.value === row.name)) sel.add(h('option', { value: row.name }, row.name), sel.querySelector(`option[value="${NEW}"]`));
+      sel.value = row.name;
+      Store.set('subjectCatalog', [...new Set([...Store.get('subjectCatalog', []), row.name])].sort((a, b) => a.localeCompare(b, 'ko')));
+      Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name));
+      sync();
+    }) }, '공식 과목 찾기');
     return {
-      el: field(label, h('div', { class: 'subj' }, sel, text)),
+      el: field(label, h('div', { class: 'subj' }, sel, text, official)),
       value: () => (sel.value === NEW ? text.value.trim() : sel.value),
       onPick: (fn) => picks.push(fn),
     };
@@ -202,11 +209,13 @@ const App = (() => {
   };
 
   function route() {
+    Store.purgeExpiredTrash().catch(() => {});
     if (Cloud.configured && !Cloud.ready) { Cloud.showGate(); return; }
     const name = (location.hash || '#home').slice(1);
     const view = views[name] || views.home;
     const key = views[name] ? name : 'home';
     if (current && current !== key && Settings.protectedTab(current)) Settings.lock();
+    if (current && current !== key && typeof Creative !== 'undefined') Creative.resetBack();
     current = key;
     if (!Timer.active()) document.title = `ClassHub - 학교생활 통합 관리 · ${CLASSHUB_VERSION}`;
     const app = document.getElementById('app');
@@ -224,7 +233,19 @@ const App = (() => {
               [...'Class'].map((letter, i) => h('span', { style: { '--i': i }, 'aria-hidden': 'true' }, letter)),
               [...'Hub'].map((letter, i) => h('b', { style: { '--i': i + 5 }, 'aria-hidden': 'true' }, letter)))),
           h('button', { class: 'nav-fold', type: 'button', 'aria-label': '탭 메뉴 접기 또는 펼치기', onclick: () => {
-            document.body.classList.toggle('nav-collapsed');
+            const bar = document.querySelector('.topbar');
+            bar.getAnimations().forEach((animation) => animation.cancel());
+            if (document.body.classList.contains('nav-collapsed')) {
+              document.body.classList.remove('nav-collapsed');
+              const height = bar.getBoundingClientRect().height;
+              const style = getComputedStyle(bar);
+              bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
+            } else {
+              const height = bar.getBoundingClientRect().height;
+              const style = getComputedStyle(bar);
+              const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
+              animation.onfinish = () => { document.body.classList.add('nav-collapsed'); animation.cancel(); };
+            }
           } }),
           navTabs(key),
           h('button', { class: 'top-settings', type: 'button', onclick: openSettings, title: '설정', 'aria-label': '설정 열기' }, icon('settings'))),
@@ -244,6 +265,7 @@ const App = (() => {
 
   window.ClassHubBack = () => {
     if (modalStack.length) { modalStack[modalStack.length - 1].close(); return true; }
+    if (typeof Creative !== 'undefined' && Creative.back()) return true;
     if (location.hash !== '#home') { location.hash = '#home'; return true; }
     return false;
   };

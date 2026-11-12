@@ -1,8 +1,8 @@
-// 설정: 학교 정보, NEIS 키, 알레르기, 화면, 백업, 초기화
+// 설정: 학교 정보, 알레르기, 화면, 백업, 초기화
 const Settings = (() => {
-  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, uiSound: true, soundVolume: 50, notesAutoTrashDays: 0, tabOrder: [], privateLockEnabled: true };
+  const DEFAULTS = { school: null, grade: '', cls: '', allergies: [], fontScale: 'normal', reduceMotion: false, timerSound: true, uiSound: true, soundVolume: 50, notesAutoTrashDays: 0, tabOrder: [], homeCardOrder: [], privateLockEnabled: true };
   const SCALE = { small: '15px', normal: '16px', large: '18px' };
-  const DEVICE = ['fontScale', 'reduceMotion', 'timerSound', 'uiSound', 'soundVolume', 'tabOrder', 'enabledTabs'];
+  const DEVICE = ['fontScale', 'reduceMotion', 'timerSound', 'uiSound', 'soundVolume', 'tabOrder', 'homeCardOrder', 'enabledTabs'];
   const unlocked = new Set();
   const protectedTabs = new Set(['wrong', 'timetable', 'subjects', 'calendar', 'activities', 'grades', 'meals', 'notes', 'study', 'whiteboard', 'schoolmap', 'timer']);
   const lockTabs = () => get().privateLockTabs || (get().privateLockEnabled === false ? [] : ['activities', 'grades']);
@@ -48,6 +48,7 @@ const Settings = (() => {
         const legacy = Store.get('settings', {}) || {};
         let migrated = false;
         if (!Array.isArray(snapshot.tabOrder)) { snapshot.tabOrder = legacy.tabOrder || legacy.homeCardOrder || []; migrated = true; }
+        if (!Array.isArray(snapshot.homeCardOrder)) { snapshot.homeCardOrder = snapshot.tabOrder.slice(); migrated = true; }
         if (!Array.isArray(snapshot.enabledTabs) && Array.isArray(legacy.enabledTabs)) { snapshot.enabledTabs = legacy.enabledTabs; migrated = true; }
         if (migrated) localStorage.setItem('classhub:deviceSettings', JSON.stringify(snapshot));
         return snapshot;
@@ -55,6 +56,7 @@ const Settings = (() => {
       const legacy = Store.get('settings', {}) || {};
       const snapshot = Object.fromEntries(DEVICE.filter((key) => key !== 'soundVolume' && key in legacy).map((key) => [key, legacy[key]]));
       snapshot.tabOrder = legacy.tabOrder || legacy.homeCardOrder || [];
+      snapshot.homeCardOrder = legacy.homeCardOrder || snapshot.tabOrder.slice();
       localStorage.setItem('classhub:deviceSettings', JSON.stringify(snapshot));
       return snapshot;
     } catch (_) { return {}; }
@@ -64,7 +66,7 @@ const Settings = (() => {
     const shared = { ...(Store.get('settings', {}) || {}) };
     DEVICE.forEach((key) => delete shared[key]);
     const result = { ...DEFAULTS, ...shared, ...local() };
-    for (const key of ['tabOrder', 'enabledTabs', 'privateLockTabs']) if (Array.isArray(result[key])) result[key] = [...new Set(result[key].map((item) => item === 'school' ? 'schoolmap' : item))];
+    for (const key of ['tabOrder', 'homeCardOrder', 'enabledTabs', 'privateLockTabs']) if (Array.isArray(result[key])) result[key] = [...new Set(result[key].map((item) => item === 'school' ? 'schoolmap' : item))];
     return result;
   };
   const save = (patch) => {
@@ -106,8 +108,8 @@ const Settings = (() => {
 
     // 알레르기
     const allergyBox = h('div', { class: 'chips al-chips' });
-    const drawAl = () => allergyBox.replaceChildren(...Neis.ALLERGY.map((n, i) => i === 0 ? null : h('button', { type: 'button', class: 'fchip' + (draft.allergies.includes(i) ? ' on' : ''),
-      onclick: () => { const k = draft.allergies.indexOf(i); if (k >= 0) draft.allergies.splice(k, 1); else draft.allergies.push(i); drawAl(); } }, `${i} ${n}`)));
+    const drawAl = () => allergyBox.replaceChildren(...Neis.ALLERGY.flatMap((n, i) => i === 0 ? [] : [h('button', { type: 'button', class: 'fchip' + (draft.allergies.includes(i) ? ' on' : ''),
+      onclick: () => { const k = draft.allergies.indexOf(i); if (k >= 0) draft.allergies.splice(k, 1); else draft.allergies.push(i); drawAl(); } }, `${i} ${n}`)]));
     drawAl();
     const alBox = section('내 알레르기', h('div', { class: 'set-row' },
       h('span', { class: 'muted' }, `선택한 알레르기 ${draft.allergies.length}개`),
@@ -141,26 +143,154 @@ const Settings = (() => {
       [[0, '자동 이동 안 함'], [1, '하루 지난 뒤'], [3, '3일 지난 뒤'], [7, '7일 지난 뒤'], [30, '30일 지난 뒤'], [90, '90일 지난 뒤']].map(([days, label]) => h('option', { value: days, selected: Number(draft.notesAutoTrashDays || 0) === days }, label)));
     const notesBox = section('메모 정리', App.field('날짜가 지난 메모', cleanupDays,
       '설정한 기간이 지나면 연결된 날짜가 있는 메모만 휴지통으로 옮겨요. 휴지통에서 복원할 수 있어요.'));
-    const cardNames = [['wrong', '오답노트'], ['timetable', '시간표'], ['subjects', '과목 관리'], ['calendar', '일정 관리'], ['activities', '활동 관리'], ['grades', '성적 관리'], ['meals', '급식'], ['notes', '메모'], ['study', '필기 공간'], ['whiteboard', '화이트보드'], ['schoolmap', '학교 지도'], ['timer', '타이머']];
-    const cardOrder = [...cardNames.map(([id]) => id)].sort((a, b) => {
+    const cardNames = [['grades', '성적 관리'], ['calendar', '일정 관리'], ['notes', '메모'], ['timetable', '시간표'], ['meals', '급식'], ['timer', '타이머'], ['wrong', '오답노트'], ['study', '필기 공간'], ['activities', '활동 관리'], ['subjects', '과목 관리'], ['whiteboard', '화이트보드'], ['schoolmap', '학교 지도']];
+    const defaultOrder = cardNames.map(([id]) => id);
+    const miniOrder = [...defaultOrder].sort((a, b) => {
       const order = draft.tabOrder || [];
       return (order.indexOf(a) < 0 ? 999 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 999 : order.indexOf(b));
     });
-    const cardList = h('div', { class: 'set-card-order' });
-    const drawCards = () => cardList.replaceChildren(...cardOrder.map((id, i) => h('div', { class: 'set-card-row' },
-      h('span', null, cardNames.find(([key]) => key === id)?.[1] || id),
-      h('button', { class: 'btn ghost', type: 'button', disabled: i === 0, 'aria-label': `${id} 위로`, onclick: () => { [cardOrder[i - 1], cardOrder[i]] = [cardOrder[i], cardOrder[i - 1]]; drawCards(); } }, '↑'),
-      h('button', { class: 'btn ghost', type: 'button', disabled: i === cardOrder.length - 1, 'aria-label': `${id} 아래로`, onclick: () => { [cardOrder[i + 1], cardOrder[i]] = [cardOrder[i], cardOrder[i + 1]]; drawCards(); } }, '↓'))));
-    drawCards();
-    const homeBox = section('탭 순서', h('button', { class: 'btn', type: 'button', onclick: () => {
+    const homeOrder = [...defaultOrder].sort((a, b) => {
+      const order = draft.homeCardOrder || [];
+      return (order.indexOf(a) < 0 ? 999 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 999 : order.indexOf(b));
+    });
+    const enabledChoices = cardNames.map(([id, label]) => ({ id, label, input: h('input', { type: 'checkbox', checked: !Array.isArray(draft.enabledTabs) || draft.enabledTabs.includes(id) }) }));
+    const cardList = h('div', { class: 'set-card-preview' });
+    let previewMode = 'home';
+    const moveCard = (from, to, placement = 'swap') => {
+      if (!from || !to || from === to) return;
+      const order = previewMode === 'home' ? homeOrder : miniOrder;
+      const fromIndex = order.indexOf(from), toIndex = order.indexOf(to);
+      if (placement === 'swap') [order[fromIndex], order[toIndex]] = [order[toIndex], order[fromIndex]];
+      else { order.splice(fromIndex, 1); order.splice(order.indexOf(to) + (placement === 'after' ? 1 : 0), 0, from); }
       drawCards();
-      const dialog = App.modal({ title: '탭 순서', body: cardList, footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
-    } }, '버튼 순서 바꾸기'));
+    };
+    const drawCards = () => {
+      cardList.className = `set-card-preview preview-${previewMode}`;
+      cardList.style.aspectRatio = '';
+      const order = previewMode === 'home' ? homeOrder : miniOrder;
+      const tiles = order.filter((id) => previewMode === 'visibility' || enabledChoices.find((item) => item.id === id)?.input.checked).map((id) => {
+        const choice = enabledChoices.find((item) => item.id === id);
+        const cardStyle = { grades: 'pink', calendar: 'orange', notes: 'amber', timetable: 'green', meals: 'teal', timer: 'slate', wrong: 'blue', study: 'indigo', activities: 'purple', subjects: 'orchid', whiteboard: 'coral', schoolmap: 'mint' };
+        const tile = previewMode === 'home'
+          ? h('div', { class: `home-card ${cardStyle[id]}`, 'data-tab-id': id }, h('span', { class: 'hc-ico' }, icon(id)), h('span', { class: 'hc-text' }, h('b', null, choice.label)), h('span', { class: 'hc-go' }, '→'))
+          : h('div', { class: 'set-preview-tile' + (choice.input.checked ? '' : ' disabled'), 'data-tab-id': id },
+            h('span', { class: 'set-preview-icon' }, icon(id)), h('b', null, choice.label),
+            previewMode === 'visibility' ? h('label', { class: 'set-preview-check' }, choice.input, '표시') : null);
+        choice.input.onchange = () => { tile.classList.toggle('disabled', !choice.input.checked); };
+        if (previewMode === 'visibility') return tile;
+        let ghost = null, dropIntent = null, insertionLine = null;
+        const hit = (event) => {
+          const point = document.elementFromPoint(event.clientX, event.clientY);
+          if (!point || !cardList.contains(point)) return null;
+          const isHorizontal = (node) => {
+            if (previewMode === 'mini') return true;
+            const r = node.getBoundingClientRect();
+            return [...cardList.querySelectorAll('[data-tab-id]')].some((peer) => {
+              if (peer === node) return false;
+              const other = peer.getBoundingClientRect();
+              return Math.abs(other.top-r.top) < Math.min(other.height, r.height)*.45 && Math.abs(other.left-r.left) > Math.min(other.width, r.width)*.4;
+            });
+          };
+          const direct = point.closest('[data-tab-id]');
+          if (direct === tile) return null;
+          if (direct && direct !== tile && cardList.contains(direct)) {
+            const r = direct.getBoundingClientRect();
+            const x = (event.clientX-r.left)/r.width, y = (event.clientY-r.top)/r.height;
+            const horizontal = isHorizontal(direct);
+            const placement = horizontal ? x < .18 ? 'before' : x > .82 ? 'after' : 'swap'
+              : y < .18 ? 'before' : y > .82 ? 'after' : 'swap';
+            return { target: direct, placement, axis: horizontal ? 'vertical' : 'horizontal' };
+          }
+          const options = [...cardList.querySelectorAll('[data-tab-id]')].filter((node) => node !== tile).flatMap((node) => {
+            const r = node.getBoundingClientRect();
+            const horizontal = isHorizontal(node);
+            return ['before', 'after'].map((placement) => {
+              const axis = horizontal ? 'vertical' : 'horizontal';
+              const edge = horizontal ? placement === 'before' ? r.left : r.right : placement === 'before' ? r.top : r.bottom;
+              const distance = horizontal ? Math.hypot(event.clientX-edge, Math.max(r.top-event.clientY, 0, event.clientY-r.bottom))
+                : Math.hypot(event.clientY-edge, Math.max(r.left-event.clientX, 0, event.clientX-r.right));
+              return { target: node, placement, axis, distance };
+            });
+          });
+          return options.sort((a, b) => a.distance-b.distance)[0] || null;
+        };
+        const showIntent = (intent) => {
+          insertionLine?.remove(); insertionLine = null;
+          cardList.querySelectorAll('.drop-before,.drop-after,.drop-swap').forEach((node) => node.classList.remove('drop-before', 'drop-after', 'drop-swap'));
+          if (!intent) return;
+          intent.target.classList.add(`drop-${intent.placement}`);
+          if (intent.placement === 'swap') return;
+          const r = intent.target.getBoundingClientRect();
+          insertionLine = h('div', { class: 'set-drop-insertion', style: intent.axis === 'vertical'
+            ? { left: `${intent.placement === 'before' ? r.left-5 : r.right+2}px`, top: `${r.top}px`, height: `${r.height}px`, width: '4px' }
+            : { left: `${r.left}px`, top: `${intent.placement === 'before' ? r.top-5 : r.bottom+2}px`, width: `${r.width}px`, height: '4px' } });
+          document.body.append(insertionLine);
+        };
+        tile.addEventListener('pointerdown', (event) => {
+          if (event.target.closest('label')) return;
+          event.preventDefault(); tile.setPointerCapture(event.pointerId);
+          tile.classList.add('dragging');
+          ghost = tile.cloneNode(true); ghost.classList.add('drag-ghost'); document.body.append(ghost);
+          ghost.style.left = `${event.clientX}px`; ghost.style.top = `${event.clientY}px`;
+        });
+        tile.addEventListener('pointermove', (event) => {
+          if (!ghost) return;
+          ghost.style.left = `${event.clientX}px`; ghost.style.top = `${event.clientY}px`;
+          dropIntent = hit(event);
+          showIntent(dropIntent);
+        });
+        const finish = (event, cancelled = false) => {
+          if (!ghost) return;
+          ghost.remove(); ghost = null; tile.classList.remove('dragging');
+          showIntent(null);
+          if (cancelled) return;
+          const result = hit(event) || dropIntent;
+          if (result) moveCard(id, result.target.dataset.tabId, result.placement);
+        };
+        tile.addEventListener('pointerup', finish);
+        tile.addEventListener('pointercancel', (event) => finish(event, true));
+        return tile;
+      });
+      if (previewMode !== 'home') { cardList.replaceChildren(...tiles); return; }
+      cardList.className = 'set-card-preview preview-home-live';
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const scale = Math.min(1, 800 / vw, Math.min(650, vh * .75) / vh);
+      const lessons = Settings.protectedTab('timetable') ? [] : Timetable.lessonsFor(new Date());
+      const schedule = h('div', { class: 'home-schedule-preview' }, h('h3', null, '오늘 시간표'),
+        h('div', { class: 'home-schedule-list' }, lessons.length ? lessons.map((lesson) => h('div', { class: 'home-schedule-lesson' }, `${lesson.period}. ${lesson.displayTitle}`)) : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')));
+      const logo = h('div', { class: 'home-logo' }, icon('books', 'logo-books'), h('div', { class: 'logo-name' }, 'Class', h('b', null, 'Hub')));
+      const side = h('div', { class: 'side-box' }, h('div', { class: 'side-date-nav' }, h('span', null, '오늘'), h('span', null, '◀'), h('h3', null, `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`), h('span', null, '▶')),
+        h('div', { class: 'side-scroll' }, h('p', { class: 'muted' }, '오늘의 일정')));
+      const stage = h('div', { class: 'set-home-stage' }, h('div', { class: 'home' }, h('div', { class: 'home-cards' }, tiles),
+        h('aside', { class: 'home-side' }, h('div', { class: 'home-topline' }, schedule, logo), side)));
+      Object.assign(stage.style, { width: `${vw}px`, height: `${vh}px`, transform: `scale(${scale})` });
+      const viewport = h('div', { class: 'set-home-viewport' }, stage);
+      Object.assign(viewport.style, { width: `${vw * scale}px`, height: `${vh * scale}px` });
+      cardList.replaceChildren(viewport);
+    };
+    const openTabPreview = (initial) => {
+      previewMode = initial; drawCards();
+      const choices = [['visibility', '표시할 탭'], ['home', '메인 화면 순서'], ['mini', '상단 탭 순서']];
+      const tabs = choices.map(([mode, label]) => h('button', { class: 'seg-btn' + (mode === initial ? ' on' : ''), type: 'button', onclick: () => {
+        previewMode = mode; tabs.forEach((button, index) => button.classList.toggle('on', choices[index][0] === mode)); drawCards(); drawActions();
+      } }, label));
+      const actions = h('div', { class: 'set-preview-actions' });
+      const drawActions = () => actions.replaceChildren(h('div', { class: 'seg' }, tabs), ...(previewMode === 'visibility' ? [
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { enabledChoices.forEach(({ input }) => { input.checked = true; }); drawCards(); } }, '전체 선택'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { enabledChoices.forEach(({ input }) => { input.checked = false; }); drawCards(); } }, '전체 해제')
+      ] : []));
+      drawActions();
+      const dialog = App.modal({ title: '탭 설정', wide: true, body: [h('p', { class: 'hint' }, '표시할 탭을 고르거나, 메인 화면과 상단 탭의 순서를 각각 끌어서 바꾸세요.'), actions, cardList], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
+    };
+    const tabBox = section('탭 설정', h('button', { class: 'btn', type: 'button', onclick: () => openTabPreview('visibility') }, '표시와 순서 바꾸기'));
     const lockChoices = cardNames.map(([id, label]) => ({ id, input: h('input', { type: 'checkbox', checked: (draft.privateLockTabs || (draft.privateLockEnabled === false ? [] : ['activities', 'grades'])).includes(id) }), label }));
     const lockOptions = h('div', { class: 'set-lock-tabs' }, lockChoices.map(({ input, label }) => h('label', { class: 'check' }, input, label)));
     const lockBox = section('잠금 활성화',
       h('button', { class: 'btn', type: 'button', onclick: () => {
-        const dialog = App.modal({ title: '잠금 활성화', body: [lockOptions, h('p', { class: 'hint' }, '잠근 탭의 내용은 홈 미리보기에서도 숨깁니다. 화면 접근용 잠금이며 저장 데이터 암호화는 아닙니다.')], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
+        const dialog = App.modal({ title: '잠금 활성화', body: [h('div', { class: 'set-preview-actions' },
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => { lockChoices.forEach(({ input }) => { input.checked = true; }); } }, '전체 선택'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => { lockChoices.forEach(({ input }) => { input.checked = false; }); } }, '전체 해제')), lockOptions,
+          h('p', { class: 'hint' }, '잠근 탭의 내용은 홈 미리보기에서도 숨깁니다. 화면 접근용 잠금이며 저장 데이터 암호화는 아닙니다.')], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
       } }, '잠글 탭 선택'),
       h('button', { class: 'btn ghost', type: 'button', onclick: () => {
         if (!get().privatePinHash) return unlock(() => App.toast('비밀번호를 설정했어요.'));
@@ -176,11 +306,20 @@ const Settings = (() => {
             } }, '변경') ] });
         });
       } }, draft.privatePinHash ? '비밀번호 변경' : '비밀번호 설정'));
-    const enabledChoices = cardNames.map(([id, label]) => ({ id, label, input: h('input', { type: 'checkbox', checked: !Array.isArray(draft.enabledTabs) || draft.enabledTabs.includes(id) }) }));
-    const enabledOptions = h('div', { class: 'set-lock-tabs' }, enabledChoices.map(({ input, label }) => h('label', { class: 'check' }, input, label)));
-    const enabledBox = section('탭 버튼 표시', h('button', { class: 'btn', type: 'button', onclick: () => {
-      const dialog = App.modal({ title: '탭 버튼 표시', body: [enabledOptions, h('p', { class: 'hint' }, '끄면 홈과 상단의 탭 버튼만 숨겨집니다. 저장된 기록은 지워지지 않습니다.')], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
-    } }, '표시할 탭 선택'));
+    const downloadStatus = h('p', { class: 'hint' }, '배포된 앱 파일을 확인하는 중…');
+    const downloadLinks = h('div', { class: 'set-row set-btns' });
+    const downloadBox = section('앱 내려받기', downloadLinks, downloadStatus);
+    fetch('https://api.github.com/repos/Jaettak/ClassHub/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+      .then((response) => { if (!response.ok) throw new Error('배포 준비 중'); return response.json(); })
+      .then((release) => {
+        const assets = Array.isArray(release.assets) ? release.assets : [];
+        const android = assets.find((asset) => /classhub.*\.apk$/i.test(asset.name));
+        const windows = assets.find((asset) => /classhub.*\.(zip|exe|msix)$/i.test(asset.name) && /windows|desktop|setup/i.test(asset.name));
+        downloadLinks.replaceChildren(...[[android, '안드로이드 앱'], [windows, '컴퓨터 앱']].filter(([asset]) => asset)
+          .map(([asset, label]) => h('a', { class: 'btn', href: asset.browser_download_url, target: '_blank', rel: 'noopener noreferrer' }, label)));
+        downloadStatus.textContent = android || windows ? `${release.tag_name || '최신'} 배포판입니다. 파일의 버전을 확인하고 설치해 주세요.` : '아직 내려받을 수 있는 앱 파일이 없어요.';
+      })
+      .catch(() => { downloadStatus.textContent = '아직 내려받을 수 있는 앱 파일이 없어요.'; });
     const versionBox = section('앱 정보', h('p', null, CLASSHUB_VERSION),
       h('p', { class: 'hint' }, '웹·컴퓨터·안드로이드에 공통으로 사용할 다음 버전의 로컬 미리보기입니다.'));
 
@@ -210,10 +349,10 @@ const Settings = (() => {
         m.close(); apply(); App.toast('모두 지웠어요.'); App.route();
       } }, '모든 데이터 지우기'));
 
-    const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, notesBox, homeBox, enabledBox, lockBox, backupBox, resetBox, versionBox);
+    const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, notesBox, tabBox, lockBox, backupBox, resetBox, downloadBox, versionBox);
     const commit = () => {
       save({ school: draft.school, grade: grade.value.trim(), cls: cls.value.trim(), allergies: draft.allergies.slice().sort((a, b) => a - b),
-        fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value), notesAutoTrashDays: Number(cleanupDays.value), tabOrder: cardOrder.slice(), enabledTabs: enabledChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockTabs: lockChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockEnabled: true });
+        fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value), notesAutoTrashDays: Number(cleanupDays.value), tabOrder: miniOrder.slice(), homeCardOrder: homeOrder.slice(), enabledTabs: enabledChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockTabs: lockChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockEnabled: true });
       if (!sound.checked) Timer.stopAlarm();
       m.close(); App.toast('설정을 저장했어요.'); App.route();
     };

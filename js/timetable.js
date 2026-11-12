@@ -1,4 +1,4 @@
-// 시간표 관리: 내 시간표 + 친구 시간표, 기본 5일 x 6교시, 교시/요일 추가·삭제, 학교 시간표(NEIS) 불러오기
+// 시간표 관리: 내 시간표 + 친구 시간표, 기본 5일 x 6교시, 교시/요일 추가·삭제
 const Timetable = (() => {
   const DEFAULT = () => ({ days: ['월', '화', '수', '목', '금'], periods: 6, periodTimes: Array.from({ length: 6 }, () => ({ start: '', end: '' })), lunch: null, cells: Array.from({ length: 5 }, () => Array(6).fill(null)) });
   let activeId = 'me';
@@ -101,11 +101,11 @@ const Timetable = (() => {
       return { start, end, row: h('div', { class: 'tt-period-time-row' },
         h('strong', null, `${i + 1}교시`), start, h('span', null, '~'), end) };
     });
-    const autoStart = h('input', { type: 'time', value: inputs[0]?.start.value || '09:00' });
-    const classLength = h('input', { type: 'number', min: 1, max: 180, value: 50 });
-    const breakLength = h('input', { type: 'number', min: 0, max: 120, value: 10 });
-    const lunchAfter = h('input', { type: 'number', min: 0, max: t.periods, value: t.lunch?.afterPeriod || Math.min(4, t.periods) });
-    const lunchLength = h('input', { type: 'number', min: 0, max: 180, value: t.lunch ? Math.max(0, (Number(t.lunch.end.slice(0, 2)) * 60 + Number(t.lunch.end.slice(3))) - (Number(t.lunch.start.slice(0, 2)) * 60 + Number(t.lunch.start.slice(3)))) : 60 });
+    const autoStart = h('input', { type: 'time', value: t.autoTime?.start || inputs[0]?.start.value || '09:00' });
+    const classLength = h('input', { type: 'number', min: 1, max: 180, value: t.autoTime?.lesson ?? 50 });
+    const breakLength = h('input', { type: 'number', min: 0, max: 120, value: t.autoTime?.rest ?? 10 });
+    const lunchAfter = h('input', { type: 'number', min: 0, max: t.periods, value: t.autoTime?.after ?? t.lunch?.afterPeriod ?? Math.min(4, t.periods) });
+    const lunchLength = h('input', { type: 'number', min: 0, max: 180, value: t.autoTime?.lunch ?? (t.lunch ? Math.max(0, (Number(t.lunch.end.slice(0, 2)) * 60 + Number(t.lunch.end.slice(3))) - (Number(t.lunch.start.slice(0, 2)) * 60 + Number(t.lunch.start.slice(3)))) : 60) });
     let autoLunch = null;
     let autoUsed = false;
     const autoFill = () => {
@@ -145,7 +145,10 @@ const Timetable = (() => {
             }
           }
           t.periodTimes = next;
-          if (autoUsed) t.lunch = autoLunch;
+          if (autoUsed) {
+            t.lunch = autoLunch;
+            t.autoTime = { start: autoStart.value, lesson: Number(classLength.value), rest: Number(breakLength.value), lunch: Number(lunchLength.value), after: Number(lunchAfter.value) };
+          } else if (next.some((time, index) => time.start !== draft[index].start || time.end !== draft[index].end)) t.autoTime = null;
           save(); m.close(); done(); App.toast('교시별 시간을 저장했어요. 기간을 지정해 일정에 추가해 주세요.');
         } }, '저장')],
     });
@@ -250,74 +253,6 @@ const Timetable = (() => {
     const shown = n.length > MAX_CHARS ? n.slice(0, MAX_CHARS - 1).join('') + '…' : name;
     const size = n.length <= 4 ? 1 : n.length <= 6 ? 0.86 : n.length <= 8 ? 0.74 : 0.64;
     return { shown, size };
-  }
-
-  // 이번 주(주말이면 다음 주) 월~금 범위
-  function schoolWeek() {
-    const n = new Date();
-    const shift = n.getDay() === 0 || n.getDay() === 6 ? 7 : 0;
-    const mon = new Date(n.getFullYear(), n.getMonth(), n.getDate() - ((n.getDay() + 6) % 7) + shift);
-    return [mon, new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 4)];
-  }
-
-  function importFromSchool(t, save, done) {
-    const s = Settings.get();
-    let school = s.school;
-    const info = h('p', { class: 'hint' });
-    const grade = h('input', { type: 'number', min: 1, max: 6, value: s.grade || '', placeholder: '학년' });
-    const cls = h('input', { type: 'number', min: 1, max: 40, value: s.cls || '', placeholder: '반' });
-    const apiKey = h('input', { type: 'text', value: Neis.savedKey(), placeholder: 'NEIS 교육정보 개방포털에서 발급한 인증키', autocomplete: 'off', onchange: (e) => Neis.setKey(e.target.value) });
-    const nameEl = h('b', { class: 'set-school' });
-    const drawName = () => { nameEl.textContent = school ? `${school.name} (${school.region})` : '학교를 선택해 주세요'; };
-    drawName();
-    const go = h('button', { class: 'btn primary', type: 'button', onclick: run }, '불러오기');
-    const m = App.modal({
-      title: '학교 시간표 불러오기',
-      body: [
-        h('div', { class: 'set-row' }, nameEl, h('button', { class: 'btn', type: 'button', onclick: () => Neis.pickSchool((sc) => { school = sc; drawName(); }) }, '학교 찾기')),
-        h('div', { class: 'row2' }, App.field('학년', grade), App.field('반', cls)),
-        App.field('NEIS 인증키', apiKey),
-        h('p', { class: 'hint tt-import-help' }, '인증키 없이 조회하면 NEIS가 5건만 보여 줘서 전체 교시를 가져올 수 없어요. 인증키는 이 기기에만 저장돼요.'),
-        h('a', { class: 'btn ghost', href: 'https://open.neis.go.kr/portal/guide/apiGuidePage.do', target: '_blank', rel: 'noopener noreferrer' }, '인증키 발급 안내'),
-        h('p', { class: 'hint tt-import-help' }, '이번 주 학급 시간표를 NEIS(공식)에서 가져와 지금 시간표를 덮어써요. 고등학교는 선택과목이 반마다 달라 내 시간표와 다를 수 있으니, 불러온 뒤 직접 고쳐 주세요.'),
-        info,
-      ],
-      footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'), go],
-    });
-    async function run() {
-      if (!school) { info.textContent = '학교를 먼저 선택해 주세요.'; return; }
-      if (!grade.value || !cls.value) { info.textContent = '학년과 반을 입력해 주세요.'; return; }
-      if (!apiKey.value.trim()) { info.textContent = '전체 교시를 가져오려면 NEIS 인증키를 입력해 주세요.'; return; }
-      if (t.cells.some((col) => col.some(Boolean)) && !confirm('지금 시간표가 불러온 내용으로 바뀌어요. 계속할까요?')) return;
-      Neis.setKey(apiKey.value);
-      go.disabled = true;
-      info.textContent = '불러오는 중…';
-      try {
-        const [from, to] = schoolWeek();
-        const rows = await Neis.timetable(school, grade.value, cls.value, from, to);
-        if (!rows.length) { info.textContent = '시간표를 찾지 못했어요. 학년·반을 확인하거나 방학·휴업 기간인지 확인해 주세요.'; go.disabled = false; return; }
-        const dayOf = (r) => WEEK[parseDate(r.date).getDay()];
-        const days = [...new Set(rows.map(dayOf))].sort((a, b) => '월화수목금토일'.indexOf(a) - '월화수목금토일'.indexOf(b));
-        const periods = Math.min(14, Math.max(1, ...rows.map((r) => r.period)));
-        const cells = days.map(() => Array(periods).fill(null));
-        rows.forEach((r) => {
-          if (r.period >= 1 && r.period <= periods) cells[days.indexOf(dayOf(r))][r.period - 1] = { subject: r.subject, teacher: '' };
-        });
-        const oldTimes = Array.from({ length: periods }, (_, i) => validTimes(t, i));
-        const hhmm = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-        t.days = days; t.periods = periods; t.cells = cells;
-        t.periodTimes = oldTimes.map((time, i) => {
-          if (time) return time;
-          const start = 9 * 60 + i * 60 + (i >= 4 ? 50 : 0);
-          return { start: hhmm(start), end: hhmm(start + 50) };
-        });
-        if (!t.lunch && periods >= 5) t.lunch = { afterPeriod: 4, start: '12:50', end: '13:50' };
-        save();
-        m.close();
-        App.toast(`${school.name} 시간표를 불러왔어요. 교시·점심 시간은 예시이니 확인해 주세요.`);
-        done();
-      } catch (e) { info.textContent = e.message; go.disabled = false; }
-    }
   }
 
   function render(root) {
@@ -440,7 +375,6 @@ const Timetable = (() => {
           h('button', { class: 'btn', type: 'button', onclick: () => openPeriodTimes(t, save, draw) }, '교시별 시간 설정'),
           h('button', { class: 'btn', type: 'button', onclick: () => editLunch(t, save, draw) }, '점심시간 설정'),
           !friend ? h('button', { class: 'btn primary', type: 'button', onclick: () => applyPeriod(t, draw) }, '기간 일정에 추가') : null,
-          h('button', { class: 'btn', type: 'button', onclick: () => importFromSchool(t, save, draw) }, '학교 시간표 불러오기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: reset }, '기본값으로'),
           friend ? h('button', { class: 'btn ghost', type: 'button', onclick: renameFriend }, '이름 바꾸기') : null,
           friend ? h('button', { class: 'btn danger', type: 'button', onclick: removeFriend }, '이 친구 삭제') : null),
@@ -451,10 +385,22 @@ const Timetable = (() => {
 
       function addPeriod() {
         if (t.periods >= 14) return App.toast('교시는 최대 14개까지예요.');
+        const nextIndex = t.periods;
         t.periods++;
         t.cells.forEach((col) => col.push(null));
         if (!Array.isArray(t.periodTimes)) t.periodTimes = [];
-        t.periodTimes.push({ start: '', end: '' });
+        let nextTime = { start: '', end: '' };
+        if (t.autoTime?.start) {
+          const rule = t.autoTime;
+          let minute = Number(rule.start.slice(0, 2)) * 60 + Number(rule.start.slice(3));
+          for (let i = 0; i < nextIndex; i++) minute += rule.lesson + (i + 1 === rule.after ? rule.lunch : rule.rest);
+          const end = minute + rule.lesson;
+          if (Number.isFinite(end) && end < 1440) {
+            const time = (n) => `${pad(Math.floor(n / 60))}:${pad(n % 60)}`;
+            nextTime = { start: time(minute), end: time(end) };
+          }
+        }
+        t.periodTimes.push(nextTime);
         save(); draw();
       }
       function addDay() {
@@ -510,7 +456,7 @@ const Timetable = (() => {
     }
 
     draw();
-    root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '시간표'), wrap), SchoolData.tools('timetable'));
+    root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '시간표'), wrap), SchoolData.tools('timetable', draw, () => activeId));
   }
 
   return { render, lessonsFor, calendarLessons };

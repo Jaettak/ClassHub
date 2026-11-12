@@ -1,13 +1,15 @@
-// 활동 관리: 수행평가·자율·동아리·봉사 등을 정리하고 생기부 중복을 확인
+// 활동·출결·생기부 기록을 성격에 맞게 나누어 보여 준다.
 const Activities = (() => {
   const TYPES = {
     perf: { label: '수행평가', color: '#4f8cff' },
     auto: { label: '자율 활동', color: '#35c27a' },
     club: { label: '동아리', color: '#a276ff' },
     volunteer: { label: '봉사', color: '#ff6f91' },
+    career: { label: '진로 활동', color: '#18bfd1' },
+    reading: { label: '독서', color: '#d09347' },
     etc: { label: '기타', color: '#ff9f2e' },
   };
-  const filters = { q: '', type: '', sem: '', grade: '', cv: '', group: 'sem', order: 'desc' };
+  const filters = { q: '', type: '', sem: '', grade: '', cv: '', group: 'curriculum', order: 'desc', view: 'activities' };
 
   const load = () => Store.get('activities', []);
   const save = (l) => Store.set('activities', l);
@@ -31,6 +33,17 @@ const Activities = (() => {
     return (2 * inter) / total;
   }
   const similarTo = (title, exceptId) => load().filter((a) => a.id !== exceptId && similarity(a.title, title) >= 0.6);
+  const recordKind = (a) => a.recordType || a.sourceDetails?.recordType || '';
+  const viewFor = (a) => recordKind(a) === 'attendance' ? 'attendance' : recordKind(a) === 'award' ? 'awards'
+    : ['narrative', 'courseRecord', 'completion'].includes(recordKind(a)) ? 'source' : 'activities';
+  const colorRules = () => Store.get('activityColorRules', { mode: 'type', type: {}, family: {}, subject: {} });
+  const borderColor = (a) => {
+    const rules = colorRules(), family = Curriculum2022.familyFor(a.subject), type = TYPES[a.type] ? a.type : 'etc';
+    return (rules.mode === 'subject' && rules.subject?.[a.subject]) || (rules.mode !== 'type' && rules.family?.[family]) || rules.type?.[type] || TYPES[type].color;
+  };
+  const subjectsOf = (a) => Array.isArray(a.subjects) && a.subjects.length ? a.subjects.filter(Boolean) : a.subject ? [a.subject] : [];
+  const typeLabel = (a) => a.sourceSchoolImport && a.type === 'perf' && !/수행평가|수행 평가/.test([a.title, a.desc, a.sourceDetails?.type, a.sourceDetails?.assessmentName].join(' '))
+    ? '종류 미확인' : (TYPES[a.type] || TYPES.etc).label;
 
   function semLabel(a) {
     const parts = [];
@@ -55,7 +68,12 @@ const Activities = (() => {
     const cv = h('textarea', { rows: 4, placeholder: '생기부에 이미 쓴 문장을 붙여 넣어 두면 나중에 같은 내용을 또 쓰지 않을 수 있어요.', value: act.cv || '' });
     const cvDone = h('input', { type: 'checkbox', checked: !!act.cvDone });
     const memo = h('textarea', { rows: 3, placeholder: '다음에 더 깊게 해 보고 싶은 점, 이어갈 아이디어 등', value: act.memo || '' });
-    const warn = h('div', { class: 'warn', hidden: true });
+    const subject = App.subjectField('관련 과목 추가', '', { empty: '과목 선택' });
+    const subjects = [...new Set(subjectsOf(act))];
+    const subjectPicks = h('div', { class: 'act-subject-picks' });
+    const drawSubjects = () => subjectPicks.replaceChildren(...subjects.map((name) => h('button', { class: 'btn ghost', type: 'button', onclick: () => { subjects.splice(subjects.indexOf(name), 1); drawSubjects(); } }, `${name} ×`)));
+    drawSubjects();
+    const warn = h('div', { class: 'warn act-similar', hidden: true });
 
     const checkSimilar = () => {
       const sim = title.value.trim().length >= 2 ? similarTo(title.value, act.id) : [];
@@ -74,11 +92,13 @@ const Activities = (() => {
         warn,
         h('div', { class: 'row3' }, App.field('종류', type), dateField),
         h('div', { class: 'row3' }, App.field('학년', grade), App.field('학기', sem)),
+        subject.el, h('button', { class: 'btn ghost', type: 'button', onclick: () => { const name = subject.value(); if (name && !subjects.includes(name)) { subjects.push(name); drawSubjects(); } } }, '관련 과목 추가'), subjectPicks,
         App.field('활동 내용', desc),
-        App.field('생기부에 쓴 내용', cv),
-        h('label', { class: 'check' }, cvDone, ' 생기부에 기록됐어요'),
+        App.field('생기부에 기재된 내용', cv),
+        h('label', { class: 'check' }, cvDone, '생기부에 기재되었어요'),
         App.field('심화 메모', memo),
-        act.sourceDetails ? h('details', { class: 'school-source-detail' }, h('summary', null, '가져온 생기부 원문과 추가 항목'), h('pre', null, JSON.stringify(act.sourceDetails, null, 2))) : null,
+        act.sourceDetails ? h('details', { class: 'school-source-detail' }, h('summary', null, '생기부에서 가져온 원문과 추가 항목'), h('pre', null, JSON.stringify(act.sourceDetails, null, 2))) : null,
+        h('p', { class: 'hint' }, '과목명이나 활동 종류가 불확실하면 학교 자료나 공식 교육과정을 검색해 확인하세요.'),
       ],
       footer: [
         !isNew ? h('button', { class: 'btn danger', type: 'button', onclick: () => {
@@ -98,7 +118,7 @@ const Activities = (() => {
       if (sim.length && !confirm(`비슷한 활동이 있어요: "${sim[0].title}" (${sim[0].date || '날짜 없음'})\n그래도 저장할까요?`)) return;
       const rec = { ...act,
         id: act.id || uid(), title: t, type: type.value, date: noDate.checked ? '' : date.value,
-        grade: grade.value, semester: sem.value, desc: desc.value.trim(), cv: cv.value.trim(),
+        grade: grade.value, semester: sem.value, subjects: [...new Set([...subjects, subject.value()].filter(Boolean))], subject: subjects[0] || subject.value(), desc: desc.value.trim(), cv: cv.value.trim(),
         cvDone: cvDone.checked, memo: memo.value.trim(), created: act.created || Date.now(),
       };
       const list = load().filter((x) => x.id !== rec.id);
@@ -113,9 +133,9 @@ const Activities = (() => {
   function filtered() {
     const f = filters;
     const q = f.q.trim().toLowerCase();
-    let list = load().filter((a) => (!f.type || a.type === f.type) && (!f.sem || String(a.semester) === f.sem)
-      && (!f.grade || String(a.grade) === f.grade) && (!f.cv || (f.cv === 'done') === !!a.cvDone)
-      && (!q || [a.title, a.subject, a.desc, a.cv, a.memo].some((s) => String(s || '').toLowerCase().includes(q))));
+    let list = load().filter((a) => viewFor(a) === f.view && (f.view !== 'activities' || !f.type || a.type === f.type) && (f.view !== 'activities' || !f.sem || String(a.semester) === f.sem)
+      && (f.view !== 'activities' || !f.grade || String(a.grade) === f.grade) && (f.view !== 'activities' || !f.cv || (f.cv === 'done') === (!!a.cvDone || !!a.sourceSchoolImport))
+      && (f.view !== 'activities' || !q || [a.title, ...subjectsOf(a), a.desc, a.cv, a.memo].some((s) => String(s || '').toLowerCase().includes(q))));
     const dir = f.order === 'asc' ? 1 : -1;
     list = list.sort((a, b) => {
       if (!a.date || !b.date) return (a.date ? -1 : 0) + (b.date ? 1 : 0) || a.created - b.created;
@@ -125,40 +145,97 @@ const Activities = (() => {
   }
 
   function card(a, after) {
-    const t = TYPES[a.type] || TYPES.etc;
-    return h('button', { type: 'button', class: 'act-card', style: { '--c': t.color }, onclick: () => edit(a, after) },
+    const recorded = a.cvDone || a.sourceSchoolImport && a.reportStatus !== 'notProvided';
+    return h('button', { type: 'button', class: 'act-card', style: { '--c': borderColor(a) }, onclick: () => {
+      const dialog = App.modal({ title: a.title, wide: true, body: [
+        h('p', null, `${typeLabel(a)} · ${a.date || '날짜 없음'} · ${semLabel(a)}`),
+        subjectsOf(a).length ? h('p', null, `관련 과목: ${subjectsOf(a).join(', ')}`) : null,
+        a.desc ? h('p', null, a.desc) : null,
+        a.cv ? h('section', null, h('b', null, '생기부에 기재된 내용'), h('p', null, a.cv)) : null,
+        a.memo ? h('section', null, h('b', null, '심화 메모'), h('p', null, a.memo)) : null,
+      ], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => { dialog.close(); edit(a, after); } }, '수정')] });
+    } },
       h('div', { class: 'act-top' },
-        h('span', { class: 'badge' }, a.sourceDetails?.type || t.label),
+        h('span', { class: 'badge' }, typeLabel(a)),
         h('span', { class: 'act-date' }, a.date || '날짜 없음'),
-        h('span', { class: 'cv-state ' + (a.cvDone ? 'ok' : 'no') }, a.cvDone ? '생기부 기록함' : '생기부 미기록')),
-      h('h4', null, a.subject ? `${a.subject} · ${a.title}` : a.title),
+        h('span', { class: 'cv-state ' + (recorded ? 'ok' : 'no') }, recorded ? '생기부에 기재됨' : '생기부 미기재')),
+      h('h4', null, subjectsOf(a).length ? `${subjectsOf(a).join(', ')} · ${a.title}` : a.title),
       h('div', { class: 'act-sem' }, semLabel(a)),
       a.desc ? h('p', { class: 'act-desc' }, a.desc) : null,
-      a.cv ? h('p', { class: 'act-cv' }, h('b', null, '생기부 '), a.cv) : null,
       a.memo ? h('p', { class: 'act-memo' }, h('b', null, '심화 '), a.memo) : null);
   }
 
+  function attendanceCard(a) {
+    const report = a.sourceDetails?.attendance || {};
+    const cell = (label, values) => h('tr', null, h('th', null, label), ...['illness', 'unexcused', 'other'].map((key) => h('td', null, values?.[key] ?? '—')));
+    return h('section', { class: 'gr-card act-attendance' }, h('h3', null, a.grade ? `${a.grade}학년 출결` : '학년 미상 출결'),
+      h('p', null, '수업 일수: ', h('strong', null, report.schoolDays ?? '미기재'), report.schoolDays != null ? '일' : ''),
+      h('div', { class: 'gr-scroll' }, h('table', { class: 'gr-table' }, h('thead', null, h('tr', null, ['구분', '질병', '미인정', '기타'].map((name) => h('th', null, name)))),
+        h('tbody', null, cell('결석', report.absence), cell('지각', report.late), cell('조퇴', report.earlyLeave), cell('결과', report.classExit)))),
+      report.remarks ? h('p', null, report.remarks) : null);
+  }
+
   function render(root) {
+    const expanded = new Set();
     root.append(SchoolData.tools('activities'));
     const listBox = h('div', { class: 'act-list' });
     const stat = h('div', { class: 'stat' });
+    const groupActions = h('div', { class: 'act-group-actions' });
+    const filterBox = h('div', { class: 'filters' });
+    const addButton = h('button', { class: 'btn primary', type: 'button', onclick: () => edit({ type: 'etc' }, redraw) }, '＋ 활동 추가');
     const redraw = () => {
       const all = load();
       const list = filtered();
-      stat.replaceChildren(
-        h('span', { class: 'pill' }, `전체 ${all.length}개`),
-        h('span', { class: 'pill warn-pill' }, `생기부 미기록 ${all.filter((a) => !a.cvDone).length}개`),
-        ...Object.entries(TYPES).map(([k, v]) => {
-          const n = all.filter((a) => a.type === k).length;
+      const active = filters.view === 'activities';
+      addButton.hidden = !active; filterBox.hidden = !active; groupActions.hidden = !active || filters.group === 'none';
+      stat.replaceChildren(...[
+        h('span', { class: 'pill' }, `${{ activities: '활동', attendance: '출결', awards: '수상', source: '생기부 원문·기타' }[filters.view]} ${list.length}개`),
+        active ? h('span', { class: 'pill warn-pill' }, `생기부 미기재 ${all.filter((a) => viewFor(a) === 'activities' && !a.cvDone && !a.sourceSchoolImport).length}개`) : null,
+        ...(active ? Object.entries(TYPES).map(([k, v]) => {
+          const n = all.filter((a) => viewFor(a) === 'activities' && a.type === k).length;
           return n ? h('span', { class: 'pill', style: { '--c': v.color } }, `${v.label} ${n}`) : '';
-        }).filter(Boolean));
+        }).filter(Boolean) : [])].filter(Boolean));
       listBox.replaceChildren();
       if (!list.length) {
-        listBox.append(h('div', { class: 'empty-box' }, all.length ? '조건에 맞는 활동이 없어요.' : '아직 기록한 활동이 없어요.'));
+        listBox.append(h('div', { class: 'empty-box' }, '표시할 기록이 없어요.'));
         return;
       }
+      if (filters.view === 'attendance') { listBox.append(...list.sort((a, b) => Number(a.grade || 0) - Number(b.grade || 0)).map(attendanceCard)); return; }
+      if (filters.view === 'awards') { listBox.append(h('div', { class: 'act-grid' }, list.map((a) => card(a, redraw)))); return; }
+      if (filters.view === 'source') { listBox.append(...list.map((a) => h('details', { class: 'school-source-detail' },
+        h('summary', null, `${a.grade ? `${a.grade}학년 ` : ''}${a.semester ? `${a.semester}학기 ` : ''}${a.title}`),
+        h('p', null, a.cv || a.desc || '원문은 아래에서 확인하세요.'), h('pre', null, JSON.stringify(a.sourceDetails || a, null, 2))))); return; }
       if (filters.group === 'none') {
         listBox.append(h('div', { class: 'act-grid' }, list.map((a) => card(a, redraw))));
+        return;
+      }
+      if (filters.group === 'curriculum') {
+        const grades = [...new Set(list.map((a) => a.grade || '미지정'))].sort((a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true }));
+        const allKeys = [];
+        const detail = (key, title, children, count) => {
+          allKeys.push(key);
+          return h('details', { class: 'act-group', open: expanded.has(key), ontoggle: (event) => { if (!event.currentTarget.isConnected) return; if (event.currentTarget.open) expanded.add(key); else { expanded.delete(key); [...expanded].filter((child) => child.startsWith(key+'/')).forEach((child) => expanded.delete(child)); event.currentTarget.querySelectorAll('details.act-group').forEach((child) => { child.open = false; }); } } },
+            h('summary', null, title, h('small', null, ` ${count}개`)), ...children);
+        };
+        const familyOrder = (name) => { const i = Curriculum2022.families.indexOf(name); return i < 0 ? 999 : i; };
+        grades.forEach((grade) => {
+          const gradeItems = list.filter((a) => String(a.grade || '미지정') === String(grade));
+          const familyOf = (name) => name ? Curriculum2022.familyFor(name) : '기타';
+          const families = [...new Set(gradeItems.flatMap((a) => subjectsOf(a).length ? subjectsOf(a).map(familyOf) : ['기타']))]
+            .sort((a, b) => familyOrder(a) - familyOrder(b) || a.localeCompare(b, 'ko'));
+          listBox.append(detail(`grade:${grade}`, grade === '미지정' ? '학년 미지정' : `${grade}학년`, families.map((family) => {
+            const familyItems = gradeItems.filter((a) => subjectsOf(a).some((name) => familyOf(name) === family) || family === '기타' && !subjectsOf(a).length);
+            const names = [...new Set(familyItems.flatMap((a) => subjectsOf(a).filter((name) => familyOf(name) === family)))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+            if (family === '기타') names.push('과목 없음');
+            return detail(`grade:${grade}/family:${family}`, family, names.map((name) => {
+              const rows = familyItems.filter((a) => name === '과목 없음' ? !subjectsOf(a).length : subjectsOf(a).includes(name));
+              return detail(`grade:${grade}/family:${family}/subject:${name}`, name, [h('div', { class: 'act-grid' }, rows.map((a) => card(a, redraw)))], rows.length);
+            }), familyItems.length);
+          }), gradeItems.length));
+        });
+        groupActions.replaceChildren(
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => { allKeys.forEach((key) => expanded.add(key)); redraw(); } }, '전체 펼치기'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => { allKeys.forEach((key) => expanded.delete(key)); redraw(); } }, '전체 접기'));
         return;
       }
       const groups = [];
@@ -168,32 +245,63 @@ const Activities = (() => {
         if (!idx.has(key)) { idx.set(key, groups.length); groups.push({ key, items: [] }); }
         groups[idx.get(key)].items.push(a);
       });
-      groups.forEach((g) => listBox.append(h('section', { class: 'act-group' },
-        h('h3', null, g.key, h('small', null, ` ${g.items.length}개`)),
-        h('div', { class: 'act-grid' }, g.items.map((a) => card(a, redraw))))));
+      if (filters.group === 'sem') groups.sort((a, b) => a.key.localeCompare(b.key, 'ko', { numeric: true }));
+      groupActions.replaceChildren(
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { groups.forEach((g) => expanded.add(g.key)); redraw(); } }, '전체 펼치기'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { groups.forEach((g) => expanded.delete(g.key)); redraw(); } }, '전체 접기'));
+      groups.forEach((g) => listBox.append(h('details', { class: 'act-group', open: expanded.has(g.key), ontoggle: (event) => {
+        if (!event.currentTarget.isConnected) return;
+        if (event.currentTarget.open) expanded.add(g.key); else expanded.delete(g.key);
+      } }, h('summary', null, g.key, h('small', null, ` ${g.items.length}개`)),
+      h('div', { class: 'act-grid' }, g.items.map((a) => card(a, redraw))))));
     };
 
     const sel = (key, opts) => h('select', { onchange: (e) => { filters[key] = e.target.value; redraw(); } },
       opts.map(([v, l]) => h('option', { value: v, selected: filters[key] === v }, l)));
 
+    function openColors() {
+      const saved = colorRules();
+      const draft = { mode: saved.mode || 'type', type: { ...saved.type }, family: { ...saved.family }, subject: { ...saved.subject } };
+      const mode = h('select', { 'aria-label': '테두리 색 기준' }, [['type', '활동 종류별'], ['family', '교과군별'], ['subject', '과목별']].map(([value, label]) => h('option', { value, selected: value === draft.mode }, label)));
+      const rows = h('div', { class: 'act-color-rows' });
+      const draw = () => {
+        draft.mode = mode.value;
+        const names = mode.value === 'type' ? Object.keys(TYPES) : mode.value === 'family' ? [...Curriculum2022.families, '기타'] : [...new Set([...Store.get('subjectCatalog', []), ...load().map((a) => a.subject).filter(Boolean)])].sort((a, b) => a.localeCompare(b, 'ko'));
+        rows.replaceChildren(...names.map((key) => {
+          const label = mode.value === 'type' ? TYPES[key].label : key;
+          const fallback = mode.value === 'type' ? TYPES[key].color : mode.value === 'subject' ? colorFor(key) : '#9aa8bb';
+          const color = h('input', { type: 'color', value: draft[mode.value][key] || fallback, 'aria-label': `${label} 테두리 색`, onchange: (event) => { draft[mode.value][key] = event.target.value; } });
+          return h('label', { class: 'act-color-row' }, label, color);
+        }));
+      };
+      mode.addEventListener('change', draw); draw();
+      const dialog = App.modal({ title: '활동 테두리 색', body: [App.field('색상 기준', mode), rows], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => { Store.set('activityColorRules', draft); dialog.close(); redraw(); } }, '저장')] });
+    }
+    const tabs = h('div', { class: 'seg act-view-tabs' }, [['activities', '활동'], ['attendance', '출결'], ['awards', '수상'], ['source', '생기부 원문·기타']].map(([key, label]) => h('button', { class: 'seg-btn' + (filters.view === key ? ' on' : ''), type: 'button', onclick: () => {
+      filters.view = key; tabs.querySelectorAll('button').forEach((button) => button.classList.toggle('on', button.textContent === label)); redraw();
+    } }, label)));
+    filterBox.append(
+      h('input', { type: 'search', placeholder: '활동명·내용 검색', value: filters.q, oninput: (e) => { filters.q = e.target.value; redraw(); } }),
+      sel('type', [['', '모든 종류'], ...Object.entries(TYPES).map(([k, v]) => [k, v.label])]),
+      sel('grade', [['', '모든 학년'], ['1', '1학년'], ['2', '2학년'], ['3', '3학년']]),
+      sel('sem', [['', '모든 학기'], ['1', '1학기'], ['2', '2학기']]),
+      sel('cv', [['', '생기부 전체'], ['done', '기재됨'], ['todo', '미기재']]),
+      sel('group', [['curriculum', '학년·교과군·과목별'], ['sem', '학기별'], ['subject', '과목별'], ['type', '종류별'], ['none', '전체 목록']]),
+      sel('order', [['desc', '최신순'], ['asc', '오래된순']]));
+
     root.append(h('section', { class: 'panel' },
       h('div', { class: 'title-row' },
         h('h1', { class: 'page-title' }, '활동 관리'),
-        h('button', { class: 'btn primary', type: 'button', onclick: () => edit({ type: 'perf' }, redraw) }, '＋ 활동 추가')),
+        h('div', { class: 'set-btns' }, h('button', { class: 'btn ghost', type: 'button', onclick: openColors }, '테두리 색'), addButton)),
+      tabs,
       stat,
-      h('div', { class: 'filters' },
-        h('input', { type: 'search', placeholder: '활동명·내용 검색', value: filters.q, oninput: (e) => { filters.q = e.target.value; redraw(); } }),
-        sel('type', [['', '모든 종류'], ...Object.entries(TYPES).map(([k, v]) => [k, v.label])]),
-        sel('grade', [['', '모든 학년'], ['1', '1학년'], ['2', '2학년'], ['3', '3학년']]),
-        sel('sem', [['', '모든 학기'], ['1', '1학기'], ['2', '2학기']]),
-        sel('cv', [['', '생기부 전체'], ['done', '기록함'], ['todo', '미기록']]),
-        sel('group', [['sem', '학기별'], ['subject', '과목별'], ['type', '종류별'], ['none', '전체 목록']]),
-        sel('order', [['desc', '최신순'], ['asc', '오래된순']])),
+      filterBox,
+      groupActions,
       listBox));
     redraw();
   }
 
-  const stats = () => { const all = load(); return { total: all.length, todo: all.filter((a) => !a.cvDone).length }; };
+  const stats = () => { const all = load().filter((a) => viewFor(a) === 'activities'); return { total: all.length, todo: all.filter((a) => !a.cvDone && !a.sourceSchoolImport).length }; };
   return { render, stats };
 })();
 

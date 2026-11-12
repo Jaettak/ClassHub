@@ -1,22 +1,15 @@
-// NEIS 교육정보 개방포털(공식 Open API) 연동: 학교 검색, 급식, 시간표
+// NEIS 교육정보 개방포털 공개 조회: 학교 검색, 급식
 const Neis = (() => {
   const BASE = 'https://open.neis.go.kr/hub/';
-  const TT = { '초등학교': 'elsTimetable', '중학교': 'misTimetable', '고등학교': 'hisTimetable', '특수학교': 'spsTimetable' };
   const ALLERGY = ['', '난류', '우유', '메밀', '땅콩', '대두', '밀', '고등어', '게', '새우', '돼지고기', '복숭아', '토마토', '아황산류', '호두', '닭고기', '쇠고기', '오징어', '조개류', '잣'];
 
-  const key = () => String(localStorage.getItem('classhub:neisKey') || (Store.get('settings', {}) || {}).neisKey || '').trim();
   const ymd = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
   const isoDate = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 
-  // 인증키가 없으면 한 번에 5건만 주므로 여러 쪽으로 나눠 가져온다
-  async function call(service, params, maxPages) {
-    const k = key();
-    const size = k ? 1000 : 5;
-    // 샘플 키는 pIndex가 1로 고정되어 여러 페이지를 요청하면 첫 5건이 반복된다.
-    const cap = k ? (maxPages || 5) : 1;
+  // 공개 샘플 조회는 첫 5건만 반환한다.
+  async function call(service, params) {
     const get = async (i) => {
-      const q = new URLSearchParams({ Type: 'json', pIndex: i, pSize: size, ...params });
-      if (k) q.set('KEY', k);
+      const q = new URLSearchParams({ Type: 'json', pIndex: i, pSize: 5, ...params });
       let res;
       try { res = await fetch(BASE + service + '?' + q); } catch (e) { throw new Error('인터넷에 연결되어 있지 않거나 NEIS 서버에 접속할 수 없어요.'); }
       if (!res.ok) throw new Error(`NEIS 서버 응답 오류 (${res.status})`);
@@ -32,13 +25,11 @@ const Neis = (() => {
       return { rows: body[1] ? body[1].row : [], total: body[0].head[0].list_total_count };
     };
     const first = await get(1);
-    const pages = Math.min(cap, Math.ceil(first.total / size));
-    const rest = pages > 1 ? await Promise.all(Array.from({ length: pages - 1 }, (_, i) => get(i + 2))) : [];
-    return { rows: [first, ...rest].flatMap((r) => r.rows), total: first.total };
+    return first;
   }
 
   async function searchSchools(name) {
-    const r = await call('schoolInfo', { SCHUL_NM: name }, Store.get('settings', {}).neisKey ? 3 : 4);
+    const r = await call('schoolInfo', { SCHUL_NM: name });
     return {
       total: r.total,
       list: r.rows.map((x) => ({ name: x.SCHUL_NM, atpt: x.ATPT_OFCDC_SC_CODE, code: x.SD_SCHUL_CODE, kind: x.SCHUL_KND_SC_NM, region: x.LCTN_SC_NM, addr: x.ORG_RDNMA || '' })),
@@ -59,9 +50,7 @@ const Neis = (() => {
     // 샘플 응답은 하루에 최대 5건. 날짜를 나누어 한 주 전체를 가져온다.
     const dates = [];
     for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) dates.push(new Date(d));
-    const results = key()
-      ? [await call('mealServiceDietInfo', { ...params, MLSV_FROM_YMD: ymd(from), MLSV_TO_YMD: ymd(to) })]
-      : await Promise.all(dates.map((d) => call('mealServiceDietInfo', { ...params, MLSV_YMD: ymd(d) })));
+    const results = await Promise.all(dates.map((d) => call('mealServiceDietInfo', { ...params, MLSV_YMD: ymd(d) })));
     const rows = results.flatMap((r) => r.rows);
     const out = {};
     const seen = new Set();
@@ -75,21 +64,6 @@ const Neis = (() => {
     });
     Object.values(out).forEach((l) => l.sort((a, b) => a.code - b.code));
     return out;
-  }
-
-  // 학년·반의 한 주 시간표 → [{ date, period, subject }]
-  async function timetable(school, grade, cls, from, to) {
-    const service = TT[school.kind];
-    if (!service) throw new Error('이 종류의 학교는 시간표 불러오기를 지원하지 않아요.');
-    const params = { ATPT_OFCDC_SC_CODE: school.atpt, SD_SCHUL_CODE: school.code, GRADE: grade, CLASS_NM: cls };
-    const dates = [];
-    for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) dates.push(new Date(d));
-    const results = key()
-      ? [await call(service, { ...params, TI_FROM_YMD: ymd(from), TI_TO_YMD: ymd(to) })]
-      : await Promise.all(dates.map((d) => call(service, { ...params, TI_FROM_YMD: ymd(d), TI_TO_YMD: ymd(d) })));
-    const seen = new Set();
-    return results.flatMap((r) => r.rows).map((x) => ({ date: isoDate(x.ALL_TI_YMD), period: Number(x.PERIO), subject: String(x.ITRT_CNTNT || '').trim() }))
-      .filter((x) => { const id = `${x.date}|${x.period}`; if (!x.subject || seen.has(id)) return false; seen.add(id); return true; });
   }
 
   // 학교 검색 창. 고르면 onPick(school) 호출
@@ -114,5 +88,5 @@ const Neis = (() => {
     setTimeout(() => q.focus(), 50);
   }
 
-  return { searchSchools, meals, timetable, pickSchool, ALLERGY, ymd, hasKey: () => !!key(), savedKey: key, setKey: (value) => localStorage.setItem('classhub:neisKey', String(value || '').trim()) };
+  return { searchSchools, meals, pickSchool, ALLERGY, ymd };
 })();

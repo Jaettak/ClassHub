@@ -2,30 +2,43 @@
 const Home = (() => {
   let selectedDate = new Date();
   let clockTimer, sideObserver;
+  const easterAudio = new Audio('assets/easter-fall.wav');
+  easterAudio.preload = 'auto';
+  function playEasterSound() {
+    const settings = Settings.get(), volume = Number(settings.soundVolume ?? 50);
+    if (settings.uiSound === false || volume <= 0) return;
+    try {
+      easterAudio.pause();
+      easterAudio.currentTime = 0;
+      easterAudio.volume = Math.min(1, volume / 50);
+      easterAudio.play().catch(() => {});
+    } catch (_) { /* 오디오를 지원하지 않아도 효과는 계속 표시한다. */ }
+  }
   const CARDS = [
-    { to: 'wrong', cls: 'blue', icon: 'wrong', title: '오답노트', desc: 'pdf파일을 잘라내고 오답정리를 해요.' },
-    { to: 'timetable', cls: 'green', icon: 'timetable', title: '시간표', desc: '나의 시간표를 입력하고 관리해요.' },
-    { to: 'calendar', cls: 'orange', icon: 'calendar', title: '일정 관리', desc: '날짜 별로 자신의 학업 일정을 관리해요.' },
-    { to: 'activities', cls: 'purple', icon: 'activities', title: '활동 관리', desc: '현재까지의 학업 활동을 관리해요.' },
     { to: 'grades', cls: 'pink', icon: 'grades', title: '성적 관리', desc: '시험 점수를 기록하고 추이를 봐요.' },
-    { to: 'meals', cls: 'teal', icon: 'meals', title: '급식', desc: '우리 학교 급식을 날짜별로 봐요.' },
+    { to: 'calendar', cls: 'orange', icon: 'calendar', title: '일정 관리', desc: '날짜 별로 자신의 학업 일정을 관리해요.' },
     { to: 'notes', cls: 'amber', icon: 'notes', title: '메모', desc: '필요한 내용을 자유롭게 적어 둬요.' },
+    { to: 'timetable', cls: 'green', icon: 'timetable', title: '시간표', desc: '나의 시간표를 입력하고 관리해요.' },
+    { to: 'meals', cls: 'teal', icon: 'meals', title: '급식', desc: '우리 학교 급식을 날짜별로 봐요.' },
     { to: 'timer', cls: 'slate', icon: 'timer', title: '타이머', desc: '공부 시간을 재고 기록해요.' },
+    { to: 'wrong', cls: 'blue', icon: 'wrong', title: '오답노트', desc: 'pdf파일을 잘라내고 오답정리를 해요.' },
     { to: 'study', cls: 'indigo', icon: 'study', title: '필기 공간', desc: '과목과 단원별로 필기를 정리해요.' },
+    { to: 'activities', cls: 'purple', icon: 'activities', title: '활동 관리', desc: '현재까지의 학업 활동을 관리해요.' },
+    { to: 'subjects', cls: 'orchid', icon: 'subjects', title: '과목 관리', desc: '과목 색과 기본 교실을 정해요.' },
     { to: 'whiteboard', cls: 'coral', icon: 'whiteboard', title: '화이트보드', desc: '그리고 저장해요.' },
     { to: 'schoolmap', cls: 'mint', icon: 'schoolmap', title: '학교 지도', desc: '층별 장소와 마커를 확인해요.' },
-    { to: 'subjects', cls: 'orchid', icon: 'subjects', title: '과목 관리', desc: '과목 색과 기본 교실을 정해요.' },
   ];
 
   function render(root) {
     clearInterval(clockTimer);
     sideObserver?.disconnect();
     const now = new Date();
+    Holidays.ensureYear(now.getFullYear(), () => App.refresh());
+    if (selectedDate.getFullYear() !== now.getFullYear()) Holidays.ensureYear(selectedDate.getFullYear(), () => App.refresh());
     const st = Settings.protectedTab('activities') ? null : Activities.stats();
-    const nextExam = Settings.protectedTab('calendar') ? null : Calendar.nextExam();
     let sideMode = Store.get('homeSideMode', 'list');
 
-    const order = Settings.get().tabOrder || Settings.get().homeCardOrder || [];
+    const order = Settings.get().homeCardOrder || [];
     const enabled = Settings.get().enabledTabs;
     const sortedCards = CARDS.filter((c) => !Array.isArray(enabled) || enabled.includes(c.to)).sort((a, b) => (order.indexOf(a.to) < 0 ? 999 : order.indexOf(a.to)) - (order.indexOf(b.to) < 0 ? 999 : order.indexOf(b.to)));
     const cards = h('div', { class: 'home-cards' }, sortedCards.map((c) => h(c.to ? 'a' : 'button', c.to ? { class: 'home-card ' + c.cls, href: '#' + c.to } : { class: 'home-card ' + c.cls, type: 'button', onclick: App.openSettings },
@@ -38,15 +51,15 @@ const Home = (() => {
       h('button', { type: 'button', class: 'bm r', title: '오늘 일정 목록', 'aria-label': '오늘 일정 목록으로 보기', onclick: () => selectSide('list') }),
       h('button', { type: 'button', class: 'bm b', title: '오늘 일정 원 그래프', 'aria-label': '오늘 일정 원 그래프로 보기', onclick: () => selectSide('pie') }),
       h('div', { class: 'side-date-nav' },
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { selectedDate = new Date(); drawSide(); } }, '오늘'),
         h('button', { class: 'btn ghost', type: 'button', 'aria-label': '이전 날짜', onclick: () => changeDate(-1) }, '◀'),
         h('h3', null),
-        h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: () => { selectedDate = new Date(); drawSide(); } }, '오늘')),
+        h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶')),
       h('div', { class: 'side-scroll' }),
-      st?.total ? h('p', { class: 'note' }, `생기부 미기록 활동 ${st.todo}개`) : null);
+      st?.todo ? h('p', { class: 'note' }, `생기부 미기록 활동 ${st.todo}개`) : null);
 
     const sideScroll = todayBox.querySelector('.side-scroll');
-    function changeDate(n) { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + n); drawSide(); }
+    function changeDate(n) { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + n); Holidays.ensureYear(selectedDate.getFullYear(), drawSide); drawSide(); }
     function openDayNotes(ds) {
       const body = h('div', { class: 'nt-completed home-note-modal' });
       const refreshNotes = () => {
@@ -98,20 +111,42 @@ const Home = (() => {
     logo.addEventListener('mouseenter', bounce);
     logo.addEventListener('pointerdown', bounce);
     logo.addEventListener('focus', bounce);
+    let logoPresses = 0;
+    logo.addEventListener('click', () => {
+      if (++logoPresses < 50) return;
+      logoPresses = 0; logo.classList.remove('go');
+      playEasterSound();
+      const original = logo.querySelector('.logo-books');
+      const box = original.getBoundingClientRect();
+      const falling = ['b1', 'b2', 'b3'].map((book, index) => {
+        const wrapper = h('div', { class: `falling-book falling-${book}` }, icon('books'));
+        wrapper.querySelectorAll('.bk').forEach((node) => { if (!node.classList.contains(book)) node.remove(); });
+        wrapper.querySelectorAll('[id]').forEach((node) => { node.id = `fall-${index}-${node.id}`; });
+        wrapper.querySelectorAll('[clip-path]').forEach((node) => { node.setAttribute('clip-path', node.getAttribute('clip-path').replace('url(#ci-', `url(#fall-${index}-ci-`)); });
+        Object.assign(wrapper.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+        document.body.append(wrapper);
+        return wrapper;
+      });
+      original.style.visibility = 'hidden';
+      setTimeout(() => falling.forEach((book) => book.remove()), 1900);
+    });
+    root.addEventListener('click', (event) => { if (!logo.contains(event.target)) logoPresses = 0; });
 
     root.append(h('button', { class: 'home-settings-btn btn', type: 'button', onclick: App.openSettings, 'aria-label': '설정 열기', title: '설정' }, icon('settings')));
     root.append(h('div', { class: 'home' },
       cards,
       h('aside', { class: 'home-side' },
-        nextExam ? h('button', { class: 'home-exam-banner', type: 'button', onclick: () => Calendar.manageExams(() => App.refresh()) },
-          h('b', null, nextExam.title),
-          h('span', null, nextExam.start <= todayStr() ? '시험기간 진행 중' : `D-${Math.round((parseDate(nextExam.start) - parseDate(todayStr())) / 86400000)}`),
-          h('small', null, `${nextExam.start} ~ ${nextExam.end}`)) : null,
         h('div', { class: 'home-topline' },
           !Settings.protectedTab('timetable') ? h('div', { class: 'home-schedule-preview' },
             h('h3', null, '오늘 시간표'),
             Timetable.lessonsFor(now).length ? h('div', { class: 'home-schedule-list' }, Timetable.lessonsFor(now).map((lesson) => h('button', { type: 'button', class: 'home-schedule-lesson', style: { '--c': colorFor(lesson.subject) }, onclick: () => Calendar.showEvent(lesson, () => App.refresh()) }, `${lesson.period}. ${lesson.displayTitle}`)))
               : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')) : null, logo),
+        ...(!Settings.protectedTab('calendar') ? Calendar.visibleExams().slice(0, 3).map((exam) => {
+          const today = todayStr(), offset = Math.round((parseDate(today) - parseDate(exam.start)) / 86400000);
+          const label = offset < 0 ? `D-${-offset}` : offset === 0 ? 'D-Day' : `시험 ${offset + 1}일차`;
+          return h('button', { class: 'home-exam-banner', type: 'button', onclick: () => Calendar.manageExams(() => App.refresh()) },
+            h('span', { class: 'exam-name' }, exam.title), h('small', null, exam.start === exam.end ? exam.start : `${exam.start} ~ ${exam.end}`), h('strong', { class: 'exam-count' }, label));
+        }) : []),
         Settings.protectedTab('calendar') ? null : todayBox)));
     sideObserver = new ResizeObserver(() => {
       if (todayBox.isConnected && matchMedia('(min-width: 1001px)').matches) cards.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - cards.getBoundingClientRect().top)}px`;

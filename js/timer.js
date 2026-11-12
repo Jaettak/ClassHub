@@ -1,24 +1,24 @@
 // 타이머: 숙제·공부 시간을 재는 떠 있는 타이머 (화면을 옮겨도 유지됨)
 const Timer = (() => {
-  let st = null; // { title, evId, date, mode:'down'|'up', total, running, startedAt, before }
+  let st = null; // 현재 조작 중인 타이머 또는 스톱워치
+  let sessions = { down: null, up: null };
+  const ordered = () => Object.values(sessions).filter(Boolean).sort((a, b) => (b.order || b.startedAt) - (a.order || a.startedAt));
   let dock = null;
   let tick = null;
   let ctx = null;
   let alarmTimer = null;
   let alarmBar = null;
   let alarmSound = false;
-  let pipWindow = null;
-  let compact = false;
   const baseTitle = `ClassHub - 학교생활 통합 관리 · ${CLASSHUB_VERSION}`;
 
-  const elapsed = () => (st ? st.before + (st.running ? (Date.now() - st.startedAt) / 1000 : 0) : 0);
-  const shown = () => (st.mode === 'down' ? Math.max(0, st.total - elapsed()) : elapsed());
+  const elapsed = (session = st) => (session ? session.before + (session.running ? (Date.now() - session.startedAt) / 1000 : 0) : 0);
+  const shown = (session = st) => (session?.mode === 'down' ? Math.max(0, session.total - elapsed(session)) : elapsed(session));
   const fmt = (s) => {
     s = Math.floor(s);
     const hh = Math.floor(s / 3600); const mm = Math.floor((s % 3600) / 60); const ss = s % 60;
     return (hh ? `${hh}:${pad(mm)}` : pad(mm)) + `:${pad(ss)}`;
   };
-  const persist = () => Store.set('timer', st);
+  const persist = () => Store.set('timerSessions', sessions);
   const log = () => Store.get('timerLog', []);
 
   function beep() {
@@ -62,24 +62,21 @@ const Timer = (() => {
   }
 
   function saveSession() {
-    let sec = Math.round(elapsed());
+    let sec = Math.max(1, Math.round(elapsed()));
     if (st.mode === 'down') sec = Math.min(sec, st.total);
-    if (sec >= 10) {
+    if (sec >= 1) {
       const l = log();
-      l.push({ title: st.title, evId: st.evId || '', date: st.date || todayStr(), sec, mode: st.mode, laps: st.laps || [], at: Date.now() });
+      l.push({ id: uid(), title: st.title, evId: st.evId || '', date: st.date || todayStr(), sec, mode: st.mode, laps: st.laps || [], at: Date.now() });
       Store.set('timerLog', l.slice(-500));
     }
     return sec;
   }
 
   function clear() {
-    st = null;
-    Store.set('timer', null);
-    document.title = baseTitle;
-    if (tick) { clearInterval(tick); tick = null; }
-    if (dock) { dock.remove(); dock = null; }
-    if (pipWindow && !pipWindow.closed) pipWindow.close();
-    pipWindow = null;
+    if (!st) return;
+    sessions[st.mode] = null;
+    st = ordered()[0] || null;
+    persist(); mount();
   }
 
   function finish(auto) {
@@ -90,7 +87,7 @@ const Timer = (() => {
     if (auto) startAlarm(info);
     App.toast(`${info.title || '타이머'} · ${fmt(sec)} 기록했어요.`);
     if (info.evId) askDone(info);
-    if (App.current === 'calendar') App.refresh();
+    if (App.current === 'calendar' || App.current === 'timer') App.refresh();
   }
 
   function askDone(info) {
@@ -107,30 +104,33 @@ const Timer = (() => {
   const auto2 = () => '수고했어요!';
 
   function update() {
-    if (!st) return;
-    if (st.mode === 'down' && st.running && elapsed() >= st.total) { finish(true); return; }
-    if (dock) {
-      dock.querySelector('.tm-time').textContent = fmt(shown());
-      dock.querySelector('.tm-play').textContent = st.running ? '일시정지' : '계속';
-      dock.classList.toggle('paused', !st.running);
+    for (const session of ordered()) {
+      if (session.mode === 'down' && session.running && elapsed(session) >= session.total) { st = session; finish(true); return; }
     }
-    document.title = st.running ? `${fmt(shown())} · ${st.title || '타이머'}` : baseTitle;
+    dock?.querySelectorAll('.timer-dock').forEach((card) => {
+      const session = sessions[card.dataset.mode];
+      if (!session) return;
+      card.querySelector('.tm-time').textContent = fmt(shown(session));
+      card.querySelector('.tm-play').textContent = session.running ? '일시정지' : '계속';
+      card.classList.toggle('paused', !session.running);
+    });
+    const latest = ordered().find((session) => session.running);
+    document.title = latest?.running ? `${fmt(shown(latest))} · ${latest.title || (latest.mode === 'up' ? '스톱워치' : '타이머')}` : baseTitle;
   }
 
   function mount() {
     if (dock) dock.remove();
-    dock = h('div', { class: 'timer-dock', role: 'timer', 'aria-live': 'off' },
-      h('div', { class: 'tm-header' },
-      h('div', { class: 'tm-title' }, st.title || '타이머'),
-      h('button', { class: 'tm-compact', type: 'button', 'aria-label': '타이머 접기 또는 펼치기', onclick: () => { compact = !compact; dock.classList.toggle('compact', compact); dock.querySelector('.tm-compact').textContent = compact ? '펼치기' : '접기'; } }, compact ? '펼치기' : '접기')),
-      h('div', { class: 'tm-time' }, fmt(shown())),
+    dock = null;
+    const running = ordered();
+    if (!running.length) { if (tick) clearInterval(tick); tick = null; document.title = baseTitle; return; }
+    dock = h('div', { class: 'timer-stack' }, running.map((session) => h('div', { class: 'timer-dock', 'data-mode': session.mode, role: 'timer', 'aria-live': 'off' },
+      h('div', { class: 'tm-header' }, h('div', { class: 'tm-title' }, session.title || (session.mode === 'up' ? '스톱워치' : '타이머'))),
+      h('div', { class: 'tm-time' }, fmt(shown(session))),
       h('div', { class: 'tm-btns' },
-        h('button', { class: 'btn tm-play', type: 'button', onclick: toggle }, '일시정지'),
-        st.mode === 'up' ? h('button', { class: 'btn', type: 'button', onclick: lap }, '구간 저장') : null,
-        h('button', { class: 'btn primary', type: 'button', onclick: () => finish(false) }, '끝내기'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (confirm('기록하지 않고 타이머를 끌까요?')) clear(); } }, '취소')),
-      (window.ClassHubNativeTimer || 'documentPictureInPicture' in window) ? h('button', { class: 'tm-outside', type: 'button', onclick: showOutside }, '앱 밖에서 보기') : null);
-    dock.classList.toggle('compact', compact);
+        h('button', { class: 'btn tm-play', type: 'button', onclick: () => { st = session; toggle(); } }, '일시정지'),
+        session.mode === 'up' ? h('button', { class: 'btn', type: 'button', onclick: () => { st = session; lap(); } }, '구간 저장') : null,
+        h('button', { class: 'btn primary', type: 'button', onclick: () => { st = session; finish(false); } }, '끝내기'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소')))));
     document.body.append(dock);
     if (!tick) tick = setInterval(update, 500);
     update();
@@ -145,31 +145,6 @@ const Timer = (() => {
     App.toast(`${st.laps.length}구간 · ${fmt(total - previous)} 저장했어요.`);
   }
 
-  async function showOutside() {
-    if (!st || !dock) return;
-    if (window.ClassHubNativeTimer) {
-      try { await window.ClassHubNativeTimer.showOutside(); }
-      catch (e) { App.toast(e.message || '작은 창을 열지 못했어요.'); }
-      return;
-    }
-    if (pipWindow && !pipWindow.closed) { pipWindow.close(); return; }
-    if (!window.documentPictureInPicture) return App.toast('이 브라우저는 작은 외부 창을 지원하지 않아요.');
-    try {
-      const win = await documentPictureInPicture.requestWindow({ width: 290, height: compact ? 95 : 175 });
-      pipWindow = win;
-      const link = win.document.createElement('link');
-      link.rel = 'stylesheet'; link.href = new URL('css/style.css', location.href).href;
-      win.document.head.append(link);
-      win.document.body.append(dock);
-      win.document.body.classList.add('timer-pip-body');
-      dock.querySelector('.tm-outside').textContent = '앱으로 돌리기';
-      win.addEventListener('pagehide', () => {
-        if (dock && st) { document.body.append(dock); dock.querySelector('.tm-outside').textContent = '앱 밖에서 보기'; }
-        if (pipWindow === win) pipWindow = null;
-      }, { once: true });
-    } catch (_) { App.toast('작은 창을 열지 못했어요. 브라우저 지원을 확인해 주세요.'); }
-  }
-
   function toggle() {
     if (!st) return;
     if (st.running) { st.before = elapsed(); st.running = false; } else { st.startedAt = Date.now(); st.running = true; }
@@ -178,10 +153,12 @@ const Timer = (() => {
 
   function start(o) {
     stopAlarm();
-    if (st && !confirm('진행 중인 타이머가 있어요. 기록하고 새로 시작할까요?')) return;
-    if (st) { saveSession(); clear(); }
+    st = sessions[o.mode] || null;
+    if (st && !confirm(`진행 중인 ${o.mode === 'up' ? '스톱워치' : '타이머'}가 있어요. 기록하고 새로 시작할까요?`)) return;
+    if (st) { saveSession(); sessions[o.mode] = null; if (App.current === 'timer') App.refresh(); }
     try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.resume) ctx.resume(); } catch (e) { /* 무시 */ }
-    st = { title: o.title || '', evId: o.evId || '', date: o.date || todayStr(), mode: o.mode, total: o.seconds ?? ((o.minutes || 0) * 60), alarmSound: o.alarmSound, alarmVisual: o.alarmVisual, running: true, startedAt: Date.now(), before: 0, laps: [] };
+    st = { title: o.title || '', evId: o.evId || '', date: o.date || todayStr(), mode: o.mode, total: o.seconds ?? ((o.minutes || 0) * 60), alarmSound: o.alarmSound, alarmVisual: o.alarmVisual, running: true, startedAt: Date.now(), order: Date.now(), before: 0, laps: [] };
+    sessions[o.mode] = st;
     persist(); mount();
   }
 
@@ -230,21 +207,26 @@ const Timer = (() => {
   const totalForDate = (date) => Math.round(log().filter((x) => !x.deletedAt && x.date === date).reduce((a, x) => a + x.sec, 0) / 60);
 
   function init() {
-    st = Store.get('timer', null);
-    if (st && st.mode) mount(); else st = null;
+    const saved = Store.get('timerSessions', null);
+    if (saved && typeof saved === 'object') sessions = { down: saved.down || null, up: saved.up || null };
+    else {
+      const legacy = Store.get('timer', null);
+      if (legacy?.mode && legacy.mode in sessions) { sessions[legacy.mode] = legacy; persist(); Store.set('timer', null); }
+    }
+    st = ordered()[0] || null;
+    if (st) mount();
   }
 
   function suspend() {
     stopAlarm();
     st = null;
+    sessions = { down: null, up: null };
     if (tick) { clearInterval(tick); tick = null; }
     if (dock) { dock.remove(); dock = null; }
-    if (pipWindow && !pipWindow.closed) pipWindow.close();
-    pipWindow = null;
     document.title = baseTitle;
   }
 
-  return { open, start, spent, totalForDate, init, suspend, stopAlarm, active: () => !!st };
+  return { open, start, spent, totalForDate, init, suspend, stopAlarm, active: () => ordered().length > 0 };
 })();
 
 App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
@@ -258,6 +240,7 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
     h('div', { class: 'timer-history' }));
   const list = panel.querySelector('.timer-history');
   const fmtMin = sec => `${Math.floor(sec / 60)}분 ${sec % 60}초`;
+  const sameLog = (a, b) => a.id || b.id ? a.id === b.id : a.at === b.at;
   const drawLogs = () => {
     const current = Store.get('timerLog', []).filter((x) => !x.deletedAt).slice().reverse();
     list.replaceChildren(...(current.length ? current.slice(0, 30).map((x) => h('div', { class: 'timer-history-row' },
@@ -265,7 +248,7 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
         h('summary', null, h('b', null, x.title || (x.mode === 'up' ? '스톱워치' : '타이머')), h('span', null, `${x.date} · ${fmtMin(x.sec)}`)),
         x.laps?.length ? h('ol', { class: 'timer-laps' }, x.laps.map((lap, i) => h('li', null, `${i + 1}구간 ${fmtMin(lap.sec)} · 누적 ${fmtMin(lap.total)}`))) : h('p', { class: 'muted' }, '저장된 구간이 없어요.')),
       h('button', { class: 'timer-log-delete', type: 'button', 'aria-label': '기록 휴지통으로 이동', onclick: () => {
-        Store.set('timerLog', Store.get('timerLog', []).map((log) => log.at === x.at ? { ...log, deletedAt: Date.now() } : log)); drawLogs();
+        Store.set('timerLog', Store.get('timerLog', []).map((log) => sameLog(log, x) ? { ...log, deletedAt: Date.now() } : log)); drawLogs();
       } }, '×'))) : [h('p', { class: 'muted' }, '아직 타이머 기록이 없어요.') ]));
   };
   drawLogs();
@@ -276,11 +259,11 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
       body.replaceChildren(...(deleted.length ? deleted.map((x) => h('div', { class: 'timer-trash-row' },
         h('span', null, `${x.title || '학습'} · ${x.date} · ${fmtMin(x.sec)}`),
         h('button', { class: 'btn ghost', type: 'button', onclick: () => {
-          Store.set('timerLog', Store.get('timerLog', []).map((log) => log.at === x.at ? { ...log, deletedAt: null } : log)); refresh(); drawLogs();
+          Store.set('timerLog', Store.get('timerLog', []).map((log) => sameLog(log, x) ? { ...log, deletedAt: null } : log)); refresh(); drawLogs();
         } }, '복원'),
         h('button', { class: 'btn danger', type: 'button', onclick: () => {
           if (!confirm('이 기록을 영구 삭제할까요?')) return;
-          Store.set('timerLog', Store.get('timerLog', []).filter((log) => log.at !== x.at)); refresh();
+          Store.set('timerLog', Store.get('timerLog', []).filter((log) => !sameLog(log, x))); refresh();
         } }, '영구 삭제'))) : [h('p', { class: 'muted' }, '휴지통이 비어 있어요.') ]));
     };
     refresh();

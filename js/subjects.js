@@ -44,16 +44,22 @@ const Subjects = (() => {
         `선생님 관리 (${(Store.get('subjectTeachers', {})[name] || []).length})`);
       const roomOptions = [...new Set([...(Store.get('subjectRoomOptions', {})[name] || []), ...(Store.get('subjectRooms', {})[name] ? [Store.get('subjectRooms', {})[name]] : [])])];
       const roomButton = h('button', { class: 'btn teacher-manage', type: 'button', onclick: () => manageOptions(name, roomButton, 'room') }, `교실 관리 (${roomOptions.length})`);
+      const family = h('select', { 'aria-label': `${name} 교과군` },
+        h('option', { value: '' }, `자동: ${Curriculum2022.find(name)?.family || '기타'}`),
+        Curriculum2022.families.map((value) => h('option', { value, selected: Store.get('subjectFamilies', {})[name] === value }, value)));
       const automatic = h('input', { type: 'checkbox', checked: !Object.hasOwn(Store.get('subjectColors', {}), name) });
       const save = () => {
         const colors = Store.get('subjectColors', {});
         if (automatic.checked) delete colors[name]; else colors[name] = color.value;
         Store.set('subjectColors', colors);
+        const families = Store.get('subjectFamilies', {});
+        if (family.value) families[name] = family.value; else delete families[name];
+        Store.set('subjectFamilies', families);
         Store.set('subjectCatalog', [...new Set([...catalog(), name])].sort());
         App.toast('과목 설정을 저장했어요.');
       };
-      return h('div', { class: 'subject-row panel' }, h('strong', null, name), color,
-        h('label', { class: 'check' }, automatic, '자동 색상'), teacherButton, roomButton,
+      return h('div', { class: 'subject-row panel' }, h('strong', null, name), family, color,
+        h('label', { class: 'check' }, '자동 색상', automatic), teacherButton, roomButton,
         h('button', { class: 'btn', type: 'button', onclick: save }, '저장'),
         h('button', { class: 'btn danger', type: 'button', onclick: () => {
           if (!confirm(`${name} 과목을 현재 시간표에서 지울까요? 이미 기록된 수업·성적은 유지돼요.`)) return;
@@ -61,17 +67,20 @@ const Subjects = (() => {
           if (tt?.cells) { tt.cells.forEach((day) => day.forEach((cell, i) => { if (cell?.subject === name) day[i] = null; })); Store.set('timetable', tt); }
           Store.set('subjectCatalog', catalog().filter((value) => value !== name));
           Store.set('hiddenSubjects', [...new Set([...Store.get('hiddenSubjects', []), name])]);
-          const colors = Store.get('subjectColors', {}), rooms = Store.get('subjectRooms', {}), teachers = Store.get('subjectTeachers', {}), roomOptions = Store.get('subjectRoomOptions', {}); delete colors[name]; delete rooms[name]; delete teachers[name]; delete roomOptions[name];
-          Store.set('subjectColors', colors); Store.set('subjectRooms', rooms); Store.set('subjectTeachers', teachers); Store.set('subjectRoomOptions', roomOptions); draw();
+          const colors = Store.get('subjectColors', {}), families = Store.get('subjectFamilies', {}), rooms = Store.get('subjectRooms', {}), teachers = Store.get('subjectTeachers', {}), roomOptions = Store.get('subjectRoomOptions', {}); delete colors[name]; delete families[name]; delete rooms[name]; delete teachers[name]; delete roomOptions[name];
+          Store.set('subjectColors', colors); Store.set('subjectFamilies', families); Store.set('subjectRooms', rooms); Store.set('subjectTeachers', teachers); Store.set('subjectRoomOptions', roomOptions); draw();
         } }, '과목 삭제'));
     }));
     const input = h('input', { type: 'text', placeholder: '새 과목 이름', maxLength: 50 });
     root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '과목 관리'),
-      h('div', { class: 'set-row' }, input, h('button', { class: 'btn primary', type: 'button', onclick: () => {
+      h('div', { class: 'subject-add-row' }, input, h('button', { class: 'btn primary', type: 'button', onclick: () => {
         const name = input.value.trim(); if (!name) return App.toast('과목 이름을 입력해 주세요.');
         Store.set('subjectCatalog', [...new Set([...catalog(), name])].sort());
         Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((value) => value !== name)); input.value = ''; draw();
-      } }, '과목 추가')),
+      } }, '과목 추가'), h('button', { class: 'btn ghost', type: 'button', onclick: () => Curriculum2022.pick((row) => {
+        Store.set('subjectCatalog', [...new Set([...catalog(), row.name])].sort((a, b) => a.localeCompare(b, 'ko')));
+        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name)); draw();
+      }) }, '공식 과목에서 선택')),
       h('p', { class: 'hint' }, '색상과 과목별 선생님·교실을 관리해요. 시간표에서는 저장한 이름을 선택할 수 있어요. 과목을 삭제해도 과거 기록은 유지합니다.'), list));
     draw();
   }

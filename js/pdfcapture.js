@@ -27,10 +27,14 @@ const PdfCapture = (() => {
     const img = new Image();
     const canvas = h('canvas', { class: 'ed-canvas' });
     const wrap = h('div', { class: 'ed-wrap' }, canvas);
+    const guides = DrawTools.guideControls(wrap, canvas);
+    const touchPointers = new Set();
     const ctx = canvas.getContext('2d');
     const ann = JSON.parse(JSON.stringify(rec.ann || []));
     const undone = [];
+    let clearPending = false;
     const tool = { name: 'pen', color: '#e53935', size: 4 };
+    const opacity = h('input', { type: 'range', min: 5, max: 100, value: 100, 'aria-label': '펜 불투명도' });
     const background = h('input', { type: 'color', value: rec.background || '#ffffff', 'aria-label': '배경색' });
     const drawingWidth = h('input', { type: 'number', min: 400, max: 4000, step: 100, 'aria-label': '오답 그림 너비' });
     const drawingHeight = h('input', { type: 'number', min: 300, max: 4000, step: 100, 'aria-label': '오답 그림 높이' });
@@ -38,13 +42,22 @@ const PdfCapture = (() => {
     let ta = null;
     let selection = null, clipboard = null, selectedPatch = null;
     const patchImages = new Map();
+    let fillCache = null, fillCount = 0, fillTail = null, fillBackground = '';
+    const invalidateFill = () => { fillCache = null; fillCount = 0; fillTail = null; };
+    const rememberFill = (count, tail) => {
+      if (!fillCache || fillCache.width !== canvas.width || fillCache.height !== canvas.height) fillCache = document.createElement('canvas');
+      fillCache.width = canvas.width; fillCache.height = canvas.height;
+      fillCache.getContext('2d').drawImage(canvas, 0, 0);
+      fillCount = count; fillTail = tail; fillBackground = background.value;
+    };
 
     const K = () => Math.min(4, Math.max(1, canvas.width / 700));
     const fontPx = (s) => (s * 3 + 10) * K();
 
     function drawAnn(a) {
+      if (a.t === 'fill') { DrawTools.floodFill(ctx, a.p[0][0], a.p[0][1], a.c, a.alpha ?? 1); return; }
       if (['pen', 'marker', 'eraser'].includes(a.t)) {
-        ctx.globalAlpha = a.t === 'marker' ? .3 : 1;
+        ctx.globalAlpha = a.alpha ?? (a.t === 'marker' ? .3 : 1);
         ctx.strokeStyle = a.t === 'eraser' ? background.value : a.c;
         ctx.lineWidth = a.s * K();
         ctx.lineCap = 'round';
@@ -56,12 +69,12 @@ const PdfCapture = (() => {
       } else if (a.t === 'cover') {
         ctx.fillStyle = background.value; ctx.fillRect(a.x, a.y, a.w, a.h);
       } else if (a.t === 'patch') {
-        if (!patchImages.has(a.data)) { const patch = new Image(); patchImages.set(a.data, patch); patch.onload = () => redraw(); patch.src = a.data; }
+        if (!patchImages.has(a.data)) { const patch = new Image(); patchImages.set(a.data, patch); patch.onload = () => { invalidateFill(); redraw(); }; patch.src = a.data; }
         const patch = patchImages.get(a.data); if (patch.complete && patch.naturalWidth) {
           ctx.save(); ctx.translate(a.x + a.w / 2, a.y + a.h / 2); ctx.rotate(a.angle || 0); ctx.drawImage(patch, -a.w / 2, -a.h / 2, a.w, a.h); ctx.restore();
         }
       } else if (['line', 'rect', 'triangle', 'ellipse'].includes(a.t)) {
-        ctx.strokeStyle = a.c; ctx.lineWidth = a.s * K(); ctx.lineCap = 'round';
+        ctx.globalAlpha = a.alpha ?? 1; ctx.strokeStyle = a.c; ctx.lineWidth = a.s * K(); ctx.lineCap = 'round';
         const [x1, y1] = a.p[0], [x2, y2] = a.p[1] || a.p[0];
         ctx.beginPath();
         if (a.t === 'line') { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); }
@@ -69,6 +82,7 @@ const PdfCapture = (() => {
         else if (a.t === 'triangle') { ctx.moveTo((x1 + x2) / 2, y1); ctx.lineTo(x2, y2); ctx.lineTo(x1, y2); ctx.closePath(); }
         else ctx.ellipse((x1 + x2) / 2, (y1 + y2) / 2, Math.max(0.01, Math.abs(x2 - x1) / 2), Math.max(0.01, Math.abs(y2 - y1) / 2), 0, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 1;
       } else {
         const fs = fontPx(a.s);
         ctx.font = `700 ${fs}px "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
@@ -84,11 +98,19 @@ const PdfCapture = (() => {
       }
     }
     function redraw(showSelection = true) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      if (rec.sourceType === 'drawing') { ctx.fillStyle = background.value; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-      else if (background.value !== '#ffffff') { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = background.value; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalCompositeOperation = 'source-over'; }
-      ann.forEach(drawAnn);
+      const cached = fillCache && fillCache.width === canvas.width && fillCache.height === canvas.height && fillBackground === background.value && ann[fillCount - 1] === fillTail;
+      if (cached) ctx.drawImage(fillCache, 0, 0);
+      else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        if (rec.sourceType === 'drawing') { ctx.fillStyle = background.value; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+        else if (background.value !== '#ffffff') { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = background.value; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalCompositeOperation = 'source-over'; }
+      }
+      for (let i = cached ? fillCount : 0; i < ann.length; i++) {
+        const a = ann[i];
+        DrawTools.drawWithSymmetry(ctx, a.symmetry, () => drawAnn(a));
+        if (a.t === 'fill') rememberFill(i + 1, a);
+      }
       if (showSelection && selection?.start) { ctx.save(); ctx.setLineDash([10, 6]); ctx.strokeStyle = '#2874e4'; ctx.lineWidth = 2 * K(); ctx.strokeRect(selection.x, selection.y, selection.w, selection.h); ctx.restore(); }
     }
     const pos = (e) => {
@@ -107,16 +129,19 @@ const PdfCapture = (() => {
       if (selectedPatch) return selectedPatch;
       const copied = captureSelection(); if (!copied) return null;
       const group = uid();
+      invalidateFill();
       ann.push({ t: 'cover', x: selection.x, y: selection.y, w: selection.w, h: selection.h, group });
       selectedPatch = { t: 'patch', data: copied.data, x: selection.x, y: selection.y, w: copied.w, h: copied.h, angle: 0, group };
       ann.push(selectedPatch); undone.length = 0; return selectedPatch;
     };
     const frame = DrawTools.selectionFrame(wrap, canvas,
       (dx, dy, start) => { const patch = promoteSelection(); if (!patch) return; patch.x = start.x + dx; patch.y = start.y + dy; selection = { ...start, x: patch.x, y: patch.y }; redraw(); frame.show(selection); },
-      (angle, start) => { const patch = promoteSelection(); if (!patch) return; patch.angle = (start.angle || 0) + angle; selection = { ...start, angle: patch.angle }; redraw(); frame.show(selection); });
+      (angle, start) => { const patch = promoteSelection(); if (!patch) return; patch.angle = (start.angle || 0) + angle; selection = { ...start, angle: patch.angle }; redraw(); frame.show(selection); },
+      (dw, dh, start) => { const patch = promoteSelection(); if (!patch) return; patch.w = Math.max(10, start.w + dw); patch.h = Math.max(10, start.h + dh); selection = { ...start, w: patch.w, h: patch.h }; redraw(); frame.show(selection); });
 
     function commitText() {
       if (!ta) return;
+      invalidateFill();
       const box = ta;
       ta = null;
       const t = box.value.replace(/\s+$/, '');
@@ -177,6 +202,7 @@ const PdfCapture = (() => {
       const idx = ann.indexOf(a);
       commitText();
       const i = ann.indexOf(a);
+      invalidateFill();
       ann.splice(i < 0 ? idx : i, 1);
       redraw();
       tool.color = a.c; tool.size = a.s;
@@ -195,6 +221,7 @@ const PdfCapture = (() => {
       if (a) editText(a); else startText(e);
     });
     canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') { touchPointers.add(e.pointerId); if (touchPointers.size > 1) { cur = null; selection = null; frame.hide(); redraw(); return; } }
       if (e.button > 0) return;
       if (tool.name === 'select') { const [x, y] = pos(e); selectedPatch = null; selection = { x, y, w: 0, h: 0, start: [x, y] }; frame.hide(); canvas.setPointerCapture(e.pointerId); redraw(); return; }
       selection = null; selectedPatch = null; frame.hide();
@@ -213,15 +240,19 @@ const PdfCapture = (() => {
       commitText();
       canvas.setPointerCapture(e.pointerId);
       const [x, y] = pos(e);
-      cur = { t: tool.name, c: tool.color, s: tool.size, p: [[x, y]] };
+      if (tool.name === 'eyedropper') { redraw(false); const pixel = ctx.getImageData(Math.max(0, Math.min(canvas.width - 1, Math.floor(x))), Math.max(0, Math.min(canvas.height - 1, Math.floor(y))), 1, 1).data; tool.color = '#' + [...pixel].slice(0, 3).map((v) => v.toString(16).padStart(2, '0')).join(''); color.value = tool.color; setTool('pen'); return; }
+      if (tool.name === 'fill') { ann.push({ t: 'fill', c: tool.color, alpha: Number(opacity.value) / 100, p: [[x, y]] }); undone.length = 0; redraw(); return; }
+      cur = { t: tool.name, c: tool.color, s: tool.size, alpha: Number(opacity.value) / 100 * (tool.name === 'marker' ? .3 : 1), symmetry: guides.symmetry(), p: [[x, y]] };
       drawAnn(cur);
     });
     canvas.addEventListener('pointermove', (e) => {
+      if (touchPointers.size > 1) return;
       if (tool.name === 'select' && selection?.start) { const [x, y] = pos(e), [sx, sy] = selection.start; Object.assign(selection, { x: Math.min(x, sx), y: Math.min(y, sy), w: Math.abs(x - sx), h: Math.abs(y - sy) }); redraw(); return; }
       if (mv) {
         const [x, y] = pos(e);
         if (!moved && Math.hypot(x - mv.sx, y - mv.sy) < 5 * K()) return;
         moved = true;
+        invalidateFill();
         mv.a.x = Math.max(0, Math.min(canvas.width - 10, x - mv.dx));
         mv.a.y = Math.max(0, Math.min(canvas.height - 10, y - mv.dy));
         canvas.style.cursor = 'grabbing';
@@ -233,17 +264,24 @@ const PdfCapture = (() => {
         return;
       }
       const [x, y] = pos(e);
+      if (guides.rulerOn() && ['pen', 'marker'].includes(cur.t)) {
+        cur.p.push(guides.project(cur.p[0], [x, y]));
+        if (cur.symmetry) { redraw(); DrawTools.drawWithSymmetry(ctx, cur.symmetry, () => drawAnn(cur)); }
+        else DrawTools.liveSegment(ctx, cur.p, cur.c, cur.s * K(), cur.alpha);
+        return;
+      }
       if (!['pen', 'marker', 'eraser'].includes(cur.t)) { cur.p[1] = [x, y]; redraw(); drawAnn(cur); return; }
       cur.p.push([x, y]);
-      DrawTools.liveSegment(ctx, cur.p, cur.t === 'eraser' ? background.value : cur.c, cur.s * K(), cur.t === 'marker' ? .3 : 1);
+      if (cur.symmetry) { redraw(); DrawTools.drawWithSymmetry(ctx, cur.symmetry, () => drawAnn(cur)); }
+      else DrawTools.liveSegment(ctx, cur.p, cur.t === 'eraser' ? background.value : cur.c, cur.s * K(), cur.alpha);
     });
     const endStroke = () => {
       if (selection?.start) { delete selection.start; if (selection.w < 2 || selection.h < 2) { selection = null; frame.hide(); } else frame.show(selection); redraw(); return; }
       if (mv) { skipClick = moved; mv = null; canvas.style.cursor = 'move'; setTimeout(() => { skipClick = false; }, 0); return; }
       if (cur) { ann.push(cur); undone.length = 0; cur = null; redraw(); }
     };
-    canvas.addEventListener('pointerup', endStroke);
-    canvas.addEventListener('pointercancel', endStroke);
+    canvas.addEventListener('pointerup', (e) => { touchPointers.delete(e.pointerId); endStroke(); });
+    canvas.addEventListener('pointercancel', (e) => { touchPointers.delete(e.pointerId); cur = null; endStroke(); });
 
     const title = h('input', { type: 'text', value: rec.title || '', placeholder: '제목 (예: 수학 3번 오답)', maxLength: 60 });
     const problemNumber = h('input', { type: 'text', value: rec.problemNumber || '', placeholder: '예: 3번, 12~14번', maxLength: 40 });
@@ -279,6 +317,7 @@ const PdfCapture = (() => {
       if (!selection || selection.w < 2 || selection.h < 2) return App.toast('먼저 영역을 드래그해 선택하세요.');
       if (action === 'copy' || action === 'cut') clipboard = captureSelection();
       if (action === 'cut' || action === 'delete') {
+        invalidateFill();
         if (selectedPatch) ann.splice(ann.indexOf(selectedPatch), 1);
         else ann.push({ t: 'cover', x: selection.x, y: selection.y, w: selection.w, h: selection.h });
         selectedPatch = null; undone.length = 0; redraw();
@@ -300,23 +339,26 @@ const PdfCapture = (() => {
         if ('h' in a) a.h *= sy;
       });
       canvas.width = w; canvas.height = h; drawingWidth.value = w; drawingHeight.value = h;
+      invalidateFill();
       const blank = document.createElement('canvas'); blank.width = w; blank.height = h;
       blank.getContext('2d').fillStyle = '#ffffff'; blank.getContext('2d').fillRect(0, 0, w, h);
       rec.base = blank.toDataURL('image/png');
       selection = null; selectedPatch = null; frame.hide(); undone.length = 0; redraw();
     };
     const bar = h('div', { class: 'ed-tools' },
-      h('div', { class: 'draw-toolbar-row' }, h('div', { class: 'draw-tool-buttons' }, Object.values(toolBtns), shapePicker.el)),
+      h('div', { class: 'draw-toolbar-row' }, h('div', { class: 'draw-tool-buttons' }, Object.values(toolBtns), shapePicker.el), DrawTools.zoomControls(wrap, canvas)),
+      h('div', { class: 'draw-toolbar-row' }, guides.el),
       h('div', { class: 'draw-toolbar-row' },
       h('label', { class: 'creative-color-label' }, '펜 색', color), quick, h('label', { class: 'size' }, '크기', size),
+      h('label', { class: 'creative-color-label' }, '불투명도', opacity),
       h('label', { class: 'creative-color-label' }, '보드 색', background),
       rec.sourceType === 'drawing' ? h('label', { class: 'creative-size-label' }, '너비', drawingWidth) : null,
       rec.sourceType === 'drawing' ? h('label', { class: 'creative-size-label' }, '높이', drawingHeight) : null,
       rec.sourceType === 'drawing' ? h('button', { class: 'btn', type: 'button', onclick: resizeDrawing }, '크기 적용') : null),
       h('div', { class: 'draw-toolbar-row' },
-      h('button', { type: 'button', class: 'btn', title: '이전', 'aria-label': '이전', onclick: () => { commitText(); if (ann.length) { const last = ann.pop(), batch = [last]; if (last.group && ann.at(-1)?.group === last.group) batch.unshift(ann.pop()); undone.push(batch); selection = null; selectedPatch = null; frame.hide(); } redraw(); } }, '↶'),
-      h('button', { type: 'button', class: 'btn', title: '이후', 'aria-label': '이후', onclick: () => { if (undone.length) ann.push(...undone.pop()); redraw(); } }, '↷'),
-      h('button', { type: 'button', class: 'btn ghost', onclick: () => { if (ann.length && confirm('쓴 내용을 모두 지울까요?')) { commitText(); ann.length = 0; redraw(); } } }, '모두 지우기')));
+      h('button', { type: 'button', class: 'btn', title: '이전', 'aria-label': '이전', onclick: () => { commitText(); if (clearPending && undone.at(-1)?.clear) { ann.push(...undone.at(-1).clear); clearPending = false; } else if (ann.length) { const last = ann.pop(), batch = [last]; if (last.group && ann.at(-1)?.group === last.group) batch.unshift(ann.pop()); undone.push(batch); selection = null; selectedPatch = null; frame.hide(); } redraw(); } }, sv('svg', { viewBox: '0 0 24 24', class: 'draw-history-icon', 'aria-hidden': 'true' }, sv('path', { d: 'M9 7 4 12l5 5M4 12h10a6 6 0 0 1 6 6', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }))),
+      h('button', { type: 'button', class: 'btn', title: '이후', 'aria-label': '이후', onclick: () => { if (undone.length) { const next = undone.pop(); if (next.clear) { ann.length = 0; clearPending = false; } else ann.push(...next); } redraw(); } }, sv('svg', { viewBox: '0 0 24 24', class: 'draw-history-icon', 'aria-hidden': 'true' }, sv('path', { d: 'm15 7 5 5-5 5m5-5H10a6 6 0 0 0-6 6', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }))),
+      h('button', { type: 'button', class: 'btn ghost', onclick: () => { commitText(); if (!ann.length) return; undone.length = 0; undone.push({ clear: ann.slice() }); clearPending = true; ann.length = 0; selection = null; selectedPatch = null; frame.hide(); redraw(); } }, '모두 지우기')));
 
     const flatten = async () => { commitText(); await Promise.all([...patchImages.values()].map((image) => image.decode().catch(() => {}))); redraw(false); return canvas.toDataURL('image/png'); };
 
@@ -350,7 +392,7 @@ const PdfCapture = (() => {
     canvas.style.cursor = 'crosshair';
     img.onload = () => { canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; drawingWidth.value = canvas.width; drawingHeight.value = canvas.height; redraw(); };
     img.src = rec.base;
-    background.addEventListener('input', redraw);
+    background.addEventListener('input', () => { invalidateFill(); redraw(); });
   }
 
   // ---------- PDF 보기 ----------

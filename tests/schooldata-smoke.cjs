@@ -30,7 +30,12 @@ const gridOnlyFloor = normalize('map', { building: '본관', floor: '4층', widt
 assert.equal(gridOnlyFloor.rooms[0].sourceCell, 'H31');
 const grade = normalize('grades', { subject: '수학', score: 88, full: 100, classRank: 3, rateA: 21 }, 0);
 assert.equal(grade.classRank, 3);
+assert.equal(grade.rank, null);
 assert.equal(grade.rateA, 21);
+const gradeWithRank = normalize('grades', { recordType: 'courseResult', subject: '수학', score: 88, full: 100, rankGrade: 2, classRank: 12, jointRank: 2 }, 0);
+assert.equal(gradeWithRank.rank, 2);
+assert.equal(gradeWithRank.classRank, 12);
+assert.equal(gradeWithRank.jointRank, 2);
 assert.equal(normalize('grades', { subject: '국어', achievement: 'A' }, 0).reportOnly, true);
 const course = normalize('grades', { recordType: 'courseResult', subject: '국어', score: 96.45, full: 100,
   achievementDistribution: { A: 28.3 }, subjectAverage: 81.3, weightPercent: 0 }, 0);

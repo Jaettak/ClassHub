@@ -84,12 +84,23 @@ const Store = (() => {
     async putImg(id, value) { if (db) { const tx = db.transaction(imgName(), 'readwrite'); tx.objectStore(imgName()).put(value, keyFor(id)); await done(tx); } else localStorage.setItem(lsPrefix(true) + id, JSON.stringify(value)); },
     async getImg(id) { if (db) return (await req(db.transaction(imgName()).objectStore(imgName()).get(keyFor(id)))) || null; try { return JSON.parse(localStorage.getItem(lsPrefix(true) + id)); } catch (_) { return null; } },
     async delImg(id) { if (db) { const tx = db.transaction(imgName(), 'readwrite'); tx.objectStore(imgName()).delete(keyFor(id)); await done(tx); } else localStorage.removeItem(lsPrefix(true) + id); },
+    async purgeExpiredTrash() {
+      const cutoff = Date.now() - 30 * 86400000;
+      for (const [key, imageKey] of [['notes', null], ['timerLog', null], ['captures', (item) => item.id], ['whiteboards', (item) => 'board-' + item.id], ['studyPages', (item) => 'study-' + item.id]]) {
+        const items = this.get(key, []);
+        if (!Array.isArray(items)) continue;
+        const expired = items.filter((item) => Number(item.deletedAt) > 0 && Number(item.deletedAt) < cutoff);
+        if (!expired.length) continue;
+        if (imageKey) for (const item of expired) await this.delImg(imageKey(item));
+        this.set(key, items.filter((item) => !expired.includes(item)));
+      }
+    },
     async exportAll() { return { app: 'ClassHub', version: 1, exportedAt: new Date().toISOString(), kv: clone(cache), img: await images() }; },
     async importAll(data) { if (!data || data.app !== 'ClassHub' || !data.kv || typeof data.kv !== 'object' || Array.isArray(data.kv)) throw new Error('ClassHub 백업 파일이 아니에요.'); await replace(data.kv, true); await replaceImages(data.img || {}); },
     async mergeAll(data) {
       if (!data || data.app !== 'ClassHub' || !data.kv || typeof data.kv !== 'object' || Array.isArray(data.kv)) throw new Error('ClassHub 백업 파일이 아니에요.');
       const next = clone(cache);
-      const maps = new Set(['subjectColors', 'subjectAutoColors', 'subjectRooms', 'subjectRoomOptions', 'subjectTeachers', 'lessonDayNotes', 'mealFavoriteNames']);
+      const maps = new Set(['subjectColors', 'subjectAutoColors', 'subjectFamilies', 'activityColorRules', 'subjectRooms', 'subjectRoomOptions', 'subjectTeachers', 'lessonDayNotes', 'mealFavoriteNames']);
       const itemId = (v) => v && typeof v === 'object' ? String(v.id ?? v.at ?? JSON.stringify(v)) : String(v);
       for (const [key, old] of Object.entries(data.kv)) {
         const current = next[key];
