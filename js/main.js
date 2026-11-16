@@ -45,6 +45,7 @@ const Home = (() => {
       h('span', { class: 'hc-ico' }, icon(c.icon)),
       h('span', { class: 'hc-text' }, h('b', null, c.title), h('small', null, c.desc)),
       h('span', { class: 'hc-go', 'aria-hidden': 'true' }, '→'))));
+    const cardFrame = h('div', { class: 'home-card-frame' }, cards);
 
     // 상자 크기는 고정하고, 내용이 많아지면 안에서 스크롤한다
     const todayBox = h('div', { class: 'side-box' },
@@ -134,7 +135,7 @@ const Home = (() => {
 
     root.append(h('button', { class: 'home-settings-btn btn', type: 'button', onclick: App.openSettings, 'aria-label': '설정 열기', title: '설정' }, icon('settings')));
     root.append(h('div', { class: 'home' },
-      cards,
+      cardFrame,
       h('aside', { class: 'home-side' },
         h('div', { class: 'home-topline' },
           !Settings.protectedTab('timetable') ? h('div', { class: 'home-schedule-preview' },
@@ -149,8 +150,8 @@ const Home = (() => {
         }) : []),
         Settings.protectedTab('calendar') ? null : todayBox)));
     sideObserver = new ResizeObserver(() => {
-      if (todayBox.isConnected && matchMedia('(min-width: 1001px)').matches) cards.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - cards.getBoundingClientRect().top)}px`;
-      else cards.style.height = '';
+      if (todayBox.isConnected && matchMedia('(min-width: 1001px)').matches) cardFrame.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - cardFrame.getBoundingClientRect().top)}px`;
+      else cardFrame.style.height = '';
       const width = todayBox.clientWidth, height = todayBox.clientHeight;
       const wide = todayBox.classList.contains('wide-pie');
       // 카드 자체의 크기를 사용한다. 그래프 모양이 바뀌어도 기준 크기는 흔들리지 않는다.

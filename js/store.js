@@ -81,17 +81,24 @@ const Store = (() => {
         else localStorage.removeItem(lsPrefix() + key);
       } else { cache[key] = clone(value); write(key, value); }
     },
-    async putImg(id, value) { if (db) { const tx = db.transaction(imgName(), 'readwrite'); tx.objectStore(imgName()).put(value, keyFor(id)); await done(tx); } else localStorage.setItem(lsPrefix(true) + id, JSON.stringify(value)); },
-    async getImg(id) { if (db) return (await req(db.transaction(imgName()).objectStore(imgName()).get(keyFor(id)))) || null; try { return JSON.parse(localStorage.getItem(lsPrefix(true) + id)); } catch (_) { return null; } },
-    async delImg(id) { if (db) { const tx = db.transaction(imgName(), 'readwrite'); tx.objectStore(imgName()).delete(keyFor(id)); await done(tx); } else localStorage.removeItem(lsPrefix(true) + id); },
+    async putImg(id, value, fromDrive = false) { if (db) { const tx = db.transaction(imgName(), 'readwrite'); tx.objectStore(imgName()).put(value, keyFor(id)); await done(tx); } else localStorage.setItem(lsPrefix(true) + id, JSON.stringify(value)); if (!fromDrive && typeof CloudDrive !== 'undefined') CloudDrive.changed(id, false); },
+    async getImg(id) {
+      let local = null;
+      if (db) local = (await req(db.transaction(imgName()).objectStore(imgName()).get(keyFor(id)))) || null;
+      else try { local = JSON.parse(localStorage.getItem(lsPrefix(true) + id)); } catch (_) {}
+      return typeof CloudDrive !== 'undefined' ? CloudDrive.read(id, local) : local;
+    },
+    async delImg(id) { if (db) { const tx = db.transaction(imgName(), 'readwrite'); tx.objectStore(imgName()).delete(keyFor(id)); await done(tx); } else localStorage.removeItem(lsPrefix(true) + id); if (typeof CloudDrive !== 'undefined') CloudDrive.changed(id, true); },
+    async imageIds() { return Object.keys(await images()); },
+    async getLocalImg(id) { if (db) return (await req(db.transaction(imgName()).objectStore(imgName()).get(keyFor(id)))) || null; try { return JSON.parse(localStorage.getItem(lsPrefix(true) + id)); } catch (_) { return null; } },
     async purgeExpiredTrash() {
       const cutoff = Date.now() - 30 * 86400000;
-      for (const [key, imageKey] of [['notes', null], ['timerLog', null], ['captures', (item) => item.id], ['whiteboards', (item) => 'board-' + item.id], ['studyPages', (item) => 'study-' + item.id]]) {
+      for (const [key, imageKey] of [['notes', (item) => (item.images || []).map((photo) => `note-${item.id}-${photo.id}`)], ['timerLog', null], ['captures', (item) => item.id], ['whiteboards', (item) => 'board-' + item.id], ['studyPages', (item) => 'study-' + item.id]]) {
         const items = this.get(key, []);
         if (!Array.isArray(items)) continue;
         const expired = items.filter((item) => Number(item.deletedAt) > 0 && Number(item.deletedAt) < cutoff);
         if (!expired.length) continue;
-        if (imageKey) for (const item of expired) await this.delImg(imageKey(item));
+        if (imageKey) for (const item of expired) for (const id of [imageKey(item)].flat()) await this.delImg(id);
         this.set(key, items.filter((item) => !expired.includes(item)));
       }
     },

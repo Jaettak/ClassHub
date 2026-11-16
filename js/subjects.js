@@ -4,10 +4,13 @@ const Subjects = (() => {
     const all = new Set(catalog());
     (Store.get('timetable', {})?.cells || []).forEach((day) => day.forEach((cell) => { if (cell?.subject) all.add(cell.subject); }));
     Store.get('grades', []).forEach((row) => { if (row.subject) all.add(row.subject); });
+    Store.get('schoolReportExtras', []).forEach((row) => { if (row.subject || row.sourceDetails?.subject) all.add(row.subject || row.sourceDetails.subject); });
     Store.get('captures', []).forEach((row) => { if (row.subject) all.add(row.subject); });
     const hidden = new Set(Store.get('hiddenSubjects', []));
     return [...all].filter((name) => !hidden.has(name)).sort((a, b) => a.localeCompare(b, 'ko'));
   };
+  const timetableNames = () => new Set((Store.get('timetable', {})?.cells || [])
+    .flatMap((day) => day || []).map((cell) => cell?.subject).filter(Boolean));
   function manageOptions(subject, button, type) {
     const isRoom = type === 'room';
     const key = isRoom ? 'subjectRoomOptions' : 'subjectTeachers';
@@ -38,7 +41,13 @@ const Subjects = (() => {
   }
   function render(root) {
     const list = h('div', { class: 'subject-list' });
-    const draw = () => list.replaceChildren(...names().map((name) => {
+    const view = h('select', { 'aria-label': '과목 목록 보기' },
+      h('option', { value: 'timetable' }, '시간표 과목만'),
+      h('option', { value: 'all' }, '전체 과목'));
+    const draw = () => {
+      const active = timetableNames();
+      const shown = view.value === 'timetable' ? names().filter((name) => active.has(name)) : names();
+      list.replaceChildren(...(shown.length ? shown.map((name) => {
       const color = h('input', { type: 'color', value: colorFor(name), 'aria-label': `${name} 색상` });
       const teacherButton = h('button', { class: 'btn teacher-manage', type: 'button', onclick: () => manageOptions(name, teacherButton, 'teacher') },
         `선생님 관리 (${(Store.get('subjectTeachers', {})[name] || []).length})`);
@@ -70,17 +79,22 @@ const Subjects = (() => {
           const colors = Store.get('subjectColors', {}), families = Store.get('subjectFamilies', {}), rooms = Store.get('subjectRooms', {}), teachers = Store.get('subjectTeachers', {}), roomOptions = Store.get('subjectRoomOptions', {}); delete colors[name]; delete families[name]; delete rooms[name]; delete teachers[name]; delete roomOptions[name];
           Store.set('subjectColors', colors); Store.set('subjectFamilies', families); Store.set('subjectRooms', rooms); Store.set('subjectTeachers', teachers); Store.set('subjectRoomOptions', roomOptions); draw();
         } }, '과목 삭제'));
-    }));
+      }) : [h('p', { class: 'muted' }, view.value === 'timetable'
+        ? '현재 내 시간표에 배치된 과목이 없어요. 전체 과목에서 과목을 관리할 수 있어요.'
+        : '등록된 과목이 없어요. 위에서 새 과목을 추가할 수 있어요.')]));
+    };
+    view.addEventListener('change', draw);
     const input = h('input', { type: 'text', placeholder: '새 과목 이름', maxLength: 50 });
     root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '과목 관리'),
       h('div', { class: 'subject-add-row' }, input, h('button', { class: 'btn primary', type: 'button', onclick: () => {
         const name = input.value.trim(); if (!name) return App.toast('과목 이름을 입력해 주세요.');
         Store.set('subjectCatalog', [...new Set([...catalog(), name])].sort());
-        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((value) => value !== name)); input.value = ''; draw();
+        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((value) => value !== name)); input.value = ''; view.value = 'all'; draw();
       } }, '과목 추가'), h('button', { class: 'btn ghost', type: 'button', onclick: () => Curriculum2022.pick((row) => {
         Store.set('subjectCatalog', [...new Set([...catalog(), row.name])].sort((a, b) => a.localeCompare(b, 'ko')));
-        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name)); draw();
+        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name)); view.value = 'all'; draw();
       }) }, '공식 과목에서 선택')),
+      App.field('과목 목록', view),
       h('p', { class: 'hint' }, '색상과 과목별 선생님·교실을 관리해요. 시간표에서는 저장한 이름을 선택할 수 있어요. 과목을 삭제해도 과거 기록은 유지합니다.'), list));
     draw();
   }

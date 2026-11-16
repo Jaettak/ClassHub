@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.2.0';
+const CLASSHUB_VERSION = 'v2.3.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -61,10 +61,19 @@ function sv(tag, attrs, ...kids) {
   return e;
 }
 
+function helpIcon() {
+  return sv('svg', { class: 'help-icon', viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+    sv('circle', { cx: 12, cy: 12, r: 10, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6 }),
+    sv('g', { transform: 'translate(12 12) scale(.84) translate(-12 -12)' },
+      sv('path', { d: 'M9.25 9.25a2.85 2.85 0 1 1 4.45 2.35c-1.2.83-1.7 1.25-1.7 2.7', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+      sv('circle', { cx: 12, cy: 17.45, r: 1.05, fill: 'currentColor' })));
+}
+
 const App = (() => {
   const views = {};
   const ORDER = ['home', 'grades', 'calendar', 'notes', 'timetable', 'meals', 'timer', 'wrong', 'study', 'activities', 'subjects', 'whiteboard', 'schoolmap', 'settings'];
   let current = null;
+  let expandedNavHeight = 0;
   const modalStack = [];
 
   function registerView(name, def) {
@@ -84,7 +93,7 @@ const App = (() => {
     container.querySelectorAll('p.hint').forEach((hint) => {
       if (!hint.textContent.trim()) return;
       const help = h('details', { class: 'context-help' },
-        h('summary', null, '도움말'), h('div', null, ...Array.from(hint.childNodes)));
+        h('summary', null, helpIcon(), '도움말'), h('div', null, ...Array.from(hint.childNodes)));
       hint.replaceWith(help);
     });
   }
@@ -124,7 +133,7 @@ const App = (() => {
 
   function field(label, input, hint) {
     return h('div', { class: 'field' }, h('label', { class: 'field-label' }, h('span', null, label), input),
-      hint ? h('details', { class: 'context-help' }, h('summary', null, '도움말'), h('div', null, hint)) : null);
+      hint ? h('details', { class: 'context-help' }, h('summary', null, helpIcon(), '도움말'), h('div', null, hint)) : null);
   }
 
   // 이전에 입력한 과목 목록 (시간표 + 오답노트)
@@ -143,13 +152,15 @@ const App = (() => {
   // 기존 과목 선택 또는 새 과목 직접 입력. { el, value(), onPick(fn) }
   function subjectField(label, value, opts = {}) {
     const NEW = '__new__';
-    const list = knownSubjects();
-    if (value && !list.includes(value)) list.push(value);
+    const list = opts.managedOnly
+      ? [...new Set(Store.get('subjectCatalog', []))].filter((name) => !Store.get('hiddenSubjects', []).includes(name)).sort((a, b) => a.localeCompare(b, 'ko'))
+      : knownSubjects();
+    if (!opts.managedOnly && value && !list.includes(value)) list.push(value);
     const text = h('input', { type: 'text', placeholder: '새 과목 이름', maxLength: 20 });
     const sel = h('select', { 'aria-label': label }, [
       h('option', { value: '' }, opts.empty || '과목 선택'),
       list.map((s) => h('option', { value: s, selected: s === value }, s)),
-      h('option', { value: NEW }, '＋ 새 과목 추가'),
+      opts.managedOnly ? null : h('option', { value: NEW }, '＋ 새 과목 추가'),
     ]);
     const picks = [];
     const sync = () => {
@@ -159,7 +170,7 @@ const App = (() => {
     };
     sel.addEventListener('change', sync);
     text.hidden = true;
-    if (!list.length) { sel.value = NEW; text.hidden = false; }
+    if (!opts.managedOnly && !list.length) { sel.value = NEW; text.hidden = false; }
     const official = h('button', { class: 'btn ghost', type: 'button', onclick: () => Curriculum2022.pick((row) => {
       if (![...sel.options].some((option) => option.value === row.name)) sel.add(h('option', { value: row.name }, row.name), sel.querySelector(`option[value="${NEW}"]`));
       sel.value = row.name;
@@ -168,7 +179,7 @@ const App = (() => {
       sync();
     }) }, '공식 과목 찾기');
     return {
-      el: field(label, h('div', { class: 'subj' }, sel, text, official)),
+      el: field(label, h('div', { class: 'subj' }, sel, opts.managedOnly ? null : text, opts.managedOnly ? null : official)),
       value: () => (sel.value === NEW ? text.value.trim() : sel.value),
       onPick: (fn) => picks.push(fn),
     };
@@ -237,11 +248,28 @@ const App = (() => {
             bar.getAnimations().forEach((animation) => animation.cancel());
             if (document.body.classList.contains('nav-collapsed')) {
               document.body.classList.remove('nav-collapsed');
+              const page = app.querySelector('.page');
               const height = bar.getBoundingClientRect().height;
               const style = getComputedStyle(bar);
-              bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
+              const basePadding = Number(app.dataset.navBasePadding || 22);
+              if (page && app.classList.contains('short-view')) {
+                const pageAnimation = page.animate([{ paddingTop: `${basePadding + expandedNavHeight}px` }, { paddingTop: `${basePadding}px` }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
+                pageAnimation.onfinish = () => { page.style.paddingTop = ''; pageAnimation.cancel(); };
+              }
+              const animation = bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
             } else {
               const height = bar.getBoundingClientRect().height;
+              expandedNavHeight = height;
+              const page = app.querySelector('.page');
+              app.classList.toggle('short-view', !!page && page.scrollHeight + height < innerHeight - 50);
+              app.style.setProperty('--nav-spacer', `${height}px`);
+              if (page && app.classList.contains('short-view')) {
+                const basePadding = parseFloat(getComputedStyle(page).paddingTop) || 22;
+                app.dataset.navBasePadding = String(basePadding);
+                app.style.setProperty('--nav-base-pad', `${basePadding}px`);
+                const pageAnimation = page.animate([{ paddingTop: `${basePadding}px` }, { paddingTop: `${basePadding + height}px` }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
+                pageAnimation.onfinish = () => { page.style.paddingTop = `${basePadding + height}px`; pageAnimation.cancel(); };
+              }
               const style = getComputedStyle(bar);
               const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
               animation.onfinish = () => { document.body.classList.add('nav-collapsed'); animation.cancel(); };
@@ -256,7 +284,16 @@ const App = (() => {
         h('button', { class: 'btn primary', type: 'button', onclick: () => Settings.unlock(key, route) }, '잠금 해제')));
       else view.render(page);
       contextualHelp(page);
-      page.prepend(h('div', { class: 'view-help-row' }, h('button', { class: 'view-help', type: 'button', 'aria-label': `${view.label} 도움말`, onclick: () => modal({ title: `${view.label} 도움말`, body: h('p', { class: 'help-copy' }, HELP[key] || '') }) }, '?')));
+      page.prepend(h('div', { class: 'view-help-row' }, h('button', { class: 'view-help', type: 'button', 'aria-label': `${view.label} 도움말`, onclick: () => modal({ title: `${view.label} 도움말`, body: h('p', { class: 'help-copy' }, HELP[key] || '') }) }, helpIcon())));
+      requestAnimationFrame(() => {
+        if (!page.isConnected) return;
+        const barHeight = app.querySelector('.topbar')?.getBoundingClientRect().height || expandedNavHeight;
+        if (barHeight) expandedNavHeight = barHeight;
+        const basePadding = parseFloat(getComputedStyle(page).paddingTop) || 22;
+        app.style.setProperty('--nav-base-pad', `${basePadding}px`);
+        app.classList.toggle('short-view', page.scrollHeight + barHeight < innerHeight - 50);
+        app.style.setProperty('--nav-spacer', `${barHeight}px`);
+      });
     }
     window.scrollTo(0, 0);
   }

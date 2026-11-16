@@ -9,6 +9,7 @@ const Activities = (() => {
     reading: { label: '독서', color: '#d09347' },
     etc: { label: '기타', color: '#ff9f2e' },
   };
+  const FAMILY_COLORS = { 국어: '#e76f89', 수학: '#4f8cff', 영어: '#8f70d6', 사회: '#e8a44c', 과학: '#38b97b', 체육: '#42adae', 예술: '#c76db1', '기술·가정': '#b88358', 정보: '#5c91c9', 제2외국어: '#c5a248', 한문: '#8875b1', 교양: '#8a99ad', 기타: '#9aa8bb' };
   const filters = { q: '', type: '', sem: '', grade: '', cv: '', group: 'curriculum', order: 'desc', view: 'activities' };
 
   const load = () => Store.get('activities', []);
@@ -37,11 +38,17 @@ const Activities = (() => {
   const viewFor = (a) => recordKind(a) === 'attendance' ? 'attendance' : recordKind(a) === 'award' ? 'awards'
     : ['narrative', 'courseRecord', 'completion'].includes(recordKind(a)) ? 'source' : 'activities';
   const colorRules = () => Store.get('activityColorRules', { mode: 'type', type: {}, family: {}, subject: {} });
-  const borderColor = (a) => {
-    const rules = colorRules(), family = Curriculum2022.familyFor(a.subject), type = TYPES[a.type] ? a.type : 'etc';
-    return (rules.mode === 'subject' && rules.subject?.[a.subject]) || (rules.mode !== 'type' && rules.family?.[family]) || rules.type?.[type] || TYPES[type].color;
-  };
   const subjectsOf = (a) => Array.isArray(a.subjects) && a.subjects.length ? a.subjects.filter(Boolean) : a.subject ? [a.subject] : [];
+  const borderColor = (a, context = {}) => {
+    const rules = colorRules(), subject = context.subject || subjectsOf(a)[0] || '';
+    if (rules.mode === 'subject') return subject ? rules.subject?.[subject] || colorFor(subject) : FAMILY_COLORS.기타;
+    if (rules.mode === 'family') {
+      const family = context.family || (subject ? Curriculum2022.familyFor(subject) : '기타');
+      return rules.family?.[family] || FAMILY_COLORS[family] || FAMILY_COLORS.기타;
+    }
+    const type = TYPES[a.type] ? a.type : 'etc';
+    return rules.type?.[type] || TYPES[type].color;
+  };
   const typeLabel = (a) => a.sourceSchoolImport && a.type === 'perf' && !/수행평가|수행 평가/.test([a.title, a.desc, a.sourceDetails?.type, a.sourceDetails?.assessmentName].join(' '))
     ? '종류 미확인' : (TYPES[a.type] || TYPES.etc).label;
 
@@ -144,9 +151,9 @@ const Activities = (() => {
     return list;
   }
 
-  function card(a, after) {
+  function card(a, after, context) {
     const recorded = a.cvDone || a.sourceSchoolImport && a.reportStatus !== 'notProvided';
-    return h('button', { type: 'button', class: 'act-card', style: { '--c': borderColor(a) }, onclick: () => {
+    return h('button', { type: 'button', class: 'act-card', style: { '--c': borderColor(a, context) }, onclick: () => {
       const dialog = App.modal({ title: a.title, wide: true, body: [
         h('p', null, `${typeLabel(a)} · ${a.date || '날짜 없음'} · ${semLabel(a)}`),
         subjectsOf(a).length ? h('p', null, `관련 과목: ${subjectsOf(a).join(', ')}`) : null,
@@ -168,11 +175,16 @@ const Activities = (() => {
   function attendanceCard(a) {
     const report = a.sourceDetails?.attendance || {};
     const cell = (label, values) => h('tr', null, h('th', null, label), ...['illness', 'unexcused', 'other'].map((key) => h('td', null, values?.[key] ?? '—')));
-    return h('section', { class: 'gr-card act-attendance' }, h('h3', null, a.grade ? `${a.grade}학년 출결` : '학년 미상 출결'),
+    const counts = ['absence', 'late', 'earlyLeave', 'classExit'].flatMap((kind) => ['illness', 'unexcused', 'other'].map((key) => report[kind]?.[key]));
+    const perfect = /개근/.test(report.remarks || '') || report.schoolDays != null && counts.every((value) => value != null && Number(value) === 0);
+    return h('section', { class: 'gr-card act-attendance' }, h('div', { class: 'act-attendance-head' }, h('h3', null, a.grade ? `${a.grade}학년 출결` : '학년 미상 출결'), perfect ? h('span', { class: 'act-perfect-icon', title: '개근', 'aria-label': '개근' },
+      sv('svg', { viewBox: '0 0 40 24', 'aria-hidden': 'true' },
+        sv('rect', { x: 1, y: 2, width: 38, height: 20, rx: 10, fill: '#77869b' }),
+        sv('text', { x: 20, y: 12.3, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: '#fff', 'font-size': 10.2, 'font-weight': 800, 'font-family': 'system-ui, sans-serif' }, '개근'))) : null),
       h('p', null, '수업 일수: ', h('strong', null, report.schoolDays ?? '미기재'), report.schoolDays != null ? '일' : ''),
       h('div', { class: 'gr-scroll' }, h('table', { class: 'gr-table' }, h('thead', null, h('tr', null, ['구분', '질병', '미인정', '기타'].map((name) => h('th', null, name)))),
         h('tbody', null, cell('결석', report.absence), cell('지각', report.late), cell('조퇴', report.earlyLeave), cell('결과', report.classExit)))),
-      report.remarks ? h('p', null, report.remarks) : null);
+      report.remarks && report.remarks.trim() !== '개근' ? h('p', null, report.remarks) : null);
   }
 
   function render(root) {
@@ -202,9 +214,24 @@ const Activities = (() => {
       }
       if (filters.view === 'attendance') { listBox.append(...list.sort((a, b) => Number(a.grade || 0) - Number(b.grade || 0)).map(attendanceCard)); return; }
       if (filters.view === 'awards') { listBox.append(h('div', { class: 'act-grid' }, list.map((a) => card(a, redraw)))); return; }
-      if (filters.view === 'source') { listBox.append(...list.map((a) => h('details', { class: 'school-source-detail' },
-        h('summary', null, `${a.grade ? `${a.grade}학년 ` : ''}${a.semester ? `${a.semester}학기 ` : ''}${a.title}`),
-        h('p', null, a.cv || a.desc || '원문은 아래에서 확인하세요.'), h('pre', null, JSON.stringify(a.sourceDetails || a, null, 2))))); return; }
+      if (filters.view === 'source') {
+        const groups = new Map();
+        list.forEach((a) => {
+          const grade = a.grade ? `${a.grade}학년` : '학년 미상';
+          const section = a.sourceDetails?.section || a.sourceDetails?.recordType || '기타';
+          const key = `${grade} · ${section}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(a);
+        });
+        [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, 'ko', { numeric: true })).forEach(([name, items]) => {
+          listBox.append(h('details', { class: 'act-source-group' }, h('summary', null, `${name} · ${items.length}개`),
+            ...items.sort((a, b) => Number(a.semester || 0) - Number(b.semester || 0) || String(a.title).localeCompare(String(b.title), 'ko')).map((a) => h('details', { class: 'school-source-detail' },
+              h('summary', null, `${a.semester ? `${a.semester}학기 · ` : ''}${a.title}`),
+              h('p', null, a.cv || a.desc || '기록된 내용이 없어요.'),
+              h('details', { class: 'school-source-detail' }, h('summary', null, '가져온 자료의 세부 항목'), h('pre', null, JSON.stringify(a.sourceDetails || a, null, 2)))))));
+        });
+        return;
+      }
       if (filters.group === 'none') {
         listBox.append(h('div', { class: 'act-grid' }, list.map((a) => card(a, redraw))));
         return;
@@ -229,7 +256,7 @@ const Activities = (() => {
             if (family === '기타') names.push('과목 없음');
             return detail(`grade:${grade}/family:${family}`, family, names.map((name) => {
               const rows = familyItems.filter((a) => name === '과목 없음' ? !subjectsOf(a).length : subjectsOf(a).includes(name));
-              return detail(`grade:${grade}/family:${family}/subject:${name}`, name, [h('div', { class: 'act-grid' }, rows.map((a) => card(a, redraw)))], rows.length);
+              return detail(`grade:${grade}/family:${family}/subject:${name}`, name, [h('div', { class: 'act-grid' }, rows.map((a) => card(a, redraw, { family, subject: name === '과목 없음' ? '' : name })))], rows.length);
             }), familyItems.length);
           }), gradeItems.length));
         });
@@ -253,7 +280,7 @@ const Activities = (() => {
         if (!event.currentTarget.isConnected) return;
         if (event.currentTarget.open) expanded.add(g.key); else expanded.delete(g.key);
       } }, h('summary', null, g.key, h('small', null, ` ${g.items.length}개`)),
-      h('div', { class: 'act-grid' }, g.items.map((a) => card(a, redraw))))));
+      h('div', { class: 'act-grid' }, g.items.map((a) => card(a, redraw, filters.group === 'subject' ? { subject: g.key === '과목 없음' ? '' : g.key } : undefined))))));
     };
 
     const sel = (key, opts) => h('select', { onchange: (e) => { filters[key] = e.target.value; redraw(); } },
@@ -266,10 +293,12 @@ const Activities = (() => {
       const rows = h('div', { class: 'act-color-rows' });
       const draw = () => {
         draft.mode = mode.value;
-        const names = mode.value === 'type' ? Object.keys(TYPES) : mode.value === 'family' ? [...Curriculum2022.families, '기타'] : [...new Set([...Store.get('subjectCatalog', []), ...load().map((a) => a.subject).filter(Boolean)])].sort((a, b) => a.localeCompare(b, 'ko'));
+        const names = mode.value === 'type' ? Object.keys(TYPES) : mode.value === 'family'
+          ? [...new Set([...Curriculum2022.families, ...Object.values(Store.get('subjectFamilies', {})), ...load().flatMap((a) => subjectsOf(a).map(Curriculum2022.familyFor)), '기타'])]
+          : [...new Set([...Store.get('subjectCatalog', []), ...load().flatMap(subjectsOf)])].sort((a, b) => a.localeCompare(b, 'ko'));
         rows.replaceChildren(...names.map((key) => {
           const label = mode.value === 'type' ? TYPES[key].label : key;
-          const fallback = mode.value === 'type' ? TYPES[key].color : mode.value === 'subject' ? colorFor(key) : '#9aa8bb';
+          const fallback = mode.value === 'type' ? TYPES[key].color : mode.value === 'subject' ? colorFor(key) : FAMILY_COLORS[key] || FAMILY_COLORS.기타;
           const color = h('input', { type: 'color', value: draft[mode.value][key] || fallback, 'aria-label': `${label} 테두리 색`, onchange: (event) => { draft[mode.value][key] = event.target.value; } });
           return h('label', { class: 'act-color-row' }, label, color);
         }));
@@ -302,7 +331,7 @@ const Activities = (() => {
   }
 
   const stats = () => { const all = load().filter((a) => viewFor(a) === 'activities'); return { total: all.length, todo: all.filter((a) => !a.cvDone && !a.sourceSchoolImport).length }; };
-  return { render, stats };
+  return { render, stats, borderColor };
 })();
 
 App.registerView('activities', { label: '활동 관리', icon: 'activities', render: Activities.render });

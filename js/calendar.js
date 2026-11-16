@@ -22,6 +22,7 @@ const Calendar = (() => {
   };
   const longDate = (d) => `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`;
   const range = (e) => (e.start === e.end ? e.start : `${e.start}–${e.end}`);
+  const eventMemo = (e) => e.sourceSchoolImport ? String(e.memo || '').replace(/^학사(?:\s*·\s*|$)/, '').trim() : e.memo || '';
   const blank = (ds, hr) => ({ date: ds, start: `${pad(hr)}:00`, end: hr >= 23 ? '23:59' : `${pad(hr + 1)}:00`, color: COLORS[0] });
   const fmtMin = (m) => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ''}` : `${m}분`);
 
@@ -101,12 +102,9 @@ const Calendar = (() => {
   };
 
   function manageExams(after = () => {}) {
-    let activeKind = 'school';
     const body = h('div', { class: 'exam-list' });
-    const kinds = h('div', { class: 'school-tabs' }, [['school', '내신'], ['mock', '모의고사']].map(([kind, label]) => h('button', { class: 'btn', type: 'button', onclick: () => { activeKind = kind; drawList(); } }, label)));
     const drawList = () => {
-      [...kinds.children].forEach((button, index) => button.classList.toggle('active', (index === 0 ? 'school' : 'mock') === activeKind));
-      const visible = exams().filter((exam) => (exam.kind || 'school') === activeKind);
+      const visible = exams();
       body.replaceChildren(...(visible.length ? visible.map((exam) => h('div', { class: 'exam-list-row' },
       h('span', null, `${exam.title} · ${exam.start}${exam.start === exam.end ? '' : ` ~ ${exam.end}`}`),
       h('button', { class: 'btn', type: 'button', onclick: () => editExam(exam, () => { drawList(); after(); }) }, '수정'),
@@ -116,7 +114,7 @@ const Calendar = (() => {
       } }, '삭제'))) : [h('p', { class: 'muted' }, '등록된 시험이 없어요.') ]));
     };
     drawList();
-    App.modal({ title: '시험 관리', wide: true, body: [kinds, body], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => editExam({ kind: activeKind }, () => { drawList(); after(); }) }, '＋ 시험 추가') ] });
+    App.modal({ title: '시험 관리', wide: true, body, footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => editExam({ kind: 'school' }, () => { drawList(); after(); }) }, '＋ 시험 추가') ] });
   }
 
   function editExam(source, after) {
@@ -137,7 +135,9 @@ const Calendar = (() => {
       const time = validExamTime(row.start || slot.start || ''), endTime = validExamTime(row.end || slot.end || '');
       const begin = h('input', { type: 'time', value: time, 'aria-label': '시작 시간' });
       const finish = h('input', { type: 'time', value: endTime, 'aria-label': '끝 시간' });
-      const line = h('div', { class: 'exam-subject-row' }, period, subject, room, begin, finish,
+      const line = h('div', { class: 'exam-subject-row' }, period, subject, room,
+        h('label', { class: 'exam-time-field' }, h('span', null, '시작'), begin),
+        h('label', { class: 'exam-time-field' }, h('span', null, '종료'), finish),
         h('button', { class: 'btn ghost', type: 'button', 'aria-label': '이 시험 과목 삭제', onclick: () => { line.remove(); dateRows.set(ds, dateRows.get(ds).filter((x) => x.line !== line)); } }, '×'));
       dateRows.get(ds).push({ line, period, subject, room, begin, finish });
       daysBox.querySelector(`[data-date="${ds}"] .exam-subjects`).append(line);
@@ -294,7 +294,7 @@ const Calendar = (() => {
     drawDateList();
     const start = h('input', { type: 'time', value: src.start });
     const end = h('input', { type: 'time', value: src.end });
-    const memo = h('textarea', { rows: 3, placeholder: '장소, 준비물, 메모 등', value: src.memo || '' });
+    const memo = h('textarea', { rows: 3, placeholder: '장소, 준비물, 메모 등', value: eventMemo(src) });
     const room = h('input', { type: 'text', value: src.room || '', placeholder: '예: 과학실 (이 날짜에만 적용)', maxLength: 40 });
     const checkable = h('input', { type: 'checkbox', checked: src.checkable !== false });
     let color = src.color || COLORS[0];
@@ -414,6 +414,7 @@ const Calendar = (() => {
     const d = parseDate(ev.date);
     const mins = toMin(ev.end) - toMin(ev.start);
     const spent = window.Timer ? Timer.spent(ev.id, ev.date) : 0;
+    const shownMemo = eventMemo(ev);
     const chk = h('input', { type: 'checkbox', checked: !!ev.done, onchange: () => { ev.done = chk.checked; setDone(ev.id, ev.date, chk.checked); after(); } });
     const m = App.modal({
       title: ev.title,
@@ -421,10 +422,11 @@ const Calendar = (() => {
         h('div', { class: 'ed-row' }, h('i', { class: 'ed-dot' }), h('b', null, longDate(d))),
         h('div', { class: 'ed-row' }, h('span', { class: 'ed-k' }, '시간'), h('span', null, range(ev) + (mins > 0 ? ` (${fmtMin(mins)})` : ''))),
         ev.room ? h('div', { class: 'ed-row' }, h('span', { class: 'ed-k' }, '교실'), h('span', null, ev.room)) : null,
+        ev.sourceSchoolImport ? h('div', { class: 'ed-row' }, h('span', { class: 'ed-k' }, '출처'), h('span', null, ev.sourceImportLabel || '학사 일정에서 가져옴')) : null,
         ev.rep ? h('div', { class: 'ed-row' }, h('span', { class: 'ed-k' }, '반복'), h('span', null, repDesc(ev))) : null,
         spent ? h('div', { class: 'ed-row' }, h('span', { class: 'ed-k' }, '공부'), h('span', null, `타이머로 ${fmtMin(spent)} 했어요`)) : null,
-        h('div', { class: 'ed-row top' }, h('span', { class: 'ed-k' }, '메모'),
-          ev.memo ? h('p', { class: 'ed-memo' }, ev.memo) : h('p', { class: 'muted' }, '적어 둔 메모가 없어요.')),
+        !ev.sourceSchoolImport || shownMemo ? h('div', { class: 'ed-row top' }, h('span', { class: 'ed-k' }, '메모'),
+          shownMemo ? h('p', { class: 'ed-memo' }, shownMemo) : h('p', { class: 'muted' }, '적어 둔 메모가 없어요.')) : null,
         ev.checkable !== false ? h('label', { class: 'check ed-done' }, chk, '완료했어요') : null),
       footer: [
         h('button', { class: 'btn danger', type: 'button', onclick: () => removeEvent(ev, after, m.close) }, '삭제'),
@@ -437,7 +439,9 @@ const Calendar = (() => {
 
   // ---------- 시간표형 보기(주간·하루) : 일정 없는 시간대는 접는다 ----------
   function timeline(days, o, redraw) {
-    const hourPx = Math.round((matchMedia('(max-width: 640px)').matches ? 38 : HP) * (days.length === 7 ? weekScale : 1));
+    const hourPx = matchMedia('(max-width: 640px)').matches ? 38 : HP;
+    const scale = days.length === 7 ? 'var(--week-scale, 1)' : '1';
+    const scaled = (pixels) => `calc(${pixels}px * ${scale})`;
     const today = todayStr();
     const per = days.map((d) => layout(byDate(dateStr(d))));
     const used = new Set();
@@ -484,24 +488,24 @@ const Calendar = (() => {
           `${pad(sg.a)}:00 ~ ${pad(sg.b)}:00 · 일정 없음 · 눌러서 펼치기`));
         return;
       }
-      const labels = h('div', { class: 'tl-times' }, Array.from({ length: sg.b - sg.a }, (_, i) => h('div', { class: 'tl-t', style: { height: hourPx + 'px' } }, `${pad(sg.a + i)}:00`)));
+      const labels = h('div', { class: 'tl-times' }, Array.from({ length: sg.b - sg.a }, (_, i) => h('div', { class: 'tl-t', style: { height: scaled(hourPx) } }, `${pad(sg.a + i)}:00`)));
       const cols = days.map((d, ci) => {
         const ds = dateStr(d);
-        const col = h('div', { class: 'tl-col' + (ds === today ? ' today' : ''), style: { height: (sg.b - sg.a) * hourPx + 'px' },
+        const col = h('div', { class: 'tl-col' + (ds === today ? ' today' : ''), style: { height: scaled((sg.b - sg.a) * hourPx), '--hour-line': scaled(hourPx) },
           onclick: (e) => {
             if (e.target !== col) return;
-            const hr = Math.min(sg.b - 1, sg.a + Math.floor((e.clientY - col.getBoundingClientRect().top) / hourPx));
+            const hr = Math.min(sg.b - 1, sg.a + Math.floor((e.clientY - col.getBoundingClientRect().top) / (hourPx * (days.length === 7 ? weekScale : 1))));
             editEvent(blank(ds, hr), redraw);
           } });
         per[ci].filter((x) => { const sh = Math.floor(x.s / 60); return sh >= sg.a && sh < sg.b; }).forEach((x) => {
           const hgt = Math.max(22, (x.f - x.s) / 60 * hourPx - 2);
           const open = () => showEvent(x.e, redraw);
           col.append(h('div', { role: 'button', tabIndex: 0, class: 'tl-ev' + (o.big ? ' big' : '') + (x.e.done ? ' done' : ''),
-            style: { '--c': x.e.color, top: (x.s - sg.a * 60) / 60 * hourPx + 'px', height: hgt + 'px', left: `calc(${x.lane / x.n * 100}% + 1px)`, width: `calc(${100 / x.n}% - 3px)` },
+            style: { '--c': x.e.color, top: scaled((x.s - sg.a * 60) / 60 * hourPx), height: scaled(hgt), left: `calc(${x.lane / x.n * 100}% + 1px)`, width: `calc(${100 / x.n}% - 3px)` },
             title: `${range(x.e)} ${x.e.title}`, onclick: open, onkeydown: (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(); } } },
           ckBtn(x.e, redraw, true),
-          h('b', null, x.e.schoolLesson ? `수업 · ${x.e.title}` : x.e.rep ? `↻ ${x.e.title}` : x.e.title), h('small', null, range(x.e)),
-          o.big && x.e.memo && hgt >= 70 ? h('em', null, x.e.memo) : null));
+          h('b', null, x.e.examLesson ? `시험 · ${x.e.title}` : x.e.schoolLesson ? `수업 · ${x.e.title}` : x.e.rep ? `↻ ${x.e.title}` : x.e.title), h('small', null, range(x.e)),
+          o.big && eventMemo(x.e) && hgt >= 70 ? h('em', null, eventMemo(x.e)) : null));
         });
         return col;
       });
@@ -528,7 +532,7 @@ const Calendar = (() => {
     };
 
     const svg = sv('svg', { viewBox: '0 0 420 420', class: 'pie-svg', role: 'img', 'aria-label': `${longDate(d)} 하루 일정 원 그래프` });
-    svg.append(sv('circle', { cx: C, cy: C, r: (R + r) / 2, fill: 'none', stroke: '#eef2fb', 'stroke-width': R - r }));
+    svg.append(sv('circle', { cx: C, cy: C, r: (R + r) / 2, fill: 'none', stroke: '#e3e9f3', 'stroke-width': R - r }));
     for (let k = 0; k < 24; k++) {
       const a = ang(k * 60);
       const [x0, y0] = P(r, a); const [x1, y1] = P(R, a);
@@ -593,7 +597,7 @@ const Calendar = (() => {
     const f = (n) => n.toFixed(2);
     const svg = sv('svg', { viewBox: '0 0 420 232', class: 'home-semi-svg', role: 'img', 'aria-label': `${longDate(d)} 반원 일정표` });
     const baseRadius = (outer + inner) / 2;
-    svg.append(sv('path', { d: `M${C - baseRadius} ${Y} A${baseRadius} ${baseRadius} 0 0 1 ${C + baseRadius} ${Y}`, fill: 'none', stroke: '#edf2fb', 'stroke-width': outer - inner }));
+    svg.append(sv('path', { d: `M${C - baseRadius} ${Y} A${baseRadius} ${baseRadius} 0 0 1 ${C + baseRadius} ${Y}`, fill: 'none', stroke: '#e3e9f3', 'stroke-width': outer - inner }));
     for (let k = 0; k <= 24; k += 6) {
       const [x, y] = point(outer + 23, angle(k * 60));
       svg.append(sv('text', { x: f(x), y: f(y), class: 'pie-hr', 'text-anchor': 'middle' }, `${k}시`));
@@ -708,13 +712,34 @@ const Calendar = (() => {
       const last = days[6];
       const label = h('b', { class: 'cal-label' }, `${ws.getFullYear()}년 ${ws.getMonth() + 1}월 ${ws.getDate()}일 ~ ${last.getMonth() + 1}월 ${last.getDate()}일`);
       const zoom = h('div', { class: 'week-zoom', role: 'group', 'aria-label': '주간 일정 크기' },
-        h('button', { class: 'btn', type: 'button', 'aria-label': '주간 일정 축소', onclick: () => { weekScale = Math.max(.65, Math.round((weekScale - .1) * 100) / 100); localStorage.setItem('classhub-week-scale', weekScale); drawWeek(); } }, '−'),
+        h('button', { class: 'btn', type: 'button', 'aria-label': '주간 일정 축소', onclick: () => applyZoom(weekScale - .1) }, '−'),
         h('span', null, `${Math.round(weekScale * 100)}%`),
-        h('button', { class: 'btn', type: 'button', 'aria-label': '주간 일정 확대', onclick: () => { weekScale = Math.min(1.6, Math.round((weekScale + .1) * 100) / 100); localStorage.setItem('classhub-week-scale', weekScale); drawWeek(); } }, '+'));
+        h('button', { class: 'btn', type: 'button', 'aria-label': '주간 일정 확대', onclick: () => applyZoom(weekScale + .1) }, '+'));
+      const weekScroll = h('div', { class: 'wk-scroll', style: { '--week-scale': weekScale } }, timeline(days, { head: true }, drawWeek));
+      const zoomLabel = zoom.querySelector('span');
+      const applyZoom = (value) => {
+        weekScale = Math.max(.65, Math.min(1.6, Math.round(value * 100) / 100));
+        weekScroll.style.setProperty('--week-scale', weekScale);
+        zoomLabel.textContent = `${Math.round(weekScale * 100)}%`;
+        localStorage.setItem('classhub-week-scale', weekScale);
+      };
+      let pinch = null;
+      weekScroll.addEventListener('touchstart', (event) => {
+        if (event.touches.length !== 2) return;
+        const [a, b] = event.touches;
+        pinch = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), scale: weekScale };
+      }, { passive: true });
+      weekScroll.addEventListener('touchmove', (event) => {
+        if (!pinch || event.touches.length !== 2) return;
+        event.preventDefault();
+        const [a, b] = event.touches;
+        applyZoom(pinch.scale * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / Math.max(1, pinch.distance));
+      }, { passive: false });
+      weekScroll.addEventListener('touchend', (event) => { if (event.touches.length < 2) pinch = null; });
       panel.replaceChildren(
         h('h1', { class: 'page-title' }, '일정 관리'),
         head(label, foldBtn(), zoom),
-        h('div', { class: 'wk-scroll', style: { '--week-scale': weekScale } }, timeline(days, { head: true }, drawWeek)));
+        weekScroll);
     };
 
     let dayHeightObserver;
@@ -731,7 +756,7 @@ const Calendar = (() => {
         ? h('ul', { class: 'pie-legend' }, pieEvents.map((e) => h('li', { class: e.done ? 'done' : '' },
           ckBtn(e, drawDay, true),
           h('button', { type: 'button', class: 'lg-main', style: { '--c': e.color }, onclick: () => showEvent(e, drawDay) },
-            h('i', null), h('span', { class: 'lg-t' }, range(e)), h('b', null, e.schoolLesson ? `수업 · ${e.title}` : e.rep ? `↻ ${e.title}` : e.title)))))
+            h('i', null), h('span', { class: 'lg-t' }, range(e)), h('b', null, e.examLesson ? `시험 · ${e.title}` : e.schoolLesson ? `수업 · ${e.title}` : e.rep ? `↻ ${e.title}` : e.title)))))
         : null;
       const pieCard = open
         ? h('div', { class: 'pie-card' }, h('div', { class: 'pie-card-head' }, h('b', null, '하루 일정 원 그래프'), pieBtn()), pie(focus, drawDay), legend)

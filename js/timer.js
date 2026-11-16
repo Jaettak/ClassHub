@@ -4,6 +4,11 @@ const Timer = (() => {
   let sessions = { down: null, up: null };
   const ordered = () => Object.values(sessions).filter(Boolean).sort((a, b) => (b.order || b.startedAt) - (a.order || a.startedAt));
   let dock = null;
+  let collapsedModes = {};
+  try { collapsedModes = JSON.parse(localStorage.getItem('classhub:timer-dock-modes') || '{}'); } catch (_) {}
+  const collapsedFor = (mode) => collapsedModes[mode] ?? matchMedia('(max-width: 640px)').matches;
+  let dockPosition = null;
+  try { dockPosition = JSON.parse(localStorage.getItem('classhub:timer-dock-position') || 'null'); } catch (_) {}
   let tick = null;
   let ctx = null;
   let alarmTimer = null;
@@ -123,18 +128,110 @@ const Timer = (() => {
     dock = null;
     const running = ordered();
     if (!running.length) { if (tick) clearInterval(tick); tick = null; document.title = baseTitle; return; }
-    dock = h('div', { class: 'timer-stack' }, running.map((session) => h('div', { class: 'timer-dock', 'data-mode': session.mode, role: 'timer', 'aria-live': 'off' },
+    const scrollbarWidth = Math.max(0, innerWidth - document.documentElement.clientWidth);
+    const toggleWidth = scrollbarWidth > 0 ? 30 : 22;
+    const collapseDistance = (row) => Math.max(0, document.documentElement.clientWidth - toggleWidth - row.getBoundingClientRect().left - 1);
+    const shiftRows = (change) => {
+      const before = [...cards.children].map((row) => [row, row.getBoundingClientRect().top]);
+      change();
+      before.forEach(([row, top]) => {
+        const delta = top - row.getBoundingClientRect().top;
+        if (Math.abs(delta) > 1 && row.animate) row.animate([
+          { translate: `0 ${delta}px` }, { translate: '0 0px' }
+        ], { duration: 290, easing: 'cubic-bezier(.2,.75,.25,1)' });
+      });
+    };
+    const cards = h('div', { class: 'timer-stack-cards' }, running.map((session) => {
+      const card = h('div', { class: 'timer-dock', 'data-mode': session.mode, role: 'timer', 'aria-live': 'off' },
       h('div', { class: 'tm-header' }, h('div', { class: 'tm-title' }, session.title || (session.mode === 'up' ? '스톱워치' : '타이머'))),
       h('div', { class: 'tm-time' }, fmt(shown(session))),
       h('div', { class: 'tm-btns' },
         h('button', { class: 'btn tm-play', type: 'button', onclick: () => { st = session; toggle(); } }, '일시정지'),
         session.mode === 'up' ? h('button', { class: 'btn', type: 'button', onclick: () => { st = session; lap(); } }, '구간 저장') : null,
         h('button', { class: 'btn primary', type: 'button', onclick: () => { st = session; finish(false); } }, '끝내기'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소')))));
+        session.mode === 'down' ? h('button', { class: 'btn ghost tm-cancel', type: 'button', onclick: () => { if (confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소') : null,
+        session.mode === 'up' ? h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소') : null));
+      const label = session.mode === 'up' ? '스톱워치' : '타이머';
+      const collapsed = collapsedFor(session.mode);
+      const row = h('div', { class: 'timer-dock-row' },
+        h('button', { class: 'timer-dock-toggle', type: 'button', 'aria-label': `${label} ${collapsed ? '펼치기' : '접기'}`, onclick: (event) => {
+          const next = !row.classList.contains('is-collapsed');
+          const button = event.currentTarget;
+          button.disabled = true;
+          if (next) {
+            row.style.setProperty('--collapse-x', `${collapseDistance(row)}px`);
+            row.classList.add('is-collapsed');
+            setTimeout(() => {
+              shiftRows(() => {
+                row.classList.add('is-compact');
+                cards.classList.toggle('all-collapsed', [...cards.children].every((item) => item.classList.contains('is-compact')));
+              });
+              setTimeout(() => { button.disabled = false; }, 230);
+            }, 360);
+          } else {
+            shiftRows(() => {
+              row.classList.remove('is-compact');
+              cards.classList.remove('all-collapsed');
+            });
+            setTimeout(() => {
+              row.classList.remove('is-collapsed');
+              setTimeout(() => { button.disabled = false; }, 360);
+            }, 230);
+          }
+          collapsedModes[session.mode] = next;
+          localStorage.setItem('classhub:timer-dock-modes', JSON.stringify(collapsedModes));
+          button.textContent = next ? '❮' : '❯';
+          button.setAttribute('aria-label', `${label} ${next ? '펼치기' : '접기'}`);
+        } }, collapsed ? '❮' : '❯'), card);
+      return row;
+    }));
+    dock = h('div', { class: 'timer-stack', style: { '--dock-toggle-width': `${toggleWidth}px` } }, cards);
+    function placeDock() {
+      if (!dockPosition) return;
+      const width = dock.getBoundingClientRect().width;
+      const height = dock.getBoundingClientRect().height;
+      dock.style.left = `${Math.max(0, Math.min(innerWidth - width, dockPosition.x))}px`;
+      dock.style.top = `${Math.max(0, Math.min(innerHeight - height, dockPosition.y))}px`;
+      dock.style.right = 'auto'; dock.style.bottom = 'auto';
+    }
+    cards.querySelectorAll('.tm-header').forEach((header) => {
+      header.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button')) return;
+        event.preventDefault(); header.setPointerCapture(event.pointerId);
+        const rect = dock.getBoundingClientRect();
+        const offsetX = event.clientX - rect.left, offsetY = event.clientY - rect.top;
+        dock.classList.add('is-dragging');
+        const move = (e) => {
+          dockPosition = { x: Math.max(0, Math.min(innerWidth - rect.width, e.clientX - offsetX)), y: Math.max(0, Math.min(innerHeight - rect.height, e.clientY - offsetY)) };
+          placeDock();
+        };
+        const end = () => { header.removeEventListener('pointermove', move); header.removeEventListener('pointerup', end); header.removeEventListener('pointercancel', end); dock.classList.remove('is-dragging'); localStorage.setItem('classhub:timer-dock-position', JSON.stringify(dockPosition)); };
+        header.addEventListener('pointermove', move);
+        header.addEventListener('pointerup', end);
+        header.addEventListener('pointercancel', end);
+      });
+    });
     document.body.append(dock);
+    placeDock();
+    cards.querySelectorAll('.timer-dock-row').forEach((row) => {
+      const mode = row.querySelector('.timer-dock').dataset.mode;
+      const height = row.querySelector('.timer-dock').offsetHeight;
+      row.style.height = `${height}px`;
+      row.style.setProperty('--row-height', `${height}px`);
+      row.style.setProperty('--collapse-x', `${collapseDistance(row)}px`);
+      if (collapsedFor(mode)) row.classList.add('is-collapsed', 'is-compact');
+    });
+    cards.classList.toggle('all-collapsed', [...cards.children].every((row) => row.classList.contains('is-compact')));
     if (!tick) tick = setInterval(update, 500);
     update();
   }
+
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (!dock) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(mount, 140);
+  });
 
   function lap() {
     if (!st || st.mode !== 'up') return;

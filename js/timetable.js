@@ -106,6 +106,9 @@ const Timetable = (() => {
     const breakLength = h('input', { type: 'number', min: 0, max: 120, value: t.autoTime?.rest ?? 10 });
     const lunchAfter = h('input', { type: 'number', min: 0, max: t.periods, value: t.autoTime?.after ?? t.lunch?.afterPeriod ?? Math.min(4, t.periods) });
     const lunchLength = h('input', { type: 'number', min: 0, max: 180, value: t.autoTime?.lunch ?? (t.lunch ? Math.max(0, (Number(t.lunch.end.slice(0, 2)) * 60 + Number(t.lunch.end.slice(3))) - (Number(t.lunch.start.slice(0, 2)) * 60 + Number(t.lunch.start.slice(3)))) : 60) });
+    const manualAfter = h('input', { type: 'number', min: 0, max: t.periods, value: t.lunch?.afterPeriod ?? 0 });
+    const manualStart = h('input', { type: 'time', value: t.lunch?.start || '' });
+    const manualEnd = h('input', { type: 'time', value: t.lunch?.end || '' });
     let autoLunch = null;
     let autoUsed = false;
     const autoFill = () => {
@@ -125,6 +128,9 @@ const Timetable = (() => {
         const before = inputs[after - 1].end.value;
         autoLunch = { afterPeriod: after, start: before, end: time(Number(before.slice(0, 2)) * 60 + Number(before.slice(3)) + lunch) };
       } else autoLunch = null;
+      manualAfter.value = autoLunch?.afterPeriod || 0;
+      manualStart.value = autoLunch?.start || '';
+      manualEnd.value = autoLunch?.end || '';
     };
     const m = App.modal({ title: '교시별 수업 시간', wide: true,
       body: [h('p', { class: 'hint' }, '각 교시의 시작·종료 시간을 정한 뒤 “기간 일정에 추가” 버튼을 누르면 해당 기간의 수업이 일정에 저장돼요. 비워둔 교시는 추가되지 않아요.'),
@@ -133,7 +139,11 @@ const Timetable = (() => {
           h('div', { class: 'row2' }, App.field('쉬는 시간(분)', breakLength), App.field('점심 시간(분)', lunchLength)),
           App.field('점심은 몇 교시 뒤 (0이면 없음)', lunchAfter),
           h('button', { class: 'btn', type: 'button', onclick: autoFill }, '아래 교시 시간 자동 채우기')),
-        h('div', { class: 'tt-period-times' }, inputs.map((x) => x.row))],
+        h('div', { class: 'tt-period-times' }, inputs.map((x) => x.row)),
+        h('div', { class: 'tt-auto-time' }, h('b', null, '점심시간'),
+          h('p', { class: 'hint' }, '점심시간이 없으면 0교시 뒤를 고르고 시작·끝을 비워 주세요.'),
+          App.field('몇 교시 뒤 (0이면 없음)', manualAfter),
+          h('div', { class: 'row2' }, App.field('시작', manualStart), App.field('끝', manualEnd)))],
       footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => {
           const next = inputs.map(({ start, end }) => ({ start: start.value, end: end.value }));
@@ -144,9 +154,12 @@ const Timetable = (() => {
               return;
             }
           }
+          const lunchPeriod = Number(manualAfter.value);
+          if (!Number.isInteger(lunchPeriod) || lunchPeriod < 0 || lunchPeriod > t.periods ||
+            (lunchPeriod && (!manualStart.value || !manualEnd.value || manualStart.value >= manualEnd.value))) return App.toast('점심시간을 확인해 주세요.');
           t.periodTimes = next;
+          t.lunch = lunchPeriod ? { afterPeriod: lunchPeriod, start: manualStart.value, end: manualEnd.value } : null;
           if (autoUsed) {
-            t.lunch = autoLunch;
             t.autoTime = { start: autoStart.value, lesson: Number(classLength.value), rest: Number(breakLength.value), lunch: Number(lunchLength.value), after: Number(lunchAfter.value) };
           } else if (next.some((time, index) => time.start !== draft[index].start || time.end !== draft[index].end)) t.autoTime = null;
           save(); m.close(); done(); App.toast('교시별 시간을 저장했어요. 기간을 지정해 일정에 추가해 주세요.');
@@ -156,7 +169,7 @@ const Timetable = (() => {
 
   function editCell(t, save, d, p, done) {
     const cur = t.cells[d][p] || { subject: '', teacher: '' };
-    const subject = App.subjectField('과목', cur.subject);
+    const subject = App.subjectField('과목', cur.subject, { managedOnly: true, empty: '과목 관리에서 등록한 과목 선택' });
     const teacher = h('input', { type: 'text', value: cur.teacher || Store.get('subjectTeachers', {})[cur.subject]?.[0] || '', placeholder: '직접 입력', maxLength: 20 });
     const room = h('input', { type: 'text', value: cur.room || Store.get('subjectRooms', {})[cur.subject] || '', placeholder: '직접 입력', maxLength: 40 });
     const teacherChoices = h('select', { 'aria-label': '저장한 선생님 선택', onchange: (event) => { if (event.currentTarget.value) teacher.value = event.currentTarget.value; } });
@@ -200,6 +213,7 @@ const Timetable = (() => {
     });
     function submit() {
       const s = subject.value();
+      if (!s) return App.toast('과목 관리에서 등록한 과목을 선택해 주세요.');
       t.cells[d][p] = s ? { subject: s, teacher: teacher.value.trim(), room: room.value.trim() } : null;
       if (s) {
         storeColor(s);
@@ -218,19 +232,6 @@ const Timetable = (() => {
       done();
     }
     m.el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') submit(); });
-  }
-
-  function editLunch(t, save, done) {
-    const after = h('input', { type: 'number', min: 1, max: t.periods, value: t.lunch?.afterPeriod || Math.min(4, t.periods) });
-    const start = h('input', { type: 'time', value: t.lunch?.start || '' });
-    const end = h('input', { type: 'time', value: t.lunch?.end || '' });
-    const m = App.modal({ title: '점심시간 설정', body: [App.field('몇 교시 뒤', after), h('div', { class: 'row2' }, App.field('시작', start), App.field('끝', end))],
-      footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => { t.lunch = null; save(); m.close(); done(); } }, '점심시간 제거'),
-        h('button', { class: 'btn primary', type: 'button', onclick: () => {
-          if (!start.value || !end.value || start.value >= end.value || Number(after.value) < 1 || Number(after.value) > t.periods) return App.toast('점심시간을 확인해 주세요.');
-          t.lunch = { afterPeriod: Number(after.value), start: start.value, end: end.value }; save(); m.close(); done();
-        } }, '저장')],
-    });
   }
 
   function showTerm(term) {
@@ -373,12 +374,11 @@ const Timetable = (() => {
           h('button', { class: 'btn primary', type: 'button', onclick: addPeriod }, '＋ 교시'),
           h('button', { class: 'btn', type: 'button', onclick: addDay }, '＋ 요일'),
           h('button', { class: 'btn', type: 'button', onclick: () => openPeriodTimes(t, save, draw) }, '교시별 시간 설정'),
-          h('button', { class: 'btn', type: 'button', onclick: () => editLunch(t, save, draw) }, '점심시간 설정'),
           !friend ? h('button', { class: 'btn primary', type: 'button', onclick: () => applyPeriod(t, draw) }, '기간 일정에 추가') : null,
           h('button', { class: 'btn ghost', type: 'button', onclick: reset }, '기본값으로'),
           friend ? h('button', { class: 'btn ghost', type: 'button', onclick: renameFriend }, '이름 바꾸기') : null,
           friend ? h('button', { class: 'btn danger', type: 'button', onclick: removeFriend }, '이 친구 삭제') : null),
-        friend ? h('details', { class: 'context-help' }, h('summary', null, '도움말'), h('div', null, `${friend.name}의 시간표예요. 친구 시간표는 홈·달력의 수업 표시에는 쓰이지 않아요.`)) : null,
+        friend ? h('details', { class: 'context-help' }, h('summary', null, helpIcon(), '도움말'), h('div', null, `${friend.name}의 시간표예요. 친구 시간표는 홈·달력의 수업 표시에는 쓰이지 않아요.`)) : null,
         h('div', { class: 'tt-scroll' }, h('table', { class: 'tt' }, h('thead', null, head), h('tbody', null, rows))),
         !friend && Store.get('timetableTerms', []).length ? h('div', { class: 'tt-term-list' },
           h('b', null, '적용한 기간'), Store.get('timetableTerms', []).map((term) => h('button', { class: 'btn ghost', type: 'button', onclick: () => showTerm(term) }, `${term.name} · ${term.start} ~ ${term.end}`))) : null].filter(Boolean));

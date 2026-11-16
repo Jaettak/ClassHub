@@ -1,11 +1,12 @@
 // 학교 자료와 사용자가 외부 AI로 정리한 JSON 파일 가져오기.
 const SchoolData = (() => {
-  const kinds = { calendar: '학사 일정', map: '교내 지도', timetable: '시간표', grades: '성적표', activities: '생기부·활동' };
+  const kinds = { calendar: '일정·계획', map: '교내 지도', timetable: '시간표', grades: '성적표', activities: '생기부·활동' };
   const saved = () => Store.get('schoolFiles', []);
   const samples = {
     calendar: [
       { recordType: 'event', date: '2026-04-20', dateEnd: '2026-04-24', title: '시험기간 예시', type: '시험', grades: [1, 2, 3], allDay: true, start: '', end: '', location: '', instructionDayEffect: 'normal', originalText: '시험기간 (20~24)', sourcePage: 1, sourceRow: '4월 4주' },
-      { recordType: 'event', date: '2026-09-15', dateEnd: '', title: '재량휴업 예시', type: '휴업', grades: [1, 2, 3], allDay: true, instructionDayEffect: 'no-class', originalText: '재량휴업(15)', sourcePage: 2, sourceRow: '9월 3주' }
+      { recordType: 'event', date: '2026-09-15', dateEnd: '', title: '재량휴업 예시', type: '휴업', grades: [1, 2, 3], allDay: true, instructionDayEffect: 'no-class', originalText: '재량휴업(15)', sourcePage: 2, sourceRow: '9월 3주', sourceCategory: 'schoolCalendar' },
+      { recordType: 'event', date: '2026-09-20', dateEnd: '', title: '독서 계획 예시', type: '개인 계획', grades: [], allDay: true, instructionDayEffect: 'normal', originalText: '9/20 책 읽기', sourcePage: 1, sourceRow: '메모 3번째 줄', sourceCategory: 'personalPlan' }
     ],
     map: [{ building: '예시동', floor: '2층', floorImageFile: '예시동-2층.png', width: 1000, height: 700, sourceSheet: '배치도',
       rooms: [{ name: '2학년 3반', type: '일반교실', sourceCell: 'D7', polygon: [] }],
@@ -31,14 +32,14 @@ const SchoolData = (() => {
     ]
   };
   const guides = {
-    calendar: '학사연도는 3월부터 다음 해 2월까지 보세요. 주요 행사 내역에서 행사마다 record 1개를 만드세요. 같은 주에 여러 일정이 있으면 분리하고 (22~28), (3.26~4.1)처럼 월을 넘는 기간을 정확히 해석하세요. 학년 대상, 수업 여부, 원문, 월/주·쪽수를 기록하세요. 학년별 월 수업 일수, 학기 합계와 연간 합계는 overview에 기록하세요. 날짜가 미정인 행사는 unresolved에 넣고 날짜를 추측하지 마세요. 아무 행사도 없는 날짜를 일정으로 만들지 마세요.',
+    calendar: '학교 학사일정표뿐 아니라 손으로 적은 계획표·메모·할 일 목록도 날짜별 일정으로 정리하세요. 실제 일정 하나마다 record 1개를 만들고 여러 일정을 합치지 마세요. sourceCategory는 학교 공식 일정이면 schoolCalendar, 개인 계획이면 personalPlan, 그 밖의 자료면 other로 구분하세요. 개인 계획에는 수업 없음·휴업을 추측해 넣지 말고 instructionDayEffect를 normal로 두세요. 확정된 날짜만 records에 넣고 날짜가 모호하거나 미정인 계획은 unresolved에 원문과 확인할 점을 기록하세요. 학사연도·수업일수 자료가 실제로 있을 때만 overview를 채우고, 없는 항목은 비워 두세요. 월을 넘는 기간과 여러 날짜를 정확히 분리·기록하세요.',
     map: '원본에서 층별 지도 영역을 정확히 잘라 각각 별도 이미지(PNG 등)로 내보내세요. 글자가 읽히도록 회전·기울기·대비·해상도를 개선하되 원본에 없는 선이나 시설을 만들지 마세요. JSON은 층 이름, 해당 이미지 파일 이름(floorImageFile), 판독한 방·시설 목록과 원본 위치의 근거만 담습니다. 정확한 지도 좌표를 판독했을 때만 rooms.polygon 또는 features의 x,y를 넣으세요. 불확실한 장소·소화기·비상구는 unresolved에 남기고 추측하지 마세요. 앱에서 각 층 이미지는 따로 첨부합니다.',
     timetable: '모든 요일·교시와 적용 시작/종료 날짜를 기록하세요. 과목·교사·교실·시각·학기·격주 여부를 보존하세요. 원본의 빈 교시는 subject를 비워 두어도 됩니다. 시작 시각만 있고 종료 시각이 없으면 end를 빈 문자열로 두세요. 원본에 없는 시간을 추측하지 마세요.',
     grades: '학년도·학년·학기·시험 단위로 기록하세요. 같은 학기 과목의 평가 항목·고사 결과·학기말 결과에는 같은 courseKey를 쓰세요. 각 지필·수행 항목은 assessment, 학기 합계는 courseResult, 고사별 결과는 examResult, 이수 과목은 completion으로 따로 만드세요. 합계와 반올림 원점수, 성취도별 분포율과 성취율 구간 원문을 보존하세요. 석차등급은 rankGrade(1~5), 석차는 classRank, 동석차 인원은 jointRank로 서로 구분하고 원문에 있는 값만 기록하세요. 수강자 수와 과목 평균도 각각 보존하세요. 체육·예술의 A~C, 교양의 P처럼 표에 없는 등급은 만들지 마세요. 모의고사는 영역·선택과목별 mockExam으로 나누고 원점수·표준점수·백분위·등급, 학교/전국 석차와 응시자 수, 누적 백분율, 보통학력 비교표, 표준점수 분석, 문항별 정오답을 원문대로 기록하세요. 빈 칸은 0으로 바꾸지 말고 null로 두세요.',
     activities: '학교생활기록부를 통째 활동 하나로 복사하지 마세요. 세특과 창의적체험활동 문단에서 원문으로 확인되는 서로 다른 실제 활동마다 recordType=activity를 별도로 만들고 title, subject 또는 subjects 배열, 역할·행동·결과를 담은 desc, 근거 sourceExcerpt, 원문 섹션 sourceSection을 기록하세요. type은 원문에서 수행평가임을 명시한 때만 perf, 자율 auto, 동아리 club, 봉사 volunteer, 진로 career, 독서 reading으로 기록하고 종류를 확인할 수 없으면 etc로 두세요. 세특에 나온 활동을 수행평가로 추측하지 마세요. 과목의 성취도 A/B/C나 단순 이수 정보는 활동이 아니므로 courseRecord로 분리하세요. 출결은 attendance, 수상은 award, 봉사 실적은 volunteer로 분리하고 원문 전체는 narrative로 별도 보존하세요. 여러 과목을 묶은 세특은 subjects 배열로 연결하세요. 낯선 과목·표현·약어는 공식 교육과정이나 학교 자료를 검색해 확인하고, 확인되지 않으면 unresolved에 넣어 추측하지 마세요. 0, 빈 칸, 해당 학년 기록 미제공은 다르므로 reportStatus에 provided/notProvided/empty를 기록하고 미제공 값을 0으로 만들지 마세요.'
   };
   const fieldGuides = {
-    calendar: { overview: 'academicYear, semesterInstructionDays.first/second의 학년별 일수, monthlyInstructionDays의 {month, byGrade}, annualInstructionDays, weeklyRows의 원본 월/주·날짜 칸·주요 행사 원문을 기록', records: '날짜가 확정된 행사만 기록. date/dateEnd, title, type, grades, instructionDayEffect, originalText, sourcePage, sourceRow', unresolved: '예: 새학년 준비기간(미정)처럼 날짜가 없는 행사는 {title, originalText, reason, sourcePage}로 기록' },
+    calendar: { overview: '학교 수업일수 자료가 있는 경우에만 academicYear, semesterInstructionDays, monthlyInstructionDays, annualInstructionDays, weeklyRows를 기록', records: '날짜가 확정된 행사·개인 계획만 기록. date/dateEnd, title, type, sourceCategory(schoolCalendar/personalPlan/other), grades, instructionDayEffect, originalText, sourcePage, sourceRow', unresolved: '날짜를 확정할 수 없는 계획·행사는 {title, originalText, reason, sourcePage}로 기록' },
     map: { records: '층마다 하나. building, floor, floorImageFile, width, height를 기록. 방과 시설 좌표는 선택 사항', floorImageFile: '외부 AI가 별도 생성한 해당 층 이미지 파일 이름. JSON과 함께 사용자가 층별로 첨부', rooms: '확인한 장소의 이름·종류·원본 근거. 좌표를 모르면 polygon=[]', features: '위치가 확인된 시설만 x,y를 기록. 위치를 모르면 unresolved에 기록', unresolved: '확인되지 않은 시설·글씨·층·위치를 원본 근거와 함께 기록' },
     timetable: { records: '요일 day(월=1~금=5), 교시 period, 과목, 교사, 교실, 수업 시작/끝, effectiveStart/effectiveEnd' },
     grades: { assessment: '지필/수행 각각의 이름, 반영비율, 만점, 받은 점수', courseResult: '학기 과목별 합계·원점수·성취도·성취도 분포·석차등급(rankGrade)·석차(classRank)·동석차 인원(jointRank)·수강자 수·과목평균·성취율 구간. 없는 값은 null', examResult: '중간/기말 등 고사별 과목 합계와 석차등급(rankGrade)·석차(classRank)·동석차·평균', completion: '교양과목 등의 학점·이수 여부·P 표기', mockExam: '영역(area)·선택과목·원점수(score/full)·표준점수와 범위·백분위·등급(rank)·학교/전국 석차와 응시자 수·누적 백분율·등급별 비율(mockGradeDistribution)·표준점수 분석(standardScoreAnalysis)·문항별 답안(answerSheet). 이미지에 없는 값은 null', analysis: '표준점수 분석과 원문 통계', errorSheet: '고사별 정오답·문항 번호·정답·선택 답·배점. 긴 목록은 원문 그대로 보존' },
@@ -146,9 +147,10 @@ const SchoolData = (() => {
     const fingerprint = JSON.stringify(row).split('').reduce((n, ch) => (Math.imul(n, 31) + ch.charCodeAt(0)) >>> 0, 0);
     const id = `school-${kind}-${fingerprint.toString(36)}`;
     if (kind === 'calendar') {
-      if (!validDate(row.date) || !text(row.title)) throw Error(`${index + 1}번째 학사 일정의 날짜·이름을 확인해 주세요.`);
-      if (row.dateEnd && (!validDate(row.dateEnd) || row.dateEnd < row.date)) throw Error(`${index + 1}번째 학사 일정의 마지막 날짜를 확인해 주세요.`);
-      return { id, date: row.date, dateEnd: row.dateEnd || '', start: /^\d\d:\d\d$/.test(row.start || '') ? row.start : '09:00', end: /^\d\d:\d\d$/.test(row.end || '') ? row.end : '09:00', title: text(row.title), memo: [row.type, row.location, row.description, row.notes].filter(Boolean).join(' · ').slice(0, 3000), color: '#35c27a', checkable: false, sourceSchoolImport: true, sourceDetails: row };
+      if (!validDate(row.date) || !text(row.title)) throw Error(`${index + 1}번째 일정·계획의 날짜·이름을 확인해 주세요.`);
+      if (row.dateEnd && (!validDate(row.dateEnd) || row.dateEnd < row.date)) throw Error(`${index + 1}번째 일정·계획의 마지막 날짜를 확인해 주세요.`);
+      const personal = row.sourceCategory === 'personalPlan';
+      return { id, date: row.date, dateEnd: row.dateEnd || '', start: /^\d\d:\d\d$/.test(row.start || '') ? row.start : '09:00', end: /^\d\d:\d\d$/.test(row.end || '') ? row.end : '09:00', title: text(row.title), memo: [row.type === '학사' ? '' : row.type, row.location, row.description, row.notes].filter(Boolean).join(' · ').slice(0, 3000), color: '#35c27a', checkable: personal, sourceSchoolImport: true, sourceImportLabel: personal ? '개인 계획에서 가져옴' : '학교 일정 자료에서 가져옴', sourceDetails: row };
     }
     if (kind === 'activities') {
       if ((row.date && !validDate(row.date)) || !text(row.title || row.section || row.subject)) throw Error(`${index + 1}번째 활동의 날짜·이름을 확인해 주세요.`);
@@ -162,7 +164,8 @@ const SchoolData = (() => {
       return { id, date: row.date || '', title: text(row.title || row.section || row.subject), subject: subjects[0] || '', subjects, type, recordType: text(row.recordType), grade: row.grade || '', semester: row.semester || '', reportStatus: text(row.reportStatus), desc: [row.desc, attendanceSummary, row.role, row.evidence].filter(Boolean).join('\n').slice(0, 5000), cv: text(row.cv, 30000), cvDone: row.cvDone === true, memo: text(row.memo, 3000), created: Date.now(), sourceSchoolImport: true, sourceDetails: row };
     }
     if (kind === 'grades') {
-      const score = numeric(row.score), full = numeric(row.full) ?? 100;
+      const score = numeric(row.score) ?? (row.recordType === 'courseResult' ? numeric(row.rawScore) : null);
+      const full = numeric(row.full) ?? 100;
       if (score === null) return { id, subject: text(row.subject || row.title || row.recordType), exam: text(row.exam), examDate: validDate(row.examDate) ? row.examDate : '', reportOnly: true, sourceSchoolImport: true, sourceDetails: row };
       if (!text(row.subject) || !Number.isFinite(score) || !Number.isFinite(full) || score < 0 || full <= 0 || score > full) throw Error(`${index + 1}번째 성적의 과목·점수를 확인해 주세요.`);
       return { id, subject: text(row.subject), exam: text(row.exam || row.assessmentName) || '기타', examDate: validDate(row.examDate) ? row.examDate : '', grade: Number(row.grade) || 1, semester: Number(row.semester) || 1, score, full,
@@ -248,8 +251,8 @@ const SchoolData = (() => {
     input.onchange = async () => {
       const file = input.files[0]; if (!file) return;
       if (file.size > 12 * 1024 * 1024) return App.toast('12MB 이하 파일을 선택해 주세요.');
-      const kind = fixedKind || prompt('자료 종류를 입력해 주세요: 지도 또는 학사 일정', '지도');
-      if (!['지도', '학사 일정'].includes(kind)) return;
+      const kind = fixedKind || prompt('자료 종류를 입력해 주세요: 지도 또는 일정·계획', '지도');
+      if (!['지도', '학사 일정', '일정·계획'].includes(kind)) return;
       const reader = new FileReader();
       reader.onload = async () => {
         const id = uid();
@@ -265,8 +268,8 @@ const SchoolData = (() => {
       h('button', { class: 'btn', type: 'button', onclick: () => App.download(`ClassHub-${kind}-양식.json`, new Blob([JSON.stringify(makeTemplate(kind), null, 2)], { type: 'application/json' })) }, `${kinds[kind]} AI 정리 양식 받기`),
       h('button', { class: 'btn', type: 'button', onclick: () => importFile(after, kind, targetId) }, '정리된 JSON 가져오기')
     ];
-    if (kind === 'calendar' || kind === 'map') buttons.unshift(h('button', { class: 'btn', type: 'button', onclick: () => addFile(after, kind === 'map' ? '지도' : '학사 일정') }, '원본 파일 저장'));
-    const files = kind === 'calendar' || kind === 'map' ? saved().filter((item) => item.kind === (kind === 'map' ? '지도' : '학사 일정')) : [];
+    if (kind === 'calendar' || kind === 'map') buttons.unshift(h('button', { class: 'btn', type: 'button', onclick: () => addFile(after, kind === 'map' ? '지도' : '일정·계획') }, '원본 파일 저장'));
+    const files = kind === 'calendar' || kind === 'map' ? saved().filter((item) => kind === 'map' ? item.kind === '지도' : ['학사 일정', '일정·계획'].includes(item.kind)) : [];
     const packages = Store.get('schoolImportPackages', []).filter((item) => item.kind === kind);
     return h('details', { class: 'school-import-tools' }, h('summary', null, `${kinds[kind]} 자료 가져오기`),
       h('p', { class: 'hint' }, '원본과 양식을 원하는 외부 AI에 직접 보내세요. AI가 모르는 과목·약어는 공식 자료를 검색해 확인하게 하고, 확인되지 않은 값은 미확인으로 남기세요. 정리된 JSON은 원본과 대조한 뒤 가져오세요.'),
@@ -386,7 +389,7 @@ const SchoolData = (() => {
         h('button', { class: 'btn', type: 'button', onclick: () => uploadFloorImages(after) }, '다른 층 사진 추가'),
         h('label', { class: 'school-zoom' }, '확대', zoom),
         h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!confirm(`${floor.name} 지도를 삭제할까요?`)) return; await Store.delImg(imageKey); Store.set('schoolPlaces', Store.get('schoolPlaces', []).filter((row) => row.id !== floor.id)); after(); } }, '지도 삭제')),
-      scroller, h('p', { class: 'muted' }, `${floor.floorImageFile || '사진 미첨부'} · 마커 ${features.length}개 · 사진은 이 기기에 저장돼요.`));
+      scroller, h('p', { class: 'muted' }, `${floor.floorImageFile || '사진 미첨부'} · 마커 ${features.length}개 · 사진은 이 기기에 저장되고 Drive를 연결하면 동기화돼요.`));
   }
   function renderMap(root) {
     const panel = h('section', { class: 'panel' });
@@ -399,7 +402,7 @@ const SchoolData = (() => {
       h('div', { class: 'school-photo-start' },
         h('button', { class: 'btn primary', type: 'button', onclick: () => uploadFloorImages(draw) }, '＋ 층별 지도 사진 올리기'),
         h('button', { class: 'btn ghost', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(MAP_AI_GUIDE); App.toast('AI에 보낼 안내를 복사했어요.'); } catch (_) { App.modal({ title: 'AI에 보낼 안내', body: h('textarea', { rows: 12, value: MAP_AI_GUIDE }) }); } } }, 'AI에 보낼 사진 준비 안내'),
-        h('p', { class: 'hint' }, '층별 지도 사진을 여기로 끌어 놓거나 버튼으로 올리세요. 사진 위에 마커를 직접 추가할 수 있어요.')),
+        h('p', { class: 'hint' }, '층별 지도 사진을 버튼으로 올리세요. 컴퓨터에서는 여기로 끌어 놓을 수도 있어요. 사진 위에 마커를 직접 추가할 수 있어요.')),
       h('div', { class: 'school-places' }, Store.get('schoolPlaces', []).length
         ? Store.get('schoolPlaces', []).map((floor) => photoFloorView(floor, draw))
         : h('p', { class: 'empty-box' }, '층별 지도 사진을 올리면 여기에 나타나요.')));
@@ -413,9 +416,9 @@ const SchoolData = (() => {
       h('button', { class: 'btn', type: 'button', onclick: async () => { const file = await Store.getImg('school-' + item.id); if (!file) return App.toast('이 기기에 원본 파일이 없어요.'); const blob = await (await fetch(file.data)).blob(); const url = URL.createObjectURL(blob); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000); } }, '보기'),
       h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!confirm('이 파일을 삭제할까요?')) return; await Store.delImg('school-' + item.id); Store.set('schoolFiles', saved().filter((x) => x.id !== item.id)); draw(); } }, '삭제'));
     const draw = () => {
-      const tabs = h('div', { class: 'school-tabs' }, [['calendar', '학사 일정'], ['map', '학교 지도'], ['reports', '성적표·생기부']].map(([key, label]) =>
+      const tabs = h('div', { class: 'school-tabs' }, [['calendar', '일정·계획'], ['map', '학교 지도'], ['reports', '성적표·생기부']].map(([key, label]) =>
         h('button', { type: 'button', class: 'btn' + (key === active ? ' primary' : ''), onclick: () => { active = key; draw(); } }, label)));
-      const files = active === 'reports' ? [] : saved().filter((item) => item.kind === (active === 'map' ? '지도' : '학사 일정'));
+      const files = active === 'reports' ? [] : saved().filter((item) => active === 'map' ? item.kind === '지도' : ['학사 일정', '일정·계획'].includes(item.kind));
       const fileList = h('div', { class: 'school-doc-list' }, files.length ? files.map(fileRow) : h('p', { class: 'muted' }, '이 기기에 저장한 파일이 없어요.'));
       const details = active === 'calendar'
         ? h('div', { class: 'school-calendar-list' }, Store.get('events', []).filter((row) => row.sourceSchoolImport).map((row) => h('button', { class: 'btn', type: 'button', onclick: () => Calendar.showEvent(row, draw) }, `${row.date}${row.dateEnd ? ' ~ ' + row.dateEnd : ''} · ${row.title}`)))
@@ -427,7 +430,7 @@ const SchoolData = (() => {
     };
     root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '학교 자료'),
       h('div', { class: 'set-row set-btns' },
-        h('button', { class: 'btn primary', type: 'button', onclick: () => addFile(draw) }, '지도·학사 일정 파일 저장'),
+        h('button', { class: 'btn primary', type: 'button', onclick: () => addFile(draw) }, '지도·일정 파일 저장'),
         kindSelect,
         h('button', { class: 'btn', type: 'button', onclick: () => App.download(`ClassHub-${kindSelect.value}-양식.json`, new Blob([JSON.stringify(makeTemplate(kindSelect.value), null, 2)], { type: 'application/json' })) }, 'AI 정리 양식 받기'),
         h('button', { class: 'btn', type: 'button', onclick: () => importFile(() => App.refresh()) }, '정리된 JSON 가져오기')),
@@ -435,6 +438,22 @@ const SchoolData = (() => {
       content));
     draw();
   }
-  return { renderMap, tools, normalize, makeTemplate };
+  function repairImportedGrades() {
+    const extras = Store.get('schoolReportExtras', []);
+    const recoverable = extras.filter((item) => item.reportOnly && item.sourceSchoolImport && item.sourceDetails?.recordType === 'courseResult'
+      && numeric(item.sourceDetails.score) === null && numeric(item.sourceDetails.rawScore) !== null);
+    if (!recoverable.length) return 0;
+    const grades = Store.get('grades', []), known = new Set(grades.map((item) => item.id));
+    for (const item of recoverable) {
+      if (known.has(item.id)) continue;
+      const restored = normalize('grades', item.sourceDetails, 0);
+      grades.push({ ...restored, id: item.id, sourceDetails: item.sourceDetails, sourcePackageId: item.sourcePackageId });
+      known.add(item.id);
+    }
+    Store.set('grades', grades);
+    Store.set('schoolReportExtras', extras.filter((item) => !recoverable.includes(item)));
+    return recoverable.length;
+  }
+  return { renderMap, tools, normalize, makeTemplate, repairImportedGrades };
 })();
 App.registerView('schoolmap', { label: '학교 지도', icon: 'schoolmap', render: SchoolData.renderMap });

@@ -187,28 +187,39 @@ const DrawTools = (() => {
     const fold = h('select', { 'aria-label': '대칭 방식' }, h('option', { value: 2 }, '좌우 대칭'), h('option', { value: 4 }, '4분할 대칭'));
     const ruler = h('div', { class: 'draw-ruler-guide', hidden: true });
     const axis = h('div', { class: 'draw-symmetry-guide', hidden: true });
-    const guideLayer = h('div', { class: 'draw-guide-layer', 'aria-hidden': 'true' }, ruler, axis);
+    const axisHandle = h('button', { class: 'draw-symmetry-handle', type: 'button', 'aria-label': '대칭축 중심 이동', hidden: true });
+    const guideLayer = h('div', { class: 'draw-guide-layer' }, ruler, axis, axisHandle);
     wrap.append(guideLayer);
     const rulerButton = h('button', { class: 'btn', type: 'button', 'aria-pressed': 'false', onclick: () => { rulerOn = !rulerOn; rulerButton.classList.toggle('on', rulerOn); rulerButton.setAttribute('aria-pressed', rulerOn); update(); } }, '자');
     const symmetryButton = h('button', { class: 'btn', type: 'button', 'aria-pressed': 'false', onclick: () => { symmetryOn = !symmetryOn; symmetryButton.classList.toggle('on', symmetryOn); symmetryButton.setAttribute('aria-pressed', symmetryOn); update(); } }, '대칭');
     const rulerFields = h('div', { class: 'draw-guide-field', hidden: true }, '자 각도 ', rulerAngle, h('output', { class: 'draw-guide-angle' }, '0°'));
     const rulerReset = h('button', { class: 'btn ghost', type: 'button', onclick: () => { rulerAngle.value = 0; update(); } }, '자 초기화');
     rulerFields.append(rulerReset);
-    const symmetryFields = h('div', { class: 'draw-guide-fields', hidden: true }, h('label', null, '축 각도', symmetryAngle), h('label', null, '가로', axisX), h('label', null, '세로', axisY), fold);
+    const symmetryFields = h('div', { class: 'draw-guide-fields', hidden: true }, h('label', null, '축 각도', symmetryAngle), fold);
     symmetryFields.append(h('button', { class: 'btn ghost', type: 'button', onclick: () => { symmetryAngle.value = 0; axisX.value = 50; axisY.value = 50; fold.value = 2; update(); } }, '대칭축 초기화'));
     function update() {
       const c = canvas.getBoundingClientRect(), w = wrap.getBoundingClientRect();
       const left = c.left - w.left + wrap.scrollLeft, top = c.top - w.top + wrap.scrollTop;
-      ruler.hidden = !rulerOn; axis.hidden = !symmetryOn; rulerFields.hidden = !rulerOn; symmetryFields.hidden = !symmetryOn;
+      ruler.hidden = !rulerOn; axis.hidden = !symmetryOn; axisHandle.hidden = !symmetryOn; rulerFields.hidden = !rulerOn; symmetryFields.hidden = !symmetryOn;
       Object.assign(guideLayer.style, { left: `${left}px`, top: `${top}px`, width: `${c.width}px`, height: `${c.height}px` });
       const diameter = Math.ceil(Math.hypot(c.width, c.height) * 2);
       Object.assign(ruler.style, { left: `${(c.width - diameter) / 2}px`, top: `${(c.height - diameter) / 2}px`, width: `${diameter}px`, height: `${diameter}px`, transform: `rotate(${rulerAngle.value}deg)` });
       const x = c.width * Number(axisX.value) / 100, y = c.height * Number(axisY.value) / 100;
       Object.assign(axis.style, { left: `${x}px`, top: `${y - diameter / 2}px`, height: `${diameter}px`, transform: `rotate(${symmetryAngle.value}deg)` });
+      Object.assign(axisHandle.style, { left: `${x}px`, top: `${y}px` });
       axis.classList.toggle('fourfold', Number(fold.value) === 4);
       rulerFields.querySelector('output').textContent = `${rulerAngle.value}°`;
     }
     [rulerAngle, symmetryAngle, axisX, axisY, fold].forEach((input) => input.addEventListener('input', update));
+    axisHandle.addEventListener('pointerdown', (event) => { event.preventDefault(); axisHandle.setPointerCapture(event.pointerId); });
+    axisHandle.addEventListener('pointermove', (event) => {
+      if (!axisHandle.hasPointerCapture(event.pointerId)) return;
+      event.preventDefault();
+      const rect = guideLayer.getBoundingClientRect();
+      axisX.value = Math.round(Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100)));
+      axisY.value = Math.round(Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100)));
+      update();
+    });
     const observer = new ResizeObserver(() => { if (wrap.isConnected) update(); else observer.disconnect(); }); observer.observe(wrap);
     wrap.addEventListener('draw-zoom-change', update);
     requestAnimationFrame(update);

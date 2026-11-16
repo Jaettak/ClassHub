@@ -1,9 +1,9 @@
-// Firebase 인증 및 레코드 단위 Firestore 동기화. PDF 캡처와 이미지는 로컬 전용.
+// Firebase 인증 및 레코드 단위 Firestore 동기화. 이미지 파일은 선택적으로 Google Drive에 보관한다.
 const Cloud = (() => {
-  const ARRAY_KEYS = new Set(['events', 'examPeriods', 'activities', 'grades', 'schoolReportExtras', 'schoolImportPackages', 'notes', 'noteFolders', 'ttFriends', 'timerLog', 'timetableTerms', 'mealFavorites', 'studyPages', 'whiteboards', 'schoolPlaces', 'subjectCatalog', 'hiddenSubjects']);
+  const ARRAY_KEYS = new Set(['events', 'examPeriods', 'activities', 'grades', 'schoolReportExtras', 'schoolImportPackages', 'notes', 'noteFolders', 'ttFriends', 'timerLog', 'timetableTerms', 'mealFavorites', 'studyPages', 'whiteboards', 'schoolPlaces', 'subjectCatalog', 'hiddenSubjects', 'captures']);
   const MAP_KEYS = new Set(['lessonDayNotes', 'subjectColors', 'subjectAutoColors', 'subjectFamilies', 'activityColorRules', 'subjectRooms', 'subjectRoomOptions', 'subjectTeachers', 'mealFavoriteNames']);
-  const LOCAL_KEYS = new Set(['captures']);
-  const keys = ['timetable', 'timetableTerms', 'ttFriends', 'subjectCatalog', 'hiddenSubjects', 'subjectColors', 'subjectAutoColors', 'subjectFamilies', 'activityColorRules', 'subjectRooms', 'subjectRoomOptions', 'subjectTeachers', 'events', 'examPeriods', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'schoolReportExtras', 'schoolImportPackages', 'notes', 'noteFolders', 'notesViewMode', 'studyPages', 'whiteboards', 'schoolPlaces', 'settings', 'mealSchool', 'mealFavorites', 'mealFavoriteNames', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
+  const LOCAL_KEYS = new Set();
+  const keys = ['timetable', 'timetableTerms', 'ttFriends', 'subjectCatalog', 'hiddenSubjects', 'subjectColors', 'subjectAutoColors', 'subjectFamilies', 'activityColorRules', 'subjectRooms', 'subjectRoomOptions', 'subjectTeachers', 'events', 'examPeriods', 'lessonDayNotes', 'eventSavedColors', 'activities', 'grades', 'schoolReportExtras', 'schoolImportPackages', 'notes', 'noteFolders', 'notesViewMode', 'studyPages', 'whiteboards', 'schoolPlaces', 'captures', 'settings', 'mealSchool', 'mealFavorites', 'mealFavoriteNames', 'timer', 'timerLog', 'homeSideMode', 'weekLessonsVisible', 'calPieOpen'];
   let auth, firestore, user = null, unsubscribe = null, ready = false, configured = false, syncing = false, remote = {}, queue = [], loaded = false, guest = false;
   let refreshTimer = null;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -104,6 +104,18 @@ const Cloud = (() => {
     }
     remote = buildRemote(snapshot);
     loaded = true;
+    const localCaptures = Store.get('captures', []);
+    const captureMigrationKey = 'classhub:captures-migrated:' + user.uid;
+    if (!localStorage.getItem(captureMigrationKey) && localCaptures.length) {
+      const known = new Set((remote.captures || []).map((item) => item.id));
+      const missing = localCaptures.filter((item) => !known.has(item.id));
+      if (missing.length) {
+        const before = remote.captures || [];
+        remote.captures = [...before, ...missing];
+        enqueue(diff('captures', before, remote.captures));
+      }
+      localStorage.setItem(captureMigrationKey, '1');
+    }
     for (const key of keys) {
       const value = overlay(key, remote[key]);
       if ((value !== undefined || loaded) && !same(Store.get(key, undefined), value)) Store.applyRemote(key, value);
@@ -125,6 +137,7 @@ const Cloud = (() => {
   async function signedIn(next) {
     if (unsubscribe) { unsubscribe(); unsubscribe = null; }
     if (user) {
+      if (typeof CloudDrive !== 'undefined') CloudDrive.disconnect();
       Timer.suspend();
       if (!queue.length) await Store.clearAccountTextCache();
       Store.leaveAccount(); queue = []; remote = {}; ready = false; loaded = false;
@@ -134,6 +147,7 @@ const Cloud = (() => {
     guest = false; sessionStorage.removeItem('classhub:guest');
     showGate('기록을 불러오는 중…');
     await Store.useAccount(next.uid);
+    if (typeof CloudDrive !== 'undefined') CloudDrive.accountChanged(next.uid);
     try { queue = JSON.parse(localStorage.getItem(outboxKey()) || '[]'); } catch (_) { queue = []; }
     Store.observe((key, before, after) => enqueue(diff(key, before, after)));
     unsubscribe = firestore.collection('users').doc(next.uid).collection('records').onSnapshot(
@@ -190,7 +204,7 @@ const Cloud = (() => {
       h('p', { class: 'muted' }, loaded ? queue.length ? '저장 대기 ' + queue.length + '건' : '클라우드 연결됨' : '오프라인 또는 연결 중'),
       needsImport ? h('p', { class: 'cloud-import-hint' }, '이 브라우저에 이전 시간표·일정·메모가 있어요. 다른 기기에도 보이게 하려면 아래에서 가져와 주세요.') : null,
       h('button', { class: 'btn ghost', type: 'button', onclick: () => { flush(); App.toast(queue.length ? `저장 대기 ${queue.length}건` : loaded ? '클라우드 동기화 중이에요.' : '연결을 확인 중이에요.'); } }, '동기화 상태 확인'),
-      h('p', { class: 'muted' }, 'PDF 오답 이미지는 이 기기에만 저장됩니다.'),
+      typeof CloudDrive !== 'undefined' ? CloudDrive.settingsSection() : null,
       h('div', { class: 'set-row set-btns' },
         h('button', { class: 'btn', type: 'button', onclick: migrate }, '이 브라우저의 기존 기록 가져오기'),
         h('button', { class: 'btn', type: 'button', onclick: () => auth.signOut() }, '로그아웃')));

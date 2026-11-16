@@ -150,8 +150,9 @@ const Grades = (() => {
 
   function gradeChart(records) {
     const rows = records.filter((g) => category(g) === 'course');
-    const termKey = (g) => `${g.schoolYear || ''}|${g.grade || ''}|${g.semester || ''}`;
-    const terms = [...new Set(rows.map(termKey))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
+    const completions = Store.get('schoolReportExtras', []).filter((g) => g.sourceDetails?.recordType === 'completion');
+    const termKey = (g) => { const row = g.sourceDetails || g; return `${row.schoolYear || ''}|${row.grade || ''}|${row.semester || ''}`; };
+    const terms = [...new Set([...rows, ...completions].map(termKey))].sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
     if (!terms.length) return h('p', { class: 'muted' }, '학기말 성적 기록이 없어요.');
     if (!terms.includes(filters.term)) filters.term = terms.at(-1);
     const tabs = h('div', { class: 'gr-term-tabs' });
@@ -164,20 +165,25 @@ const Grades = (() => {
     };
     const draw = () => {
       tabs.replaceChildren(...terms.map((key) => {
-        const sample = rows.find((g) => termKey(g) === key);
+        const sample = (rows.find((g) => termKey(g) === key) || completions.find((g) => termKey(g) === key))?.sourceDetails || rows.find((g) => termKey(g) === key);
         const label = `${sample.schoolYear ? `${sample.schoolYear} · ` : ''}${sample.grade || '—'}학년 ${sample.semester || '—'}학기`;
-        return h('button', { class: `seg-btn${filters.term === key ? ' on' : ''}`, type: 'button', onclick: () => { filters.term = key; draw(); } }, label);
+        const completionCount = completions.filter((g) => termKey(g) === key).length;
+        return h('button', { class: `seg-btn${filters.term === key ? ' on' : ''}`, type: 'button', onclick: () => { filters.term = key; draw(); } }, label, completionCount ? ` · 이수 ${completionCount}` : '');
       }));
       const termRows = rows.filter((g) => termKey(g) === filters.term);
       const counts = (labels, pick) => labels.map((label) => termRows.filter((g) => String(pick(g) ?? '').toUpperCase() === label).length);
       content.replaceChildren(panel('성취도', ['A', 'B', 'C', 'D', 'E'], counts(['A', 'B', 'C', 'D', 'E'], (g) => g.achievement), '#8a75d7'),
         panel('등급', ['1', '2', '3', '4', '5'], counts(['1', '2', '3', '4', '5'], rankOf), '#668de8'));
+      const completed = completions.filter((g) => termKey(g) === filters.term).map((g) => g.sourceDetails);
+      if (completed.length) content.append(h('div', { class: 'gr-completions' }, h('b', null, '이수 여부'),
+        ...completed.map((row) => h('span', null, `${row.subject || '과목'} ${row.completionMark || (row.completed === true ? 'P' : row.completed === false ? '미이수' : '미기재')}`))));
     };
     draw();
     return h('div', null, tabs, content);
   }
 
   function render(root) {
+    SchoolData.repairImportedGrades();
     root.append(SchoolData.tools('grades'));
     const body = h('div', { class: 'gr-body' });
     const stat = h('div', { class: 'stat' });
@@ -205,14 +211,16 @@ const Grades = (() => {
     };
     const redraw = () => {
       graphResize?.disconnect(); graphResize = null;
+      if (typeof subjectSummary !== 'undefined') subjectSummary.textContent = subjectFilter.selectedOptions[0]?.textContent || '모든 과목';
       const all = load();
       const allMode = all.filter((g) => isMock(g) === (filters.mode === 'mock'));
       const list = filtered().filter((g) => isMock(g) === (filters.mode === 'mock'));
+      const completionExtras = filters.mode === 'school' ? Store.get('schoolReportExtras', []).filter((g) => g.sourceDetails?.recordType === 'completion') : [];
       stat.replaceChildren(h('span', { class: 'pill' }, `기록 ${list.length}개`));
       body.replaceChildren();
-      if (!allMode.length) { body.append(h('div', { class: 'empty-box' }, all.length ? '이 탭에 기록한 성적이 없어요.' : '아직 기록한 성적이 없어요.')); return; }
+      if (!allMode.length && !completionExtras.length) { body.append(h('div', { class: 'empty-box' }, all.length ? '이 탭에 기록한 성적이 없어요.' : '아직 기록한 성적이 없어요.')); return; }
       if (!list.length) body.append(h('div', { class: 'empty-box' }, '선택한 조건에 맞는 성적이 없어요. 아래 교과군·과목 목록에서 다른 기록을 볼 수 있어요.'));
-      const subjects = [...new Set(allMode.map((g) => g.subject || '과목 없음'))];
+      const subjects = [...new Set([...allMode.map((g) => g.subject || '과목 없음'), ...completionExtras.map((g) => g.subject || g.sourceDetails.subject)])];
       const families = [...new Set(subjects.map((name) => Curriculum2022.familyFor(name)))].sort((a, b) => familyOrder(a) - familyOrder(b) || a.localeCompare(b, 'ko'));
       const focused = filters.subject ? list.filter((g) => g.subject === filters.subject) : [];
       const selectedRows = focused.length ? focused : filters.family ? list.filter((g) => Curriculum2022.familyFor(g.subject) === filters.family) : [];
@@ -222,19 +230,28 @@ const Grades = (() => {
       } else chartFilter.hidden = filters.mode === 'mock';
       chartExamFilter.hidden = filters.mode === 'mock' || !!filters.subject || filters.chart !== 'exam';
       const chartRows = chartRowsFor(focused);
-      const summaryRows = chartRowsFor(selectedRows.length ? selectedRows : list);
+      const summaryRows = chartRowsFor(filters.subject || filters.family ? selectedRows : list);
       const graphRows = focused.length ? chartRows : combinedTrend(summaryRows);
-      const barRows = focused.length ? chartRows.slice() : [...new Set(summaryRows.map((g) => g.subject))].map((name) => {
+      const barRows = focused.length || (filters.mode === 'school' && filters.chart === 'exam') ? summaryRows.slice() : [...new Set(summaryRows.map((g) => g.subject))].map((name) => {
         const rows = summaryRows.filter((g) => g.subject === name);
         return { subject: name, exam: '평균', score: rows.reduce((sum, g) => sum + Number(g.score || 0), 0) / rows.length,
-          full: rows.reduce((sum, g) => sum + Number(g.full || 100), 0) / rows.length };
+          full: rows.reduce((sum, g) => sum + Number(g.full || 100), 0) / rows.length,
+          sortDate: rows.map(orderKey).sort().at(-1) };
       });
       const assessmentRows = focused.filter((g) => category(g) === 'assessment');
-      if (filters.order === 'high' || filters.order === 'low') barRows.sort((a, b) => (filters.order === 'high' ? -1 : 1)*(Number(a.score)-Number(b.score)));
+      const compareRows = (a, b) => filters.order === 'recent' || filters.order === 'oldest'
+        ? (filters.order === 'recent' ? -1 : 1) * String(a.sortDate || orderKey(a)).localeCompare(String(b.sortDate || orderKey(b)))
+        : (filters.order === 'high' ? -1 : 1) * (Number(a.score) - Number(b.score));
+      barRows.sort(compareRows);
       const scoreAvg = (rows) => rows.length ? `${fmt(rows.reduce((sum, g) => sum + Number(g.score || 0), 0) / rows.length)}점` : '—';
-      const bars = (rows) => h('div', { class: 'gr-bars' }, rows.length ? rows.map((g) => h('div', { class: 'gr-bar', style: { '--c': colorFor(g.subject) } },
-        h('span', { class: 'gb-n' }, focused.length ? g.assessmentName || g.exam || '평가' : `${g.subject} · ${g.exam || '학기 성적'}`), h('span', { class: 'gb-t' }, h('i', { style: { width: `${Math.max(0, Math.min(100, pct(g)))}%` } })),
-        h('b', null, `${fmt(g.score)} / ${fmt(g.full)}점`))) : h('p', { class: 'muted' }, '선택한 기준의 기록이 없어요.'));
+      const bars = (rows) => h('div', { class: 'gr-bars' }, rows.length ? rows.map((g) => {
+        const label = focused.length ? g.assessmentName || g.exam || '평가'
+          : filters.mode === 'school' && filters.chart === 'exam' ? `${g.subject} · ${g.grade || '—'}학년 ${g.semester || '—'}학기 ${g.exam || '고사'}`
+            : `${g.subject} · ${g.exam || '학기 성적'}`;
+        return h('div', { class: 'gr-bar', style: { '--c': colorFor(g.subject) } },
+        h('span', { class: 'gb-n', title: label }, label), h('span', { class: 'gb-t' }, h('i', { style: { width: `${Math.max(0, Math.min(100, pct(g)))}%` } })),
+        h('b', null, `${fmt(g.score)} / ${fmt(g.full)}점`));
+      }) : h('p', { class: 'muted' }, '선택한 기준의 기록이 없어요.'));
       if (focused.length) body.append(h('section', { class: 'gr-card gr-focus' }, h('h3', null, `${filters.subject} 한눈에 보기`),
         filters.mode === 'mock' ? h('div', { class: 'gr-focus-grid' },
           h('div', null, h('small', null, '원점수 평균'), h('strong', null, scoreAvg(focused))),
@@ -257,7 +274,8 @@ const Grades = (() => {
         const overview = h('div', { class: `gr-overview${focused.length && filters.mode === 'school' && !chartRows.length ? ' gr-no-trend' : ''}` },
         focused.length && filters.mode === 'school' ? h('section', { class: 'gr-card gr-score-split' }, h('h3', null, '고사별 점수'), bars(barRows),
           h('h3', null, '수행평가별 점수'), bars(assessmentRows))
-          : h('section', { class: 'gr-card' }, h('h3', null, '과목별 점수'), h('p', { class: 'hint' }, `${filters.family || '전체 과목'}의 과목별 평균 점수`), bars(barRows)),
+          : h('section', { class: 'gr-card' }, h('h3', null, filters.mode === 'school' && filters.chart === 'exam' ? '고사별 점수' : '과목별 점수'),
+            h('p', { class: 'hint' }, filters.mode === 'school' && filters.chart === 'exam' ? '각 과목의 고사 점수' : `${filters.family || '전체 과목'}의 과목별 평균 점수`), bars(barRows)),
         focused.length && filters.mode === 'school' && !chartRows.length ? null : h('section', { class: 'gr-card' }, h('div', { class: 'title-row' }, h('h3', null, filters.mode === 'mock' ? '모의고사 추이' : filters.chart === 'course' ? '학기말 추이' : '고사별 추이'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: '점수 추이 확대', wide: true, body: trend(graphRows, true) }) }, '확대')),
           h('div', { class: 'gr-chart' }, trend(graphRows))),
@@ -300,14 +318,36 @@ const Grades = (() => {
           ...names.map((name) => h('details', { class: 'gr-subject-group', open: name === filters.subject },
             h('summary', null, h('i', { class: 'gr-dot', style: { background: colorFor(name) } }), name),
             h('button', { class: 'btn ghost', type: 'button', onclick: () => { filters.family = family; filters.subject = name; familyFilter.value = family; subjectFilter.value = name; redraw(); } }, '이 과목 그래프 보기'),
-            ...allMode.filter((g) => g.subject === name).sort((a, b) => filters.order === 'low' ? Number(a.score)-Number(b.score) : Number(b.score)-Number(a.score)).map(record)))));
+            ...allMode.filter((g) => g.subject === name).sort(compareRows).map(record),
+            ...completionExtras.filter((g) => (g.subject || g.sourceDetails.subject) === name).map((g) => {
+              const row = g.sourceDetails;
+              return h('div', { class: 'gr-completion-record' },
+                h('b', null, `${row.schoolYear || ''}학년도 ${row.grade || ''}학년 ${row.semester || ''}학기 · 이수 여부`),
+                h('strong', null, row.completionMark || (row.completed === true ? 'P' : row.completed === false ? '미이수' : '미기재')));
+            })))));
       });
     };
 
     const sel = (key, opts) => h('select', { onchange: (e) => { filters[key] = e.target.value; redraw(); } },
       opts.map(([v, l]) => h('option', { value: v, selected: filters[key] === v }, l)));
 
-    const subjectFilter = sel('subject', [['', '모든 과목'], ...[...new Set(load().map((g) => g.subject))].sort((a, b) => a.localeCompare(b, 'ko')).map((name) => [name, name])]);
+    const subjectFilter = sel('subject', [['', '모든 과목'], ...[...new Set([...load().map((g) => g.subject), ...Store.get('schoolReportExtras', []).filter((g) => g.sourceDetails?.recordType === 'completion').map((g) => g.subject || g.sourceDetails.subject)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko')).map((name) => [name, name])]);
+    const subjectSummary = h('summary', null, subjectFilter.selectedOptions[0]?.textContent || '모든 과목');
+    const subjectOptions = h('div', { class: 'gr-select-options' }, [...subjectFilter.options].map((option) => h('button', { type: 'button', onclick: () => {
+      subjectFilter.value = option.value;
+      subjectSummary.textContent = option.textContent;
+      subjectMenu.open = false;
+      subjectFilter.dispatchEvent(new Event('change', { bubbles: true }));
+    } }, option.textContent)));
+    const closeSubjectMenu = (event) => { if (!subjectMenu.contains(event.target)) subjectMenu.open = false; };
+    const subjectMenu = h('details', { class: 'gr-select-menu', ontoggle: () => {
+      document.removeEventListener('pointerdown', closeSubjectMenu);
+      if (!subjectMenu.open) return;
+      document.addEventListener('pointerdown', closeSubjectMenu);
+      const rect = subjectMenu.getBoundingClientRect();
+      subjectOptions.classList.toggle('above', innerHeight - rect.bottom < Math.min(300, innerHeight * .45) && rect.top > innerHeight - rect.bottom);
+      subjectSummary.textContent = subjectFilter.selectedOptions[0]?.textContent || '모든 과목';
+    } }, subjectSummary, subjectFilter, subjectOptions);
     const familyFilter = sel('family', [['', '모든 교과군'], ...Curriculum2022.families.map((name) => [name, name])]);
     subjectFilter.addEventListener('change', () => { if (filters.subject && filters.family && Curriculum2022.familyFor(filters.subject) !== filters.family) { filters.family = ''; familyFilter.value = ''; redraw(); } });
     const chartExamFilter = sel('chartExam', [['', '모든 고사'], ...[...new Set(load().filter((g) => category(g) === 'exam').map((g) => g.exam))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko')).map((name) => [name, name])]);
@@ -328,16 +368,18 @@ const Grades = (() => {
         sel('grade', [['', '모든 학년'], ['1', '1학년'], ['2', '2학년'], ['3', '3학년']]),
         sel('sem', [['', '모든 학기'], ['1', '1학기'], ['2', '2학기']]),
         familyFilter,
-        subjectFilter,
+        subjectMenu,
         chartFilter,
         chartExamFilter,
-        sel('order', [['high', '점수 높은순'], ['low', '점수 낮은순']])),
+        sel('order', [['high', '점수 높은순'], ['low', '점수 낮은순'], ['recent', '최신순'], ['oldest', '오래된 순']])),
       body));
     redraw();
-    const extras = Store.get('schoolReportExtras', []);
-    if (extras.length) root.append(h('details', { class: 'school-import-tools' }, h('summary', null, `점수가 없는 성적표 기록 ${extras.length}개`),
+    const extras = Store.get('schoolReportExtras', []).filter((item) => item.sourceDetails?.recordType !== 'completion');
+    if (extras.length) root.append(h('details', { class: 'school-import-tools' }, h('summary', null, `성적표의 이수·추가 기록 ${extras.length}개`),
       h('div', { class: 'school-source-list' }, extras.map((item) => h('details', { class: 'school-source-detail' },
-        h('summary', null, `${item.subject || '과목 없음'} · ${item.exam || ''}`), h('pre', null, JSON.stringify(item.sourceDetails, null, 2)))))));
+        h('summary', null, item.sourceDetails?.recordType === 'completion'
+          ? `${item.sourceDetails.schoolYear || ''}학년도 ${item.sourceDetails.grade || ''}학년 ${item.sourceDetails.semester || ''}학기 · ${item.subject || '과목 없음'} · ${item.sourceDetails.completionMark || (item.sourceDetails.completed === true ? 'P' : '미기재')}`
+          : `${item.subject || '과목 없음'} · ${item.exam || ''}`), h('pre', null, JSON.stringify(item.sourceDetails, null, 2)))))));
   }
 
   return { render };

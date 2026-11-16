@@ -21,8 +21,8 @@ const Settings = (() => {
     if (!crypto?.subtle) return App.toast('이 환경에서는 비밀번호 잠금을 사용할 수 없어요.');
     const s = get();
     const setup = !s.privatePinHash;
-    const pin = h('input', { type: 'password', inputMode: 'numeric', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: setup ? '새 비밀번호 4자 이상' : '비밀번호' });
-    const repeat = h('input', { type: 'password', inputMode: 'numeric', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: '비밀번호 다시 입력' });
+    const pin = h('input', { type: 'password', inputMode: 'text', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: setup ? '새 비밀번호 4자 이상' : '비밀번호' });
+    const repeat = h('input', { type: 'password', inputMode: 'text', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: '비밀번호 다시 입력' });
     const submit = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
       if (pin.value.length < 4) return App.toast('비밀번호를 4자 이상 입력해 주세요.');
       if (setup && pin.value !== repeat.value) return App.toast('비밀번호가 서로 달라요.');
@@ -226,14 +226,17 @@ const Settings = (() => {
             : { left: `${r.left}px`, top: `${intent.placement === 'before' ? r.top-5 : r.bottom+2}px`, width: `${r.width}px`, height: '4px' } });
           document.body.append(insertionLine);
         };
+        let touchStart = null;
         tile.addEventListener('pointerdown', (event) => {
           if (event.target.closest('label')) return;
+          if (event.pointerType === 'touch') { touchStart = { x: event.clientX, y: event.clientY, id: event.pointerId }; return; }
           event.preventDefault(); tile.setPointerCapture(event.pointerId);
           tile.classList.add('dragging');
           ghost = tile.cloneNode(true); ghost.classList.add('drag-ghost'); document.body.append(ghost);
           ghost.style.left = `${event.clientX}px`; ghost.style.top = `${event.clientY}px`;
         });
         tile.addEventListener('pointermove', (event) => {
+          if (touchStart && !ghost) return;
           if (!ghost) return;
           ghost.style.left = `${event.clientX}px`; ghost.style.top = `${event.clientY}px`;
           dropIntent = hit(event);
@@ -249,6 +252,40 @@ const Settings = (() => {
         };
         tile.addEventListener('pointerup', finish);
         tile.addEventListener('pointercancel', (event) => finish(event, true));
+        tile.addEventListener('touchstart', (event) => {
+          if (event.target.closest('label')) return;
+          const touch = event.touches[0];
+          const start = { x: touch.clientX, y: touch.clientY, timer: null };
+          start.timer = setTimeout(() => {
+            if (touchStart && !ghost) {
+              tile.classList.add('dragging');
+              ghost = tile.cloneNode(true); ghost.classList.add('drag-ghost'); document.body.append(ghost);
+              ghost.style.left = `${start.x}px`; ghost.style.top = `${start.y}px`;
+            }
+          }, 350);
+          tile._dragTouch = start;
+        }, { passive: true });
+        tile.addEventListener('touchmove', (event) => {
+          const state = tile._dragTouch;
+          if (!state) return;
+          const touch = event.touches[0];
+          if (!ghost && Math.hypot(touch.clientX - state.x, touch.clientY - state.y) > 8) { clearTimeout(state.timer); tile._dragTouch = null; touchStart = null; return; }
+          if (!ghost) return;
+          event.preventDefault();
+          ghost.style.left = `${touch.clientX}px`; ghost.style.top = `${touch.clientY}px`;
+          dropIntent = hit(touch); showIntent(dropIntent);
+        }, { passive: false });
+        tile.addEventListener('touchend', (event) => {
+          const state = tile._dragTouch;
+          if (state) clearTimeout(state.timer);
+          tile._dragTouch = null; touchStart = null;
+          if (ghost) finish(event.changedTouches[0]);
+        });
+        tile.addEventListener('touchcancel', (event) => {
+          if (tile._dragTouch) clearTimeout(tile._dragTouch.timer);
+          tile._dragTouch = null; touchStart = null;
+          finish(event.changedTouches[0] || event, true);
+        });
         return tile;
       });
       if (previewMode !== 'home') { cardList.replaceChildren(...tiles); return; }
@@ -266,6 +303,18 @@ const Settings = (() => {
       Object.assign(stage.style, { width: `${vw}px`, height: `${vh}px`, transform: `scale(${scale})` });
       const viewport = h('div', { class: 'set-home-viewport' }, stage);
       Object.assign(viewport.style, { width: `${vw * scale}px`, height: `${vh * scale}px` });
+      const scroller = stage.querySelector('.home-cards');
+      const scrollControls = h('div', { class: 'set-home-scroll-controls' },
+        h('button', { type: 'button', 'aria-label': '탭 목록 위로', onclick: () => { scroller.scrollTop -= scroller.clientHeight * .8; } }, '↑'),
+        h('button', { type: 'button', 'aria-label': '탭 목록 아래로', onclick: () => { scroller.scrollTop += scroller.clientHeight * .8; } }, '↓'));
+      viewport.append(scrollControls);
+      requestAnimationFrame(() => { scrollControls.hidden = scroller.scrollHeight <= scroller.clientHeight + 2; });
+      viewport.addEventListener('wheel', (event) => {
+        if (!scroller || scroller.scrollHeight <= scroller.clientHeight) return;
+        const before = scroller.scrollTop;
+        scroller.scrollTop += event.deltaY / scale;
+        if (scroller.scrollTop !== before) event.preventDefault();
+      }, { passive: false });
       cardList.replaceChildren(viewport);
     };
     const openTabPreview = (initial) => {
@@ -329,7 +378,7 @@ const Settings = (() => {
         h('button', { class: 'btn', type: 'button', onclick: App.exportData }, '백업 내보내기'),
         h('button', { class: 'btn', type: 'button', onclick: () => { m.close(); App.importData(true); } }, '백업 합치기'),
         h('button', { class: 'btn', type: 'button', onclick: () => { m.close(); App.importData(); } }, '백업으로 바꾸기')),
-      h('button', { class: 'btn ghost', type: 'button', onclick: () => {
+      h('div', { class: 'set-row set-btns set-backup-archive' }, h('button', { class: 'btn ghost', type: 'button', onclick: () => {
         const cutoff = dateStr(new Date(new Date().getFullYear() - 1, new Date().getMonth(), new Date().getDate()));
         const events = Store.get('events', []).filter((e) => !e.repeat && !e.schoolLesson && !e.sourceBreak && (e.dateEnd || e.date) < cutoff && (e.done || e.doneDates?.length));
         const activities = Store.get('activities', []).filter((a) => a.date && a.date < cutoff);
@@ -337,7 +386,7 @@ const Settings = (() => {
         if (!events.length && !activities.length && !notes.length) return App.toast('1년 지난 보관 대상 기록이 없어요.');
         App.download(`ClassHub-오래된기록-${todayStr()}.json`, new Blob([JSON.stringify({ app: 'ClassHubArchive', exportedAt: new Date().toISOString(), cutoff, events, activities, notes }, null, 2)], { type: 'application/json' }));
         App.toast('기록을 파일로 저장했어요. 원본 기록은 그대로 유지돼요.');
-      } }, '1년 지난 기록 JSON으로 보관'),
+      } }, '1년 지난 기록 JSON으로 보관')),
       h('p', { class: 'hint' }, '완료된 단일 일정, 지난 활동, 휴지통의 날짜 연결 메모만 내보냅니다. 반복 일정과 시간표는 제외하며 앱의 원본은 삭제하지 않습니다.'));
 
     // 초기화

@@ -18,6 +18,9 @@ assert.equal(makeTemplate('grades').examples.find((row) => row.recordType === 'c
 const calendar = normalize('calendar', { date: '2026-11-10', title: '체육대회' }, 0);
 assert.equal(calendar.title, '체육대회');
 assert.equal(calendar.checkable, false);
+const importedCalendar = normalize('calendar', { date: '2026-11-10', title: '졸업식', type: '학사' }, 0);
+assert.equal(importedCalendar.memo, '');
+assert.equal(importedCalendar.sourceSchoolImport, true);
 const range = normalize('calendar', { date: '2026-11-10', dateEnd: '2026-11-12', title: '시험기간', location: '본관' }, 0);
 assert.equal(range.dateEnd, '2026-11-12');
 assert.match(range.memo, /본관/);
@@ -37,11 +40,29 @@ assert.equal(gradeWithRank.rank, 2);
 assert.equal(gradeWithRank.classRank, 12);
 assert.equal(gradeWithRank.jointRank, 2);
 assert.equal(normalize('grades', { subject: '국어', achievement: 'A' }, 0).reportOnly, true);
+const completion = normalize('grades', { recordType: 'completion', schoolYear: 2025, grade: 1, semester: 1,
+  subject: '진로와 직업', completed: true, completionMark: 'P', score: null }, 0);
+assert.equal(completion.reportOnly, true);
+assert.equal(completion.sourceDetails.completionMark, 'P');
 const course = normalize('grades', { recordType: 'courseResult', subject: '국어', score: 96.45, full: 100,
   achievementDistribution: { A: 28.3 }, subjectAverage: 81.3, weightPercent: 0 }, 0);
 assert.equal(course.rateA, 28.3);
 assert.equal(course.avg, 81.3);
 assert.equal(course.weightPercent, 0);
+const roundedCourse = normalize('grades', { recordType: 'courseResult', subject: '공통국어2', score: null, full: null,
+  rawScore: 97, achievement: 'A', rankGrade: 1 }, 0);
+assert.equal(roundedCourse.reportOnly, undefined);
+assert.equal(roundedCourse.score, 97);
+assert.equal(roundedCourse.rawScore, 97);
+assert.equal(roundedCourse.rank, 1);
+const stored = { grades: [], schoolReportExtras: [{ id: 'imported-course', reportOnly: true, sourceSchoolImport: true,
+  sourceDetails: { recordType: 'courseResult', subject: '공통국어2', score: null, rawScore: 97, rankGrade: 1 } }] };
+context.Store = { get: (key, fallback) => stored[key] ?? fallback, set: (key, value) => { stored[key] = value; } };
+assert.equal(context.school.repairImportedGrades(), 1);
+assert.equal(stored.grades[0].id, 'imported-course');
+assert.equal(stored.grades[0].score, 97);
+assert.equal(stored.schoolReportExtras.length, 0);
+assert.equal(context.school.repairImportedGrades(), 0);
 const record = normalize('activities', { subject: '국어', section: '세부능력및특기사항', cv: '수업 원문' }, 0);
 assert.equal(record.date, '');
 assert.equal(record.subject, '국어');

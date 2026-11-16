@@ -7,6 +7,14 @@ const Notes = (() => {
   const save = (l) => Store.set('notes', l);
   const folders = () => Store.get('noteFolders', []);
   const active = () => load().filter((n) => !n.deletedAt);
+  const imageKey = (noteId, imageId) => `note-${noteId}-${imageId}`;
+  const removeImages = async (note) => { for (const image of note.images || []) await Store.delImg(imageKey(note.id, image.id)); };
+  const galleryPhoto = (noteId, photo, data = '') => {
+    const image = h('img', { alt: photo.name || '메모 사진', loading: 'lazy' });
+    if (data) image.src = data;
+    else Store.getImg(imageKey(noteId, photo.id)).then((saved) => { if (saved?.data) image.src = saved.data; });
+    return image;
+  };
   let selectedFolder = '*';
   let sortMode = localStorage.getItem('classhub-note-sort') || 'manual';
   function cleanupExpired() {
@@ -44,9 +52,11 @@ const Notes = (() => {
 
   function show(n, after = () => {}) {
     const when = n.dates?.length ? n.dates.join(', ') : n.dateEnd ? `${n.date} ~ ${n.dateEnd}` : n.date;
+    const photos = n.images?.length ? h('div', { class: 'nt-photo-gallery' }, n.images.map((photo) => galleryPhoto(n.id, photo))) : null;
     const m = App.modal({ title: n.title || '메모',
       body: h('div', { class: 'nt-detail' },
         n.body ? h('p', null, n.body) : null,
+        photos,
         when ? h('small', null, `연결된 날짜 · ${when}`) : null,
         n.folderId ? h('small', null, `보관함 · ${folders().find((f) => f.id === n.folderId)?.name || '기본 보관함'}`) : null),
       footer: [
@@ -60,6 +70,24 @@ const Notes = (() => {
     const isNew = !n.id;
     const title = h('input', { type: 'text', value: n.title || '', placeholder: '제목 (선택)', maxLength: 60 });
     const body = h('textarea', { rows: 9, placeholder: '메모를 적어 보세요', value: n.body || '' });
+    const photos = (n.images || []).map((photo) => ({ ...photo }));
+    const photoList = h('div', { class: 'nt-photo-gallery' });
+    const fileInput = h('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+    const cameraInput = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true });
+    const renderPhotos = () => photoList.replaceChildren(...photos.map((photo) => h('div', { class: 'nt-photo-item' },
+      galleryPhoto(n.id, photo, photo.data),
+      h('button', { class: 'nt-photo-remove', type: 'button', 'aria-label': `${photo.name || '사진'} 제거`, onclick: () => { photos.splice(photos.indexOf(photo), 1); renderPhotos(); } }, '×'))));
+    const addFiles = async (files) => {
+      for (const file of [...files]) {
+        if (!file.type.startsWith('image/') || file.size > 12 * 1024 * 1024) { App.toast('12MB 이하 사진 파일을 선택해 주세요.'); continue; }
+        if (photos.length >= 12) { App.toast('메모 한 개에 사진은 최대 12장까지 넣을 수 있어요.'); break; }
+        const data = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
+        photos.push({ id: uid(), name: file.name || '사진', type: file.type, data });
+      }
+      renderPhotos();
+    };
+    [fileInput, cameraInput].forEach((input) => input.addEventListener('change', () => { addFiles(input.files).catch(() => App.toast('사진을 읽지 못했어요.')); input.value = ''; }));
+    renderPhotos();
     const folder = h('select', { 'aria-label': '메모 보관함' },
       h('option', { value: '' }, '기본 보관함'),
       folders().map((f) => h('option', { value: f.id, selected: f.id === (n.folderId || (selectedFolder === '*' ? '' : selectedFolder)) }, f.name)));
@@ -96,22 +124,31 @@ const Notes = (() => {
     const pin = h('input', { type: 'checkbox', checked: pinned, onchange: () => { pinned = pin.checked; } });
     const m = App.modal({
       title: isNew ? '새 메모' : '메모 수정',
-      body: [App.field('제목', title), App.field('내용', body), App.field('보관함', folder), App.field('날짜 연결', mode), singleField, endField, manyField, h('div', { class: 'field' }, h('span', null, '색상'), swatches), h('label', { class: 'check' }, pin, '맨 위에 고정')],
+      body: [App.field('제목', title), App.field('내용', body),
+        h('div', { class: 'field' }, h('span', null, '사진'), h('div', { class: 'set-row set-btns' },
+          h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, '사진 파일·갤러리에서 추가'),
+          h('button', { class: 'btn', type: 'button', onclick: () => cameraInput.click() }, '사진 찍기')),
+          fileInput, cameraInput, photoList),
+        App.field('보관함', folder), App.field('날짜 연결', mode), singleField, endField, manyField, h('div', { class: 'field' }, h('span', null, '색상'), swatches), h('label', { class: 'check' }, pin, '맨 위에 고정')],
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: submit }, '저장'),
       ],
     });
-    function submit() {
-      if (!title.value.trim() && !body.value.trim()) { App.toast('내용을 적어 주세요.'); body.focus(); return; }
+    async function submit() {
+      if (!title.value.trim() && !body.value.trim() && !photos.length) { App.toast('내용이나 사진을 넣어 주세요.'); body.focus(); return; }
       if (mode.value === 'one' && !noteDate.value || mode.value === 'range' && (!noteDate.value || !endDate.value || endDate.value < noteDate.value) || mode.value === 'many' && !selectedDates.size)
         return App.toast('연결할 날짜를 확인해 주세요.');
       const rec = { ...n, id: n.id || uid(), title: title.value.trim(), body: body.value.trim(), folderId: folder.value,
         date: ['one', 'range'].includes(mode.value) ? noteDate.value : '', dateEnd: mode.value === 'range' ? endDate.value : '',
-        dates: mode.value === 'many' ? [...selectedDates].sort() : [], color, pinned, updatedAt: Date.now() };
+        dates: mode.value === 'many' ? [...selectedDates].sort() : [], color, pinned, createdAt: n.createdAt || Date.now(), updatedAt: Date.now(),
+        images: photos.map(({ id, name, type }) => ({ id, name, type })) };
+      try { for (const photo of photos.filter((item) => item.data)) await Store.putImg(imageKey(rec.id, photo.id), { data: photo.data, type: photo.type, name: photo.name }); }
+      catch (_) { return App.toast('사진 저장에 실패했어요. 다시 시도해 주세요.'); }
       const list = load().filter((x) => x.id !== rec.id);
       list.push(rec);
       save(list);
+      for (const old of n.images || []) if (!photos.some((photo) => photo.id === old.id)) Store.delImg(imageKey(rec.id, old.id));
       m.close();
       after();
     }
@@ -120,8 +157,6 @@ const Notes = (() => {
 
   function render(root) {
     cleanupExpired();
-    const trashCutoff = Date.now() - 30 * 86400000;
-    if (load().some((n) => n.deletedAt && n.deletedAt < trashCutoff)) save(load().filter((n) => !n.deletedAt || n.deletedAt >= trashCutoff));
     let viewMode = Store.get('notesViewMode', 'cards');
     const grid = h('div', { class: 'nt-grid' });
     const folderBar = h('div', { class: 'nt-folders' });
@@ -188,6 +223,8 @@ const Notes = (() => {
       const sortNotes = (a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) ||
         (sortMode === 'date-asc' ? String(a.date || a.dates?.[0] || '').localeCompare(String(b.date || b.dates?.[0] || '')) : 0) ||
         (sortMode === 'date-desc' ? String(b.date || b.dates?.[0] || '').localeCompare(String(a.date || a.dates?.[0] || '')) : 0) ||
+        (sortMode === 'created-asc' ? (a.createdAt || a.created || a.updatedAt || 0) - (b.createdAt || b.created || b.updatedAt || 0) : 0) ||
+        (sortMode === 'created-desc' ? (b.createdAt || b.created || b.updatedAt || 0) - (a.createdAt || a.created || a.updatedAt || 0) : 0) ||
         (sortMode === 'folder' ? String(folders().find((f) => f.id === a.folderId)?.name || '').localeCompare(String(folders().find((f) => f.id === b.folderId)?.name || ''), 'ko') : 0) ||
         (sortMode === 'name' ? String(a.title || '').localeCompare(String(b.title || ''), 'ko') : 0) ||
         (sortMode === 'recent' ? (b.updatedAt || 0) - (a.updatedAt || 0) : 0) ||
@@ -236,36 +273,68 @@ const Notes = (() => {
         grid.append(h('div', { class: 'empty-box' }, all.length ? '표시할 메모가 없어요.' : '아직 메모가 없어요.'));
         return;
       }
-      list.forEach((n) => {
+      const groupedMode = sortMode === 'date-group';
+      const display = [];
+      if (groupedMode) {
+        const groups = new Map();
+        list.forEach((note) => {
+          const dates = note.dates?.length ? [...new Set(note.dates)].sort() : [note.date || ''];
+          dates.forEach((date) => { if (!groups.has(date)) groups.set(date, []); groups.get(date).push(note); });
+        });
+        [...groups.keys()].sort((a, b) => !a ? 1 : !b ? -1 : a.localeCompare(b)).forEach((date) => {
+          const target = h('div', { class: 'nt-date-cards nt-grid' + (viewMode === 'list' ? ' list' : '') });
+          grid.append(h('details', { class: 'nt-date-group', open: true },
+            h('summary', null, `${date || '날짜 없음'} · ${groups.get(date).length}개`), target));
+          groups.get(date).forEach((note) => display.push({ n: note, target }));
+        });
+      } else list.forEach((n) => display.push({ n, target: grid }));
+      display.forEach(({ n, target }) => {
         let touchDrag = null, ghost = null;
-        const card = h('div', { role: 'button', tabIndex: 0, draggable: true, class: 'nt-card', 'data-note-id': n.id, style: { '--c': n.color },
-        onclick: (e) => { if (Date.now() < suppressClickUntil || e.target.closest('.nt-delete,.nt-drag-handle')) return; show(n, redraw); },
+        const card = h('div', { role: 'button', tabIndex: 0, draggable: !groupedMode, class: 'nt-card', 'data-note-id': n.id, style: { '--c': n.color },
+        onclick: (e) => { if (Date.now() < suppressClickUntil || e.target.closest('.nt-delete')) return; show(n, redraw); },
         onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) show(n, redraw); },
-        ondragstart: (e) => { if (e.target.closest('.nt-drag-handle')) { e.preventDefault(); return; } dragId = n.id; e.dataTransfer.setData('text/plain', n.id); e.dataTransfer.effectAllowed = 'move'; },
+        ondragstart: (e) => { if (groupedMode) return e.preventDefault(); dragId = n.id; e.dataTransfer.setData('text/plain', n.id); e.dataTransfer.effectAllowed = 'move'; },
         ondragend: () => { dragId = ''; clearIntent(); } },
         h('div', { class: 'nt-top' },
           h('h4', null, n.title || '제목 없음'), n.pinned ? h('span', { class: 'badge' }, '고정') : null,
-          h('span', { class: 'nt-drag-handle', title: '메모 순서 이동', 'aria-label': '메모 순서 이동', onpointerdown: (event) => {
-            if (event.pointerType === 'mouse') return;
-            event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId);
-            touchDrag = { x: event.clientX, y: event.clientY };
-          }, onpointermove: (event) => {
-            if (!touchDrag) return;
-            if (!ghost && Math.hypot(event.clientX - touchDrag.x, event.clientY - touchDrag.y) < 6) return;
-            if (!ghost) { ghost = card.cloneNode(true); ghost.classList.add('nt-drag-ghost'); document.body.append(ghost); card.classList.add('dragging'); }
-            ghost.style.left = `${event.clientX}px`; ghost.style.top = `${event.clientY}px`;
-            showIntent(hit(event.clientX, event.clientY, n.id));
-          }, onpointerup: (event) => {
-            if (!touchDrag) return;
-            const intent = ghost ? hit(event.clientX, event.clientY, n.id) || dropIntent : null;
-            if (ghost) { ghost.remove(); card.classList.remove('dragging'); suppressClickUntil = Date.now() + 400; }
-            ghost = null; touchDrag = null; clearIntent();
-            if (intent) move(n.id, intent.target.dataset.noteId, intent.placement);
-          }, onpointercancel: () => { ghost?.remove(); ghost = null; touchDrag = null; card.classList.remove('dragging'); clearIntent(); } }, '⋮⋮'),
           viewMode === 'list' ? null : h('button', { class: 'nt-delete', type: 'button', title: '휴지통으로 이동', 'aria-label': `${n.title || '메모'} 휴지통으로 이동`, onclick: (e) => { e.stopPropagation(); trash(n.id, redraw); } }, '×')),
         n.body && viewMode !== 'list' ? h('p', null, n.body) : null,
         h('small', null, n.dates?.length ? `${n.dates.length}개 날짜` : n.dateEnd ? `${n.date} ~ ${n.dateEnd}` : n.date ? `일정 ${n.date}` : new Date(n.updatedAt).toLocaleDateString('ko-KR')));
-        grid.append(viewMode === 'list' ? h('div', { class: 'nt-list-row' }, card,
+        const cancelTouchDrag = () => {
+          if (touchDrag?.timer) clearTimeout(touchDrag.timer);
+          ghost?.remove(); ghost = null; touchDrag = null;
+          card.classList.remove('dragging'); clearIntent();
+        };
+        card.addEventListener('touchstart', (event) => {
+          if (groupedMode || event.touches.length !== 1 || event.target.closest('.nt-delete')) return;
+          const touch = event.touches[0];
+          touchDrag = { x: touch.clientX, y: touch.clientY, timer: setTimeout(() => {
+            if (!touchDrag || !card.isConnected) return;
+            ghost = card.cloneNode(true); ghost.classList.add('nt-drag-ghost'); document.body.append(ghost);
+            ghost.style.left = `${touchDrag.x}px`; ghost.style.top = `${touchDrag.y}px`;
+            card.classList.add('dragging'); suppressClickUntil = Date.now() + 400;
+          }, 350) };
+        });
+        card.addEventListener('touchmove', (event) => {
+          if (!touchDrag) return;
+          const touch = event.touches[0]; if (!touch) return;
+          if (!ghost) {
+            if (Math.hypot(touch.clientX - touchDrag.x, touch.clientY - touchDrag.y) > 8) cancelTouchDrag();
+            return;
+          }
+          event.preventDefault();
+          ghost.style.left = `${touch.clientX}px`; ghost.style.top = `${touch.clientY}px`;
+          showIntent(hit(touch.clientX, touch.clientY, n.id));
+        }, { passive: false });
+        card.addEventListener('touchend', (event) => {
+          const touch = event.changedTouches[0];
+          const intent = ghost && touch ? hit(touch.clientX, touch.clientY, n.id) || dropIntent : null;
+          if (ghost) suppressClickUntil = Date.now() + 400;
+          cancelTouchDrag();
+          if (intent) move(n.id, intent.target.dataset.noteId, intent.placement);
+        });
+        card.addEventListener('touchcancel', cancelTouchDrag);
+        target.append(viewMode === 'list' ? h('div', { class: 'nt-list-row' }, card,
           h('button', { class: 'nt-list-delete', type: 'button', title: '휴지통으로 이동', 'aria-label': `${n.title || '메모'} 휴지통으로 이동`, onclick: () => trash(n.id, redraw) }, '×')) : card);
       });
     };
@@ -318,13 +387,15 @@ const Notes = (() => {
             if (note) { delete note.deletedAt; note.autoTrashExempt = true; save(records); }
             m.close(); redraw(); openTrash();
           } }, '복원'),
-          h('button', { class: 'btn danger', type: 'button', onclick: () => {
+          h('button', { class: 'btn danger', type: 'button', onclick: async () => {
             if (!confirm('이 메모를 영구 삭제할까요?')) return;
+            await removeImages(n);
             save(load().filter((x) => x.id !== n.id)); m.close(); redraw(); openTrash();
           } }, '영구 삭제'))))
         : h('p', { class: 'muted' }, '휴지통이 비어 있어요.'),
-        footer: list.length ? [h('button', { class: 'btn danger', type: 'button', onclick: () => {
+        footer: list.length ? [h('button', { class: 'btn danger', type: 'button', onclick: async () => {
           if (!confirm(`휴지통의 메모 ${list.length}개를 모두 영구 삭제할까요?`)) return;
+          for (const note of list) await removeImages(note);
           save(load().filter((n) => !n.deletedAt)); m.close(); redraw(); App.toast('휴지통을 비웠어요.');
         } }, '휴지통 비우기')] : null });
     }
@@ -348,7 +419,7 @@ const Notes = (() => {
         ...[['cards', '네모 보기'], ['list', '줄 보기']].map(([mode, label]) => h('button', { class: 'btn' + (viewMode === mode ? ' on' : ''), type: 'button', 'aria-pressed': String(viewMode === mode), onclick: () => { viewMode = mode; Store.set('notesViewMode', mode); App.refresh(); } }, label))),
       h('div', { class: 'filters' }, h('input', { type: 'search', placeholder: '메모 검색', value: q, oninput: (e) => { q = e.target.value; redraw(); } }),
         h('select', { 'aria-label': '메모 정렬', onchange: (e) => { sortMode = e.target.value; localStorage.setItem('classhub-note-sort', sortMode); redraw(); } },
-          [['manual', '직접 정렬'], ['recent', '최근 수정순'], ['date-asc', '날짜 빠른순'], ['date-desc', '날짜 늦은순'], ['folder', '보관함순'], ['name', '이름순']].map(([value, label]) => h('option', { value, selected: sortMode === value }, label)))),
+          [['manual', '직접 정렬'], ['recent', '최근 수정순'], ['created-desc', '작성 최근순'], ['created-asc', '작성 오래된순'], ['date-asc', '연결 날짜 빠른순'], ['date-desc', '연결 날짜 늦은순'], ['date-group', '연결 날짜별 묶기'], ['folder', '보관함순'], ['name', '이름순']].map(([value, label]) => h('option', { value, selected: sortMode === value }, label)))),
       grid));
     redraw();
   }
