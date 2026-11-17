@@ -205,7 +205,7 @@ const DrawTools = (() => {
       const diameter = Math.ceil(Math.hypot(c.width, c.height) * 2);
       Object.assign(ruler.style, { left: `${(c.width - diameter) / 2}px`, top: `${(c.height - diameter) / 2}px`, width: `${diameter}px`, height: `${diameter}px`, transform: `rotate(${rulerAngle.value}deg)` });
       const x = c.width * Number(axisX.value) / 100, y = c.height * Number(axisY.value) / 100;
-      Object.assign(axis.style, { left: `${x}px`, top: `${y - diameter / 2}px`, height: `${diameter}px`, transform: `rotate(${symmetryAngle.value}deg)` });
+      Object.assign(axis.style, { left: `${x - 1}px`, top: `${y - diameter / 2}px`, height: `${diameter}px`, transform: `rotate(${symmetryAngle.value}deg)` });
       Object.assign(axisHandle.style, { left: `${x}px`, top: `${y}px` });
       axis.classList.toggle('fourfold', Number(fold.value) === 4);
       rulerFields.querySelector('output').textContent = `${rulerAngle.value}°`;

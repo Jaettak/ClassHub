@@ -277,7 +277,30 @@ const Grades = (() => {
           : h('section', { class: 'gr-card' }, h('h3', null, filters.mode === 'school' && filters.chart === 'exam' ? '고사별 점수' : '과목별 점수'),
             h('p', { class: 'hint' }, filters.mode === 'school' && filters.chart === 'exam' ? '각 과목의 고사 점수' : `${filters.family || '전체 과목'}의 과목별 평균 점수`), bars(barRows)),
         focused.length && filters.mode === 'school' && !chartRows.length ? null : h('section', { class: 'gr-card' }, h('div', { class: 'title-row' }, h('h3', null, filters.mode === 'mock' ? '모의고사 추이' : filters.chart === 'course' ? '학기말 추이' : '고사별 추이'),
-          h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: '점수 추이 확대', wide: true, body: trend(graphRows, true) }) }, '확대')),
+          h('button', { class: 'btn ghost', type: 'button', onclick: () => {
+            const chart = trend(graphRows, true);
+            const viewport = h('div', { class: 'gr-expanded-chart' }, chart);
+            const dialog = App.modal({ title: '점수 추이 확대', wide: true, body: viewport });
+            dialog.back.classList.add('gr-chart-modal');
+            let scale = 1, pinch = null;
+            const apply = (next, clientX, clientY) => {
+              const rect = viewport.getBoundingClientRect();
+              const x = (clientX ?? rect.left + rect.width / 2) - rect.left;
+              const y = (clientY ?? rect.top + rect.height / 2) - rect.top;
+              const contentX = (viewport.scrollLeft + x) / scale;
+              const contentY = (viewport.scrollTop + y) / scale;
+              scale = Math.max(1, Math.min(4, next));
+              chart.style.width = `${Math.max(viewport.clientWidth, 320) * scale}px`;
+              chart.style.height = `${Math.max(viewport.clientWidth, 320) * scale * 300 / 820}px`;
+              viewport.scrollLeft = contentX * scale - x;
+              viewport.scrollTop = contentY * scale - y;
+            };
+            requestAnimationFrame(() => apply(1));
+            viewport.addEventListener('wheel', (event) => { event.preventDefault(); apply(scale * (event.deltaY < 0 ? 1.12 : 1 / 1.12), event.clientX, event.clientY); }, { passive: false });
+            viewport.addEventListener('touchstart', (event) => { if (event.touches.length === 2) { const [a, b] = event.touches; pinch = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), scale }; } }, { passive: true });
+            viewport.addEventListener('touchmove', (event) => { if (!pinch || event.touches.length !== 2) return; event.preventDefault(); const [a, b] = event.touches; apply(pinch.scale * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / Math.max(1, pinch.distance), (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2); }, { passive: false });
+            viewport.addEventListener('touchend', (event) => { if (event.touches.length < 2) pinch = null; });
+          } }, '확대')),
           h('div', { class: 'gr-chart' }, trend(graphRows))),
         filters.mode === 'school' ? h('section', { class: 'gr-card gr-grade-chart' }, h('h3', null, '학기별 등급·성취도'), gradeChart(allMode)) : null);
         body.append(overview);

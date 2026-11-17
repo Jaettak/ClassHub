@@ -223,7 +223,7 @@ const SchoolData = (() => {
             tt.days = ['월', '화', '수', '목', '금']; tt.periods = periods;
             tt.cells = Array.from({ length: 5 }, (_, d) => Array.from({ length: periods }, (_, p) => tt.cells?.[d]?.[p] || null));
             tt.periodTimes = Array.from({ length: periods }, (_, p) => tt.periodTimes?.[p] || { start: '', end: '' });
-            rows.forEach((r) => { tt.cells[r.day - 1][r.period - 1] = r.subject ? { subject: r.subject, teacher: r.teacher, room: r.room, sourceDetails: r.sourceDetails } : null; if (r.start || r.end) { const old = tt.periodTimes[r.period - 1]; tt.periodTimes[r.period - 1] = { start: r.start || old.start, end: r.end || old.end }; } });
+            rows.forEach((r) => { tt.cells[r.day - 1][r.period - 1] = r.subject ? { subject: r.subject, teacher: r.teacher, room: r.room, sourceDetails: r.sourceDetails, sourcePackageId: packageId } : null; if (r.start || r.end) { const old = tt.periodTimes[r.period - 1]; tt.periodTimes[r.period - 1] = { start: r.start || old.start, end: r.end || old.end }; } });
             if (friendIndex >= 0) { friendList[friendIndex] = tt; Store.set('ttFriends', friendList); }
             else Store.set('timetable', tt);
           } else if (data.kind === 'grades') {
@@ -280,6 +280,16 @@ const SchoolData = (() => {
           h('button', { class: 'btn danger', type: 'button', onclick: () => {
             if (!confirm('이 가져오기 기록과 해당 파일로 추가한 항목을 삭제할까요?')) return;
             const ids = new Set(item.recordIds || []);
+            if (kind === 'timetable') {
+              const own = Store.get('timetable', null);
+              if (own?.cells) {
+                own.cells.forEach((column) => column.forEach((cell, index) => { if (cell?.sourcePackageId === item.id) column[index] = null; }));
+                Store.set('timetable', own);
+              }
+              const friendRows = Store.get('ttFriends', []);
+              friendRows.forEach((friend) => friend.cells?.forEach((column) => column.forEach((cell, index) => { if (cell?.sourcePackageId === item.id) column[index] = null; })));
+              Store.set('ttFriends', friendRows);
+            }
             const keys = { calendar: ['events'], grades: ['grades', 'schoolReportExtras'], activities: ['activities'], map: ['schoolPlaces'] }[kind] || [];
             keys.forEach((key) => Store.set(key, Store.get(key, []).filter((row) => row.sourcePackageId !== item.id && !(ids.has(row.id) && row.sourceSchoolImport && !row.sourcePackageId))));
             Store.set('schoolImportPackages', Store.get('schoolImportPackages', []).filter((row) => row.id !== item.id)); after();
@@ -386,12 +396,24 @@ const SchoolData = (() => {
         h('button', { class: 'btn', type: 'button', onclick: () => { const name = prompt('층 이름', floor.name)?.trim(); if (name) update({ name }); } }, '이름 변경'),
         h('button', { class: 'btn', type: 'button', onclick: () => { placing = true; App.toast('사진에서 마커를 놓을 위치를 눌러 주세요.'); } }, '마커 추가'),
         h('button', { class: 'btn', type: 'button', onclick: () => uploadFloorImages(after, floor) }, '사진 교체'),
-        h('button', { class: 'btn', type: 'button', onclick: () => uploadFloorImages(after) }, '다른 층 사진 추가'),
+        h('button', { class: 'btn', type: 'button', 'aria-label': `${floor.name} 위로 이동`, onclick: () => {
+          const items = Store.get('schoolPlaces', []).slice(), i = items.findIndex((item) => item.id === floor.id);
+          if (i <= 0) return;
+          [items[i - 1], items[i]] = [items[i], items[i - 1]];
+          Store.set('schoolPlaces', items); after();
+        } }, '↑ 위로'),
+        h('button', { class: 'btn', type: 'button', 'aria-label': `${floor.name} 아래로 이동`, onclick: () => {
+          const items = Store.get('schoolPlaces', []).slice(), i = items.findIndex((item) => item.id === floor.id);
+          if (i < 0 || i >= items.length - 1) return;
+          [items[i], items[i + 1]] = [items[i + 1], items[i]];
+          Store.set('schoolPlaces', items); after();
+        } }, '↓ 아래로'),
         h('label', { class: 'school-zoom' }, '확대', zoom),
         h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!confirm(`${floor.name} 지도를 삭제할까요?`)) return; await Store.delImg(imageKey); Store.set('schoolPlaces', Store.get('schoolPlaces', []).filter((row) => row.id !== floor.id)); after(); } }, '지도 삭제')),
       scroller, h('p', { class: 'muted' }, `${floor.floorImageFile || '사진 미첨부'} · 마커 ${features.length}개 · 사진은 이 기기에 저장되고 Drive를 연결하면 동기화돼요.`));
   }
   function renderMap(root) {
+    openFloorId = null;
     const panel = h('section', { class: 'panel' });
     const dropZone = h('div', { class: 'school-photo-drop' }, '지도 사진을 여기로 끌어 놓으세요');
     dropZone.addEventListener('dragover', (event) => { if ([...(event.dataTransfer?.types || [])].includes('Files')) { event.preventDefault(); dropZone.classList.add('drag-over'); } });

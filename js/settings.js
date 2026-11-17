@@ -23,6 +23,16 @@ const Settings = (() => {
     const setup = !s.privatePinHash;
     const pin = h('input', { type: 'password', inputMode: 'text', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: setup ? '새 비밀번호 4자 이상' : '비밀번호' });
     const repeat = h('input', { type: 'password', inputMode: 'text', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: '비밀번호 다시 입력' });
+    const visible = h('button', { class: 'btn ghost pin-visibility', type: 'button', 'aria-label': '비밀번호 보기', onclick: () => {
+      const show = pin.type === 'password';
+      pin.type = show ? 'text' : 'password';
+      repeat.type = pin.type;
+      visible.classList.toggle('is-visible', show);
+      visible.setAttribute('aria-label', show ? '비밀번호 숨기기' : '비밀번호 보기');
+    } }, sv('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+      sv('path', { d: 'M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7 }),
+      sv('circle', { cx: 12, cy: 12, r: 2.5, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7 }),
+      sv('path', { class: 'pin-eye-slash', d: 'M4 20 20 4', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-linecap': 'round' })));
     const submit = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
       if (pin.value.length < 4) return App.toast('비밀번호를 4자 이상 입력해 주세요.');
       if (setup && pin.value !== repeat.value) return App.toast('비밀번호가 서로 달라요.');
@@ -35,7 +45,7 @@ const Settings = (() => {
     } }, setup ? '설정하고 열기' : '열기');
     const m = App.modal({ title: setup ? '잠금 설정' : '잠금 해제',
       body: [h('p', { class: 'hint' }, setup ? '잠근 탭을 열 때 사용할 비밀번호를 설정하세요.' : '잠근 탭을 보려면 비밀번호를 입력하세요.'),
-        App.field('비밀번호', pin), setup ? App.field('비밀번호 확인', repeat) : null],
+        h('div', { class: 'pin-entry' }, App.field('비밀번호', pin), visible), setup ? App.field('비밀번호 확인', repeat) : null],
       footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'), submit] });
     [pin, repeat].forEach((input) => input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); submit.click(); } }));
     pin.focus();
@@ -177,7 +187,14 @@ const Settings = (() => {
             h('span', { class: 'set-preview-icon' }, icon(id)), h('b', null, choice.label),
             previewMode === 'visibility' ? h('label', { class: 'set-preview-check' }, choice.input, '표시') : null);
         choice.input.onchange = () => { tile.classList.toggle('disabled', !choice.input.checked); };
-        if (previewMode === 'visibility') return tile;
+        if (previewMode === 'visibility') {
+          tile.addEventListener('click', (event) => {
+            if (event.target.closest('input, label')) return;
+            choice.input.checked = !choice.input.checked;
+            choice.input.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+          return tile;
+        }
         let ghost = null, dropIntent = null, insertionLine = null;
         const hit = (event) => {
           const point = document.elementFromPoint(event.clientX, event.clientY);
@@ -288,10 +305,30 @@ const Settings = (() => {
         });
         return tile;
       });
-      if (previewMode !== 'home') { cardList.replaceChildren(...tiles); return; }
+      if (previewMode === 'visibility') { cardList.replaceChildren(...tiles); return; }
+      if (previewMode === 'mini') {
+        cardList.className = 'set-card-preview preview-mini-live';
+        const vw = window.innerWidth;
+        const scale = Math.min(1, Math.min(680, Math.max(240, vw - 80)) / vw);
+        const max = vw <= 640 ? 3 : vw <= 1000 ? 5 : 7;
+        const rows = Math.min(tiles.length, Math.max(vw <= 640 ? 1 : 2, Math.ceil(tiles.length / max)));
+        let index = 0;
+        const nav = h('nav', { class: 'set-mini-nav' }, Array.from({ length: rows }, (_, row) => {
+          const count = Math.floor(tiles.length / rows) + (row < tiles.length % rows ? 1 : 0);
+          return h('div', { class: 'set-mini-row' }, tiles.slice(index, index += count));
+        }));
+        const stage = h('div', { class: 'set-mini-stage' },
+          h('div', { class: 'set-mini-brand' }, icon('books'), h('b', null, 'Class', h('span', null, 'Hub'))),
+          nav, h('span', { class: 'set-mini-settings' }, icon('settings')));
+        Object.assign(stage.style, { width: `${vw}px`, transform: `scale(${scale})` });
+        const viewport = h('div', { class: 'set-mini-viewport' }, stage);
+        viewport.style.height = `${Math.max(92, 22 + rows * 52) * scale}px`;
+        cardList.replaceChildren(viewport);
+        return;
+      }
       cardList.className = 'set-card-preview preview-home-live';
       const vw = window.innerWidth, vh = window.innerHeight;
-      const scale = Math.min(1, 800 / vw, Math.min(650, vh * .75) / vh);
+      const scale = Math.min(1, Math.min(680, Math.max(240, vw - 80)) / vw, Math.min(650, vh * .75) / vh);
       const lessons = Settings.protectedTab('timetable') ? [] : Timetable.lessonsFor(new Date());
       const schedule = h('div', { class: 'home-schedule-preview' }, h('h3', null, '오늘 시간표'),
         h('div', { class: 'home-schedule-list' }, lessons.length ? lessons.map((lesson) => h('div', { class: 'home-schedule-lesson' }, `${lesson.period}. ${lesson.displayTitle}`)) : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')));
@@ -335,13 +372,13 @@ const Settings = (() => {
     const lockChoices = cardNames.map(([id, label]) => ({ id, input: h('input', { type: 'checkbox', checked: (draft.privateLockTabs || (draft.privateLockEnabled === false ? [] : ['activities', 'grades'])).includes(id) }), label }));
     const lockOptions = h('div', { class: 'set-lock-tabs' }, lockChoices.map(({ input, label }) => h('label', { class: 'check' }, input, label)));
     const lockBox = section('잠금 활성화',
-      h('button', { class: 'btn', type: 'button', onclick: () => {
+      h('button', { class: 'btn set-lock-action', type: 'button', onclick: () => {
         const dialog = App.modal({ title: '잠금 활성화', body: [h('div', { class: 'set-preview-actions' },
           h('button', { class: 'btn ghost', type: 'button', onclick: () => { lockChoices.forEach(({ input }) => { input.checked = true; }); } }, '전체 선택'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => { lockChoices.forEach(({ input }) => { input.checked = false; }); } }, '전체 해제')), lockOptions,
           h('p', { class: 'hint' }, '잠근 탭의 내용은 홈 미리보기에서도 숨깁니다. 화면 접근용 잠금이며 저장 데이터 암호화는 아닙니다.')], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
       } }, '잠글 탭 선택'),
-      h('button', { class: 'btn ghost', type: 'button', onclick: () => {
+      h('button', { class: 'btn ghost set-lock-action', type: 'button', onclick: () => {
         if (!get().privatePinHash) return unlock(() => App.toast('비밀번호를 설정했어요.'));
         unlock(() => {
           const next = h('input', { type: 'password', minLength: 4, maxLength: 32, autocomplete: 'off' });
@@ -398,7 +435,7 @@ const Settings = (() => {
         m.close(); apply(); App.toast('모두 지웠어요.'); App.route();
       } }, '모든 데이터 지우기'));
 
-    const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, notesBox, tabBox, lockBox, backupBox, resetBox, downloadBox, versionBox);
+    const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, notesBox, tabBox, lockBox, backupBox, downloadBox, versionBox, resetBox);
     const commit = () => {
       save({ school: draft.school, grade: grade.value.trim(), cls: cls.value.trim(), allergies: draft.allergies.slice().sort((a, b) => a - b),
         fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value), notesAutoTrashDays: Number(cleanupDays.value), tabOrder: miniOrder.slice(), homeCardOrder: homeOrder.slice(), enabledTabs: enabledChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockTabs: lockChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockEnabled: true });

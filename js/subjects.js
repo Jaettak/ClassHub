@@ -44,9 +44,22 @@ const Subjects = (() => {
     const view = h('select', { 'aria-label': '과목 목록 보기' },
       h('option', { value: 'timetable' }, '시간표 과목만'),
       h('option', { value: 'all' }, '전체 과목'));
+    const viewTabs = h('div', { class: 'seg subject-view-tabs', role: 'group', 'aria-label': '과목 목록 보기' });
+    const viewButtons = ['timetable', 'all'].map((value) => h('button', { class: 'seg-btn', type: 'button',
+      onclick: () => { view.value = value; draw(); } }));
+    viewTabs.append(...viewButtons);
+    const updateViewTabs = () => {
+      const active = timetableNames();
+      const total = names().length;
+      viewTabs.dataset.mode = view.value;
+      viewButtons[0].textContent = `시간표 과목 ${names().filter((name) => active.has(name)).length}개`;
+      viewButtons[1].textContent = `전체 과목 ${total}개`;
+      viewButtons.forEach((button, index) => button.setAttribute('aria-pressed', view.value === ['timetable', 'all'][index]));
+    };
     const draw = () => {
       const active = timetableNames();
       const shown = view.value === 'timetable' ? names().filter((name) => active.has(name)) : names();
+      updateViewTabs();
       list.replaceChildren(...(shown.length ? shown.map((name) => {
       const color = h('input', { type: 'color', value: colorFor(name), 'aria-label': `${name} 색상` });
       const teacherButton = h('button', { class: 'btn teacher-manage', type: 'button', onclick: () => manageOptions(name, teacherButton, 'teacher') },
@@ -94,7 +107,7 @@ const Subjects = (() => {
         Store.set('subjectCatalog', [...new Set([...catalog(), row.name])].sort((a, b) => a.localeCompare(b, 'ko')));
         Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name)); view.value = 'all'; draw();
       }) }, '공식 과목에서 선택')),
-      App.field('과목 목록', view),
+      h('div', { class: 'subject-view-row' }, h('strong', null, '과목 목록'), viewTabs),
       h('p', { class: 'hint' }, '색상과 과목별 선생님·교실을 관리해요. 시간표에서는 저장한 이름을 선택할 수 있어요. 과목을 삭제해도 과거 기록은 유지합니다.'), list));
     draw();
   }

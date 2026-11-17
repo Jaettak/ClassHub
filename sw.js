@@ -1,8 +1,8 @@
-const CACHE = 'classhub-static-v2.3.0';
+const CACHE = 'classhub-static-v2.4.0';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/style.css',
   './assets/logo.svg', './assets/logo.png', './assets/easter-fall.wav', './lib/pdf.min.js', './lib/pdf.worker.min.js',
-  './js/firebase-config.js', './js/store.js', './js/icons.js', './js/app.js', './js/curriculum2022.js',
+  './js/firebase-config.js', './js/store.js', './js/icons.js', './js/app.js', './js/picker.js', './js/curriculum2022.js',
   './js/neis.js', './js/timer.js', './js/settings.js', './js/cloud.js', './js/cloud-drive.js',
   './js/timetable.js', './js/holidays.js', './js/calendar.js', './js/activities.js',
   './js/grades.js', './js/meals.js', './js/notes.js', './js/pdfcapture.js', './js/creative.js', './js/schooldata.js', './js/subjects.js', './js/main.js'

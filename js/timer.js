@@ -230,7 +230,21 @@ const Timer = (() => {
   window.addEventListener('resize', () => {
     if (!dock) return;
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(mount, 140);
+    resizeTimer = setTimeout(() => {
+      if (!dock?.isConnected) return;
+      const toggleWidth = innerWidth > document.documentElement.clientWidth ? 30 : 22;
+      dock.style.setProperty('--dock-toggle-width', `${toggleWidth}px`);
+      if (dockPosition) {
+        const rect = dock.getBoundingClientRect();
+        dockPosition.x = Math.max(0, Math.min(innerWidth - rect.width, dockPosition.x));
+        dockPosition.y = Math.max(0, Math.min(innerHeight - rect.height, dockPosition.y));
+        dock.style.left = `${dockPosition.x}px`;
+        dock.style.top = `${dockPosition.y}px`;
+      }
+      dock.querySelectorAll('.timer-dock-row').forEach((row) => {
+        row.style.setProperty('--collapse-x', `${Math.max(0, document.documentElement.clientWidth - toggleWidth - row.getBoundingClientRect().left - 1)}px`);
+      });
+    }, 140);
   });
 
   function lap() {

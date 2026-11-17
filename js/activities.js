@@ -161,12 +161,13 @@ const Activities = (() => {
         a.cv ? h('section', null, h('b', null, '생기부에 기재된 내용'), h('p', null, a.cv)) : null,
         a.memo ? h('section', null, h('b', null, '심화 메모'), h('p', null, a.memo)) : null,
       ], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => { dialog.close(); edit(a, after); } }, '수정')] });
+      dialog.back.classList.add('act-detail-modal');
     } },
       h('div', { class: 'act-top' },
         h('span', { class: 'badge' }, typeLabel(a)),
         h('span', { class: 'act-date' }, a.date || '날짜 없음'),
         h('span', { class: 'cv-state ' + (recorded ? 'ok' : 'no') }, recorded ? '생기부에 기재됨' : '생기부 미기재')),
-      h('h4', null, subjectsOf(a).length ? `${subjectsOf(a).join(', ')} · ${a.title}` : a.title),
+      h('h4', null, subjectsOf(a).length ? h('span', { class: 'act-subject-prefix' }, `${subjectsOf(a).join(', ')} · `) : null, a.title),
       h('div', { class: 'act-sem' }, semLabel(a)),
       a.desc ? h('p', { class: 'act-desc' }, a.desc) : null,
       a.memo ? h('p', { class: 'act-memo' }, h('b', null, '심화 '), a.memo) : null);

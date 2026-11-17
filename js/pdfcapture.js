@@ -35,6 +35,7 @@ const PdfCapture = (() => {
     let clearPending = false;
     const tool = { name: 'pen', color: '#e53935', size: 4 };
     const opacity = h('input', { type: 'range', min: 5, max: 100, value: 100, 'aria-label': '펜 불투명도' });
+    const shapeFill = h('input', { type: 'checkbox', 'aria-label': '도형 채우기' });
     const background = h('input', { type: 'color', value: rec.background || '#ffffff', 'aria-label': '배경색' });
     const drawingWidth = h('input', { type: 'number', min: 400, max: 4000, step: 100, 'aria-label': '오답 그림 너비' });
     const drawingHeight = h('input', { type: 'number', min: 300, max: 4000, step: 100, 'aria-label': '오답 그림 높이' });
@@ -81,7 +82,8 @@ const PdfCapture = (() => {
         else if (a.t === 'rect') ctx.rect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
         else if (a.t === 'triangle') { ctx.moveTo((x1 + x2) / 2, y1); ctx.lineTo(x2, y2); ctx.lineTo(x1, y2); ctx.closePath(); }
         else ctx.ellipse((x1 + x2) / 2, (y1 + y2) / 2, Math.max(0.01, Math.abs(x2 - x1) / 2), Math.max(0.01, Math.abs(y2 - y1) / 2), 0, 0, Math.PI * 2);
-        ctx.stroke();
+        if (a.filled && ['rect', 'triangle', 'ellipse'].includes(a.t)) { ctx.fillStyle = a.c; ctx.fill(); }
+        else ctx.stroke();
         ctx.globalAlpha = 1;
       } else {
         const fs = fontPx(a.s);
@@ -242,7 +244,7 @@ const PdfCapture = (() => {
       const [x, y] = pos(e);
       if (tool.name === 'eyedropper') { redraw(false); const pixel = ctx.getImageData(Math.max(0, Math.min(canvas.width - 1, Math.floor(x))), Math.max(0, Math.min(canvas.height - 1, Math.floor(y))), 1, 1).data; tool.color = '#' + [...pixel].slice(0, 3).map((v) => v.toString(16).padStart(2, '0')).join(''); color.value = tool.color; setTool('pen'); return; }
       if (tool.name === 'fill') { ann.push({ t: 'fill', c: tool.color, alpha: Number(opacity.value) / 100, p: [[x, y]] }); undone.length = 0; redraw(); return; }
-      cur = { t: tool.name, c: tool.color, s: tool.size, alpha: Number(opacity.value) / 100 * (tool.name === 'marker' ? .3 : 1), symmetry: guides.symmetry(), p: [[x, y]] };
+      cur = { t: tool.name, c: tool.color, s: tool.size, filled: shapeFill.checked, alpha: Number(opacity.value) / 100 * (tool.name === 'marker' ? .3 : 1), symmetry: guides.symmetry(), p: [[x, y]] };
       drawAnn(cur);
     });
     canvas.addEventListener('pointermove', (e) => {
@@ -304,7 +306,7 @@ const PdfCapture = (() => {
     const color = h('input', { type: 'color', value: tool.color, 'aria-label': '색상', oninput: (e) => { tool.color = e.target.value; } });
     const quick = ['#e53935', '#1e66f5', '#2e9e5b', '#111111', '#ff9800'].map((c) => h('button', { type: 'button', class: 'sw', style: { background: c }, 'aria-label': c,
       onclick: () => { tool.color = c; color.value = c; } }));
-    const size = h('input', { type: 'range', min: 1, max: 12, value: tool.size, 'aria-label': '굵기·글자 크기', oninput: (e) => { tool.size = Number(e.target.value); } });
+    const size = h('input', { type: 'range', min: 1, max: 24, value: tool.size, 'aria-label': '펜·지우개 굵기·글자 크기', oninput: (e) => { tool.size = Number(e.target.value); } });
     const selectAction = (label, action) => h('button', { class: 'btn', type: 'button', onclick: () => {
       if (action === 'paste') {
         if (!clipboard) return App.toast('먼저 영역을 복사하세요.');
@@ -351,6 +353,7 @@ const PdfCapture = (() => {
       h('div', { class: 'draw-toolbar-row' },
       h('label', { class: 'creative-color-label' }, '펜 색', color), quick, h('label', { class: 'size' }, '크기', size),
       h('label', { class: 'creative-color-label' }, '불투명도', opacity),
+      h('label', { class: 'creative-shape-fill' }, shapeFill, '도형 채우기'),
       h('label', { class: 'creative-color-label' }, '보드 색', background),
       rec.sourceType === 'drawing' ? h('label', { class: 'creative-size-label' }, '너비', drawingWidth) : null,
       rec.sourceType === 'drawing' ? h('label', { class: 'creative-size-label' }, '높이', drawingHeight) : null,
@@ -540,7 +543,7 @@ const PdfCapture = (() => {
     }
     fileInput.addEventListener('change', () => { openFile(fileInput.files[0]); fileInput.value = ''; });
     const blankBase = () => {
-      const c = document.createElement('canvas'); c.width = 2200; c.height = 1500;
+      const c = document.createElement('canvas'); c.width = 2000; c.height = matchMedia('(max-width: 640px)').matches ? 2000 : 1200;
       const cx = c.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
       return c.toDataURL('image/png');
     };

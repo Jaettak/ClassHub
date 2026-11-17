@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.3.0';
+const CLASSHUB_VERSION = 'v2.4.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -47,6 +47,8 @@ function h(tag, props, ...kids) {
     if (c == null || c === false) continue;
     e.append(c.nodeType ? c : document.createTextNode(c));
   }
+  if (tag === 'input' && ['date', 'time', 'color'].includes(e.type) && typeof ClassHubPicker !== 'undefined') ClassHubPicker.enhance(e);
+  if (tag === 'select' && typeof ClassHubPicker !== 'undefined') ClassHubPicker.enhanceSelect(e);
   return e;
 }
 
@@ -220,6 +222,8 @@ const App = (() => {
   };
 
   function route() {
+    const previousView = current;
+    const previousScroll = window.scrollY;
     Store.purgeExpiredTrash().catch(() => {});
     if (Cloud.configured && !Cloud.ready) { Cloud.showGate(); return; }
     const name = (location.hash || '#home').slice(1);
@@ -295,7 +299,7 @@ const App = (() => {
         app.style.setProperty('--nav-spacer', `${barHeight}px`);
       });
     }
-    window.scrollTo(0, 0);
+    window.scrollTo(0, previousView === key ? previousScroll : 0);
   }
 
   function refresh() { route(); }
@@ -349,8 +353,7 @@ const App = (() => {
 // 주요 선택 동작마다 같은 계열의 짧은 효과음을 낸다.
 (() => {
   let audio;
-  document.addEventListener('click', (event) => {
-    const target = event.target.closest('button, a, [role="button"], summary');
+  const playSelection = (target) => {
     const settings = Settings.get();
     if (!target || target.disabled || settings.uiSound === false || Number(settings.soundVolume ?? 50) <= 0) return;
     try {
@@ -365,5 +368,9 @@ const App = (() => {
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.105);
       osc.connect(gain); gain.connect(audio.destination); osc.start(t); osc.stop(t + 0.11);
     } catch (_) { /* 소리를 낼 수 없는 브라우저에서는 조용히 동작 */ }
+  };
+  document.addEventListener('click', (event) => playSelection(event.target.closest('button, a, [role="button"], summary')));
+  document.addEventListener('change', (event) => {
+    if (event.target.matches('select, input[list]')) playSelection(event.target);
   });
 })();

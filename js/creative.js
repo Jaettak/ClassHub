@@ -2,11 +2,12 @@
 const Creative = (() => {
   let backHandler = null;
   function board(root, key, afterSave = () => {}) {
-    const canvas = h('canvas', { class: 'creative-canvas', width: 2200, height: 1400 });
+    const canvas = h('canvas', { class: 'creative-canvas', width: 2000, height: matchMedia('(max-width: 640px)').matches ? 2000 : 1200 });
     const ctx = canvas.getContext('2d');
-    const color = h('input', { type: 'color', value: '#233654', 'aria-label': '펜 색' });
+    const color = h('input', { type: 'color', value: '#000000', 'aria-label': '펜 색' });
     const background = h('input', { type: 'color', value: '#ffffff', 'aria-label': '배경 색' });
-    const size = h('input', { type: 'range', min: 2, max: 50, value: 8, 'aria-label': '펜 굵기' });
+    const size = h('input', { type: 'range', min: 2, max: 100, value: 8, 'aria-label': '펜·지우개 굵기' });
+    const shapeFill = h('input', { type: 'checkbox', 'aria-label': '도형 채우기' });
     const opacity = h('input', { type: 'range', min: 5, max: 100, value: 100, 'aria-label': '펜 불투명도' });
     const boardWidth = h('input', { type: 'number', min: 400, max: 4000, step: 100, value: canvas.width, 'aria-label': '그림 너비' });
     const boardHeight = h('input', { type: 'number', min: 300, max: 4000, step: 100, value: canvas.height, 'aria-label': '그림 높이' });
@@ -59,7 +60,8 @@ const Creative = (() => {
         if (s.tool === '사각형') ctx.rect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
         if (s.tool === '삼각형') { ctx.moveTo((a[0] + b[0]) / 2, a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(a[0], b[1]); ctx.closePath(); }
         if (s.tool === '타원') ctx.ellipse((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, Math.max(.1, Math.abs(a[0] - b[0]) / 2), Math.max(.1, Math.abs(a[1] - b[1]) / 2), 0, 0, Math.PI * 2);
-        ctx.stroke();
+        if (s.filled && ['사각형', '삼각형', '타원'].includes(s.tool)) { ctx.fillStyle = s.color; ctx.fill(); }
+        else ctx.stroke();
         ctx.globalAlpha = 1;
         });
       }
@@ -134,7 +136,7 @@ const Creative = (() => {
         input.addEventListener('blur', () => { const value = input.value.trim(); input.remove(); if (value) { strokes.push({ tool: '글자', color: color.value, size: Number(size.value), points: [point], text: value }); undone = []; draw(); } });
         wrap.append(input); input.focus(); return;
       }
-      active = { tool: mode, color: color.value, size: Number(size.value), alpha: Number(opacity.value) / 100 * (mode === '마커' ? .3 : 1), symmetry: guides.symmetry(), points: [pos(e)] }; canvas.setPointerCapture(e.pointerId); draw();
+      active = { tool: mode, color: color.value, size: Number(size.value), filled: shapeFill.checked, alpha: Number(opacity.value) / 100 * (mode === '마커' ? .3 : 1), symmetry: guides.symmetry(), points: [pos(e)] }; canvas.setPointerCapture(e.pointerId); draw();
     });
     canvas.addEventListener('pointermove', (e) => {
       if (touchPointers.size > 1) return;
@@ -155,7 +157,7 @@ const Creative = (() => {
     canvas.addEventListener('pointerup', () => { if (!active) return; strokes.push(active); undone = []; active = null; draw(); });
     canvas.addEventListener('pointercancel', (e) => { touchPointers.delete(e.pointerId); active = null; selection = null; draw(); });
     const readyImage = async () => { await Promise.all([...images.values()].map((image) => image.decode().catch(() => {}))); draw(false); };
-    const save = async () => { await readyImage(); await Store.putImg(key, { data: canvas.toDataURL('image/png'), strokes, background: background.value, pixelWidth: canvas.width, pixelHeight: canvas.height }); afterSave(); App.toast('그림을 이 기기에 저장했어요.'); };
+    const save = async (quiet = false) => { await readyImage(); await Store.putImg(key, { data: canvas.toDataURL('image/png'), strokes, background: background.value, pixelWidth: canvas.width, pixelHeight: canvas.height }); afterSave(); if (!quiet) App.toast('그림을 이 기기에 저장했어요.'); };
     const load = async () => { const old = await Store.getImg(key); if (old?.strokes) {
       if (old.pixelWidth && old.pixelHeight) { canvas.width = old.pixelWidth; canvas.height = old.pixelHeight; boardWidth.value = canvas.width; boardHeight.value = canvas.height; }
       const scale = canvas.width / (old.pixelWidth || 1100);
@@ -168,6 +170,7 @@ const Creative = (() => {
       h('div', { class: 'draw-toolbar-row' },
       h('label', { class: 'creative-color-label' }, '펜 색', color),
       h('label', { class: 'creative-color-label' }, '굵기', size),
+      h('label', { class: 'creative-shape-fill' }, shapeFill, '도형 채우기'),
       h('label', { class: 'creative-color-label' }, '불투명도', opacity),
       h('label', { class: 'creative-color-label' }, '보드 색', background),
       h('label', { class: 'creative-size-label' }, '너비', boardWidth),
@@ -177,11 +180,12 @@ const Creative = (() => {
       h('button', { class: 'btn', type: 'button', 'aria-label': '이전', title: '이전', onclick: () => { if (clearPending && undone.at(-1)?.clear) { strokes = undone.at(-1).clear.slice(); clearPending = false; } else if (strokes.length) { const last = strokes.pop(), batch = [last]; if (last.group && strokes.at(-1)?.group === last.group) batch.unshift(strokes.pop()); undone.push(batch); selection = null; selectedPatch = null; frame.hide(); } draw(); } }, sv('svg', { viewBox: '0 0 24 24', class: 'draw-history-icon', 'aria-hidden': 'true' }, sv('path', { d: 'M9 7 4 12l5 5M4 12h10a6 6 0 0 1 6 6', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }))),
       h('button', { class: 'btn', type: 'button', 'aria-label': '이후', title: '이후', onclick: () => { if (undone.length) { const next = undone.pop(); if (next.clear) { strokes = []; clearPending = false; } else strokes.push(...next); } draw(); } }, sv('svg', { viewBox: '0 0 24 24', class: 'draw-history-icon', 'aria-hidden': 'true' }, sv('path', { d: 'm15 7 5 5-5 5m5-5H10a6 6 0 0 0-6 6', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }))),
       h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (!strokes.length) return; undone = [{ clear: strokes.slice() }]; clearPending = true; strokes = []; selection = null; selectedPatch = null; frame.hide(); draw(); } }, '모두 지우기'),
-      h('button', { class: 'btn primary', type: 'button', onclick: save }, '그림 저장'),
+      key.startsWith('study-') ? null : h('button', { class: 'btn primary', type: 'button', onclick: () => save() }, '그림 저장'),
       h('button', { class: 'btn', type: 'button', onclick: async () => { await readyImage(); App.download('ClassHub-그림.png', canvas.toDataURL('image/png')); } }, 'PNG 받기'))),
       wrap);
     background.addEventListener('input', () => { invalidateFill(); draw(); });
     load();
+    return { save };
   }
   function whiteboard(root) {
     const list = () => Store.get('whiteboards', []);
@@ -195,13 +199,12 @@ const Creative = (() => {
       area.replaceChildren(back, saved);
       saved.replaceChildren(...list().filter((item) => !item.deletedAt).map((item) => {
         const content = h('div', { class: 'saved-board-content' });
-        const details = h('details', { class: 'panel saved-board', ontoggle: () => {
+        const details = h('details', { class: 'panel saved-board', ontoggle: async () => {
           if (details.open && !content.childElementCount) {
-            const title = h('input', { type: 'text', value: item.title, 'aria-label': '보드 이름' });
-            const drawing = h('div');
-            content.append(App.field('이름', title), drawing,
+            const image = await Store.getImg('board-' + item.id);
+            content.append(image?.data ? h('img', { class: 'saved-board-image', src: image.data, alt: `${item.title} 그림` }) : h('p', { class: 'muted' }, '저장된 그림이 없어요.'),
+              h('button', { class: 'btn primary', type: 'button', onclick: () => open(item) }, '수정'),
               h('button', { class: 'btn danger', type: 'button', onclick: () => { saveList(list().map((x) => x.id === item.id ? { ...x, deletedAt: Date.now() } : x)); showSaved(); } }, '휴지통'));
-            board(drawing, 'board-' + item.id, () => { saveList(list().map((x) => x.id === item.id ? { ...x, title: title.value.trim() || item.title, updatedAt: Date.now() } : x)); details.querySelector('summary').textContent = title.value.trim() || item.title; });
           }
         } }, h('summary', null, item.title), content);
         return details;
@@ -231,7 +234,7 @@ const Creative = (() => {
   function study(root) {
     const pages = () => Store.get('studyPages', []);
     const savePages = (items) => Store.set('studyPages', items);
-    const list = h('div', { class: 'study-list' });
+    const list = h('div', { class: 'study-list study-saved-list' });
     const editor = h('div', { class: 'study-editor' });
     const entry = h('div', { class: 'creative-entry' });
     const returnToEntry = () => { list.hidden = true; editor.hidden = true; entry.hidden = false; backHandler = null; };
@@ -245,26 +248,48 @@ const Creative = (() => {
         if (!groups.get(subject).has(unit)) groups.get(subject).set(unit, []);
         groups.get(subject).get(unit).push(p);
       });
-      list.replaceChildren(listBack, ...[...groups].map(([subject, units]) => h('details', { class: 'study-group', open: true },
-        h('summary', null, subject), [...units].map(([unit, items]) => h('details', { class: 'study-unit', open: true },
-          h('summary', null, unit), items.map((p) => h('button', { class: 'btn', type: 'button', onclick: () => open(p) }, p.title)))))));
+      list.replaceChildren(listBack, ...[...groups].map(([subject, units]) => h('details', { class: 'study-group' },
+        h('summary', null, subject), [...units].map(([unit, items]) => h('details', { class: 'study-unit' },
+          h('summary', null, unit), items.map((p) => h('button', { class: 'btn', type: 'button', onclick: async () => {
+            const image = await Store.getImg('study-' + p.id);
+            const dialog = App.modal({ title: p.title, body: [h('p', null, `${p.subject || '미분류'} · ${p.unit || '단원 없음'}`),
+              h('p', { class: 'study-read-body' }, p.body || ''), image?.data ? h('img', { class: 'saved-board-image', src: image.data, alt: `${p.title} 그림` }) : null],
+              footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => { dialog.close(); open(p); } }, '수정')] });
+          } }, p.title)))))));
     };
     const open = (page = null) => {
       list.hidden = true; editor.hidden = false; entry.hidden = true; backHandler = returnToEntry;
       const id = page?.id || uid();
-      const subject = h('input', { type: 'text', value: page?.subject || '', placeholder: '과목' });
+      const subject = h('input', { type: 'text', value: page?.subject || '', placeholder: '과목 이름' });
+      const subjectChoice = h('select', { 'aria-label': '필기 과목 선택', onchange: () => { if (subjectChoice.value) subject.value = subjectChoice.value; } });
+      const subjectModes = h('div', { class: 'seg study-subject-modes' });
+      const modeButtons = ['timetable', 'all'].map((mode) => h('button', { class: 'seg-btn', type: 'button', onclick: () => showSubjects(mode) }, mode === 'timetable' ? '시간표 과목' : '전체 과목'));
+      subjectModes.append(...modeButtons);
+      const showSubjects = (mode) => {
+        const timetable = new Set((Store.get('timetable', {})?.cells || []).flatMap((day) => day || []).map((cell) => cell?.subject).filter(Boolean));
+        const all = new Set([...Store.get('subjectCatalog', []), ...Store.get('subjects', []).map((item) => typeof item === 'string' ? item : item.name),
+          ...Store.get('grades', []).map((row) => row.subject), ...pages().map((row) => row.subject), ...timetable]);
+        const names = [...(mode === 'timetable' ? timetable : all)].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
+        subjectChoice.replaceChildren(h('option', { value: '' }, names.length ? '과목 선택' : '등록된 과목 없음'),
+          names.map((name) => h('option', { value: name, selected: name === subject.value }, name)));
+        modeButtons.forEach((button, index) => { button.classList.toggle('on', mode === ['timetable', 'all'][index]); button.setAttribute('aria-pressed', mode === ['timetable', 'all'][index]); });
+      };
+      showSubjects('timetable');
       const unit = h('input', { type: 'text', value: page?.unit || '', placeholder: '단원' });
       const title = h('input', { type: 'text', value: page?.title || '', placeholder: '제목' });
       const body = h('textarea', { rows: 12, placeholder: '필기 내용을 입력하세요', value: page?.body || '' });
       const drawing = h('div');
-      editor.replaceChildren(back, h('div', { class: 'row3' }, App.field('과목', subject), App.field('단원', unit), App.field('제목', title)), App.field('내용', body),
-        h('div', { class: 'set-row' }, h('button', { class: 'btn primary', type: 'button', onclick: () => {
+      let boardEditor;
+      editor.replaceChildren(back, h('div', { class: 'row3' }, App.field('과목', h('div', { class: 'study-subject-controls' }, subjectModes, subjectChoice, subject)), App.field('단원', unit), App.field('제목', title)), App.field('내용', body),
+        h('div', { class: 'set-row study-save-row' }, h('button', { class: 'btn primary', type: 'button', onclick: async () => {
           if (!subject.value.trim() || !title.value.trim()) return App.toast('과목과 제목을 입력해 주세요.');
+          await boardEditor.save(true);
           savePages([{ id, subject: subject.value.trim(), unit: unit.value.trim(), title: title.value.trim(), body: body.value, updatedAt: Date.now() }, ...pages().filter((p) => p.id !== id)]);
           draw(); App.toast('필기를 저장했어요.');
         } }, '필기 저장'), page ? h('button', { class: 'btn danger', type: 'button', onclick: () => { savePages(pages().map((p) => p.id === id ? { ...p, deletedAt: Date.now() } : p)); editor.replaceChildren(); editor.hidden = true; list.hidden = false; draw(); } }, '휴지통') : null),
         h('h3', null, '그림 필기'), drawing);
-      board(drawing, 'study-' + id);
+      boardEditor = board(drawing, 'study-' + id);
+      editor.append(editor.querySelector('.study-save-row'));
     };
     const savedView = () => { editor.replaceChildren(); editor.hidden = true; entry.hidden = true; list.hidden = false; backHandler = returnToEntry; draw(); };
     const openTrash = () => {

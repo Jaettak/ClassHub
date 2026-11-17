@@ -123,6 +123,7 @@ const CloudDrive = (() => {
     if (!Cloud.user || Cloud.user.uid !== uid) throw new Error('Google 계정으로 먼저 로그인해 주세요.');
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope(SCOPE);
+    provider.setCustomParameters?.({ prompt: 'consent' });
     const result = await Cloud.user.reauthenticateWithPopup(provider);
     const accessToken = firebase.auth.GoogleAuthProvider.credentialFromResult(result)?.accessToken;
     if (!accessToken) throw new Error('Drive 사용 권한을 받지 못했어요.');
@@ -137,8 +138,10 @@ const CloudDrive = (() => {
       : token ? `Drive 연결됨 · 업로드 대기 ${Object.keys(pending).length}개` : 'Drive 연결을 다시 눌러 주세요. 이 기기의 파일은 그대로 보관됩니다.');
     const button = h('button', { class: 'btn', type: 'button', onclick: async () => {
       button.disabled = true; status.textContent = 'Google Drive에 연결하는 중…';
+      const waiting = setTimeout(() => { status.textContent = '인증 화면이 하얗게 멈췄다면 창을 닫고 다시 시도해 주세요. 연결이 끝나지 않았습니다.'; }, 30000);
       try { await connect(); status.textContent = `Drive 연결됨 · 업로드 대기 ${Object.keys(pending).length}개`; }
-      catch (error) { status.textContent = error.message || 'Drive 연결에 실패했어요.'; }
+      catch (error) { status.textContent = `${error.message || 'Drive 연결에 실패했어요.'}${error.code ? ` (${error.code})` : ''}`; }
+      clearTimeout(waiting);
       button.disabled = false;
     } }, token ? 'Drive 동기화 다시 확인' : 'Google Drive 연결');
     return h('div', { class: 'set-row set-btns cloud-drive-settings' },

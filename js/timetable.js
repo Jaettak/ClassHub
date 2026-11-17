@@ -258,6 +258,13 @@ const Timetable = (() => {
 
   function render(root) {
     const wrap = h('div', { class: 'tt-wrap' });
+    let editing = false;
+    const editButton = h('button', { class: 'btn ghost', type: 'button', 'aria-pressed': 'false', onclick: () => {
+      editing = !editing;
+      editButton.textContent = editing ? '수정 완료' : '수정';
+      editButton.setAttribute('aria-pressed', String(editing));
+      draw();
+    } }, '수정');
 
     function askName(title, initial, onSave) {
       const input = h('input', { type: 'text', value: initial, maxLength: 12, placeholder: '이름' });
@@ -332,10 +339,12 @@ const Timetable = (() => {
       const { t, save, friend } = current();
       const today = t.days.indexOf(WEEK[new Date().getDay()]);
       wrap.replaceChildren();
+      wrap.classList.toggle('tt-editing', editing);
 
       const tabs = h('div', { class: 'tt-tabs' },
-        h('button', { type: 'button', class: 'fchip' + (activeId === 'me' ? ' on' : ''), onclick: () => { activeId = 'me'; draw(); } }, '나'),
-        friends().map((f) => h('button', { type: 'button', class: 'fchip' + (activeId === f.id ? ' on' : ''), onclick: () => { activeId = f.id; draw(); } }, f.name)),
+        h('div', { class: 'tt-friend-scroll' },
+          h('button', { type: 'button', class: 'fchip' + (activeId === 'me' ? ' on' : ''), onclick: () => { activeId = 'me'; draw(); } }, '나'),
+          friends().map((f) => h('button', { type: 'button', class: 'fchip' + (activeId === f.id ? ' on' : ''), onclick: () => { activeId = f.id; draw(); } }, f.name))),
         h('button', { type: 'button', class: 'fchip add', onclick: addFriend }, '＋ 친구'));
 
       const head = h('tr', null, h('th', { class: 'corner' }, ''),
@@ -351,8 +360,8 @@ const Timetable = (() => {
           t.days.map((dn, d) => {
             const c = t.cells[d][p];
             const td = h('td', { class: 'slot' + (d === today ? ' today' : '') + (c ? ' filled' : ''), tabIndex: 0,
-              onclick: () => editCell(t, save, d, p, draw),
-              onkeydown: (e) => { if (e.key === 'Enter') editCell(t, save, d, p, draw); } });
+              onclick: () => { if (editing) editCell(t, save, d, p, draw); },
+              onkeydown: (e) => { if (editing && e.key === 'Enter') editCell(t, save, d, p, draw); } });
             if (c) {
               td.style.setProperty('--c', colorFor(c.subject));
               const f = fitName(c.subject);
@@ -370,14 +379,14 @@ const Timetable = (() => {
       }
       wrap.append(...[
         tabs,
-        h('div', { class: 'tt-tools' },
+        editing ? h('div', { class: 'tt-tools' },
           h('button', { class: 'btn primary', type: 'button', onclick: addPeriod }, '＋ 교시'),
           h('button', { class: 'btn', type: 'button', onclick: addDay }, '＋ 요일'),
           h('button', { class: 'btn', type: 'button', onclick: () => openPeriodTimes(t, save, draw) }, '교시별 시간 설정'),
           !friend ? h('button', { class: 'btn primary', type: 'button', onclick: () => applyPeriod(t, draw) }, '기간 일정에 추가') : null,
           h('button', { class: 'btn ghost', type: 'button', onclick: reset }, '기본값으로'),
           friend ? h('button', { class: 'btn ghost', type: 'button', onclick: renameFriend }, '이름 바꾸기') : null,
-          friend ? h('button', { class: 'btn danger', type: 'button', onclick: removeFriend }, '이 친구 삭제') : null),
+          friend ? h('button', { class: 'btn danger', type: 'button', onclick: removeFriend }, '이 친구 삭제') : null) : null,
         friend ? h('details', { class: 'context-help' }, h('summary', null, helpIcon(), '도움말'), h('div', null, `${friend.name}의 시간표예요. 친구 시간표는 홈·달력의 수업 표시에는 쓰이지 않아요.`)) : null,
         h('div', { class: 'tt-scroll' }, h('table', { class: 'tt' }, h('thead', null, head), h('tbody', null, rows))),
         !friend && Store.get('timetableTerms', []).length ? h('div', { class: 'tt-term-list' },
@@ -456,7 +465,7 @@ const Timetable = (() => {
     }
 
     draw();
-    root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '시간표'), wrap), SchoolData.tools('timetable', draw, () => activeId));
+    root.append(h('section', { class: 'panel' }, h('div', { class: 'title-row' }, h('h1', { class: 'page-title' }, '시간표'), editButton), wrap), SchoolData.tools('timetable', draw, () => activeId));
   }
 
   return { render, lessonsFor, calendarLessons };

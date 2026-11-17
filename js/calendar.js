@@ -479,7 +479,7 @@ const Calendar = (() => {
             const ds = dateStr(d), notes = Notes.forDate(ds);
             App.modal({ title: `${ds} 메모`, body: notes.length ? h('div', { class: 'nt-completed' }, notes.map((n) => h('button', { class: 'btn ghost', style: { background: n.color || '#fff4b8' }, type: 'button', onclick: () => Notes.show(n, redraw) }, n.title || n.body))) : h('p', { class: 'muted' }, '이 날의 메모가 없어요.'),
               footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => Notes.openForDate(ds, redraw) }, '＋ 메모')] });
-          } }, `메모 ${Notes.forDate(dateStr(d)).length}`)))));
+          } }, h('span', { class: 'week-memo-word' }, '메모 '), Notes.forDate(dateStr(d)).length)))));
     }
 
     segs.forEach((sg) => {
@@ -651,21 +651,23 @@ const Calendar = (() => {
     } }, '＋ 일정');
     const foldBtn = () => {
       const folded = collapse && !opened.size;
-      return h('button', { class: 'btn ghost', type: 'button', onclick: () => {
+      return h('button', { class: 'btn ghost cal-fold-button', type: 'button', onclick: () => {
         if (!collapse) collapse = true; else if (opened.size) opened.clear(); else collapse = false;
         draw();
       } }, folded ? '빈 시간 펼치기' : '빈 시간 접기');
     };
     const pieOpen = () => Store.get('calPieOpen', true) !== false;
     const pieBtn = () => h('button', { class: 'btn ghost pie-toggle', type: 'button', 'aria-expanded': pieOpen(), onclick: () => { Store.set('calPieOpen', !pieOpen()); draw(); } }, pieOpen() ? '접기' : '펼치기');
-    const head = (label, ...extra) => h('div', { class: 'cal-head' },
+    const head = (label, ...extra) => h('div', { class: `cal-head cal-head-${mode}` },
       h('div', { class: 'cal-nav' },
         modeTabs(),
         h('button', { class: 'btn', type: 'button', disabled: !canMove(-1), onclick: () => go(target(-1)), 'aria-label': `이전 ${unit()}` }, '◀'),
         label,
         h('button', { class: 'btn', type: 'button', disabled: !canMove(1), onclick: () => go(target(1)), 'aria-label': `다음 ${unit()}` }, '▶'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: () => go(new Date()) }, mode === 'month' ? '이번 달' : mode === 'week' ? '이번 주' : '오늘')),
-      h('div', { class: 'cal-act' }, h('button', { class: 'btn', type: 'button', onclick: () => manageExams(draw) }, '시험기간'), addBtn(), ...extra));
+        h('button', { class: 'btn ghost cal-today', type: 'button', onclick: () => go(new Date()) }, mode === 'month' ? '이번 달' : mode === 'week' ? '이번 주' : '오늘')),
+      h('div', { class: 'cal-act' }, mode === 'month' ? null : addBtn(), ...extra));
+    const pageTitle = () => h('div', { class: 'title-row cal-title-row' }, h('h1', { class: 'page-title' }, '일정 관리'),
+      h('button', { class: 'btn', type: 'button', onclick: () => manageExams(draw) }, '시험기간'));
 
     const drawMonth = () => {
       const y = focus.getFullYear(); const mo = focus.getMonth();
@@ -698,7 +700,7 @@ const Calendar = (() => {
         evs.length ? h('span', { class: 'dots' }, evs.slice(0, 4).map((e) => h('i', { style: { background: e.color, opacity: e.done ? 0.35 : 1 } }))) : null));
       }
       panel.replaceChildren(
-        h('h1', { class: 'page-title' }, '일정 관리'),
+        pageTitle(),
         head(h('span', { class: 'ym' }, yearSel, monthSel)),
         h('div', { class: 'cal-grid' },
           [...WEEK].map((w, i) => h('div', { class: 'dow' + (i === 0 ? ' sun' : '') + (i === 6 ? ' sat' : '') }, w)),
@@ -716,12 +718,22 @@ const Calendar = (() => {
         h('span', null, `${Math.round(weekScale * 100)}%`),
         h('button', { class: 'btn', type: 'button', 'aria-label': '주간 일정 확대', onclick: () => applyZoom(weekScale + .1) }, '+'));
       const weekScroll = h('div', { class: 'wk-scroll', style: { '--week-scale': weekScale } }, timeline(days, { head: true }, drawWeek));
+      weekScroll.classList.toggle('compact-notes', weekScale <= .9);
       const zoomLabel = zoom.querySelector('span');
-      const applyZoom = (value) => {
+      const applyZoom = (value, clientX, clientY) => {
+        const oldScale = weekScale;
+        const rect = weekScroll.getBoundingClientRect();
+        const offsetX = (clientX ?? rect.left + rect.width / 2) - rect.left;
+        const offsetY = (clientY ?? rect.top + rect.height / 2) - rect.top;
+        const contentX = (weekScroll.scrollLeft + offsetX) / oldScale;
+        const contentY = (weekScroll.scrollTop + offsetY) / oldScale;
         weekScale = Math.max(.65, Math.min(1.6, Math.round(value * 100) / 100));
         weekScroll.style.setProperty('--week-scale', weekScale);
+        weekScroll.classList.toggle('compact-notes', weekScale <= .9);
         zoomLabel.textContent = `${Math.round(weekScale * 100)}%`;
         localStorage.setItem('classhub-week-scale', weekScale);
+        weekScroll.scrollLeft = contentX * weekScale - offsetX;
+        weekScroll.scrollTop = contentY * weekScale - offsetY;
       };
       let pinch = null;
       weekScroll.addEventListener('touchstart', (event) => {
@@ -733,11 +745,12 @@ const Calendar = (() => {
         if (!pinch || event.touches.length !== 2) return;
         event.preventDefault();
         const [a, b] = event.touches;
-        applyZoom(pinch.scale * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / Math.max(1, pinch.distance));
+        applyZoom(pinch.scale * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / Math.max(1, pinch.distance),
+          (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
       }, { passive: false });
       weekScroll.addEventListener('touchend', (event) => { if (event.touches.length < 2) pinch = null; });
       panel.replaceChildren(
-        h('h1', { class: 'page-title' }, '일정 관리'),
+        pageTitle(),
         head(label, foldBtn(), zoom),
         weekScroll);
     };
@@ -774,7 +787,7 @@ const Calendar = (() => {
               h('b', null, n.title || '제목 없음'), h('span', null, n.body || ''))) : h('p', { class: 'muted' }, '시간이 정해지지 않은 메모가 없어요.')),
           timeline([focus], { big: true }, drawDay)));
       panel.replaceChildren(
-        h('h1', { class: 'page-title' }, '일정 관리'),
+        pageTitle(),
         head(label, foldBtn()),
         dayLayout);
       if (open) {
