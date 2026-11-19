@@ -204,8 +204,22 @@ const ClassHubPicker = (() => {
     select.setAttribute('aria-haspopup', 'dialog');
     let lastOpen = 0;
     const show = () => { if (select.disabled || Date.now() - lastOpen < 450) return; lastOpen = Date.now(); openSelect(select); };
-    select.addEventListener('pointerdown', (event) => { event.preventDefault(); show(); });
-    select.addEventListener('click', (event) => { event.preventDefault(); show(); });
+    let press = null;
+    let suppressClick = false;
+    select.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      suppressClick = false;
+      press = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    });
+    select.addEventListener('pointerup', (event) => {
+      if (!press || press.id !== event.pointerId) return;
+      const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y) > 9;
+      press = null;
+      suppressClick = moved;
+      if (!moved) show();
+    });
+    select.addEventListener('pointercancel', () => { press = null; });
+    select.addEventListener('click', (event) => { event.preventDefault(); if (!press && !suppressClick) show(); suppressClick = false; });
     select.addEventListener('keydown', (event) => {
       if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); show(); }
     });

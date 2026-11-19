@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.4.0';
+const CLASSHUB_VERSION = 'v2.5.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -127,6 +127,43 @@ const App = (() => {
     document.body.classList.add('modal-open');
     document.body.append(back);
     return api;
+  }
+
+  function confirmAction(message) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (accepted) => {
+        if (settled) return;
+        settled = true;
+        dialog.close();
+        resolve(accepted);
+      };
+      const dialog = modal({ title: '확인', body: h('p', { class: 'confirm-message' }, message),
+        footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => finish(false) }, '취소'),
+          h('button', { class: 'btn danger', type: 'button', onclick: () => finish(true) }, '확인')],
+        onClose: () => { if (!settled) { settled = true; resolve(false); } } });
+      dialog.back.classList.add('confirm-dialog');
+    });
+  }
+
+  function askText(message, initial = '') {
+    return new Promise((resolve) => {
+      let settled = false;
+      const input = h('input', { type: 'text', value: initial, autocomplete: 'off' });
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        dialog.close();
+        resolve(value);
+      };
+      const dialog = modal({ title: '입력', body: h('div', { class: 'confirm-text' }, h('label', null, message, input)),
+        footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => finish(null) }, '취소'),
+          h('button', { class: 'btn primary', type: 'button', onclick: () => finish(input.value) }, '확인')],
+        onClose: () => { if (!settled) { settled = true; resolve(null); } } });
+      dialog.back.classList.add('confirm-dialog');
+      input.addEventListener('keydown', (event) => { if (event.key === 'Enter') finish(input.value); });
+      input.focus();
+    });
   }
 
   document.addEventListener('keydown', (e) => {
@@ -261,6 +298,7 @@ const App = (() => {
                 pageAnimation.onfinish = () => { page.style.paddingTop = ''; pageAnimation.cancel(); };
               }
               const animation = bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
+              bar.querySelector('.tabs')?.animate([{ opacity: 0, transform: 'translateY(-18px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
             } else {
               const height = bar.getBoundingClientRect().height;
               expandedNavHeight = height;
@@ -276,12 +314,29 @@ const App = (() => {
               }
               const style = getComputedStyle(bar);
               const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
+              bar.querySelector('.tabs')?.animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-18px)' }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)' });
               animation.onfinish = () => { document.body.classList.add('nav-collapsed'); animation.cancel(); };
             }
           } }),
           navTabs(key),
           h('button', { class: 'top-settings', type: 'button', onclick: openSettings, title: '설정', 'aria-label': '설정 열기' }, icon('settings'))),
         page);
+      const header = app.querySelector('.topbar');
+      let swipeStart = null;
+      header.addEventListener('touchstart', (event) => {
+        if (!matchMedia('(max-width: 640px)').matches || event.touches.length !== 1) return;
+        swipeStart = event.touches[0].clientY;
+      }, { passive: true });
+      header.addEventListener('touchend', (event) => {
+        if (swipeStart === null || !matchMedia('(max-width: 640px)').matches) return;
+        const distance = event.changedTouches[0].clientY - swipeStart;
+        swipeStart = null;
+        if ((distance < -55 && !document.body.classList.contains('nav-collapsed')) ||
+            (distance > 55 && document.body.classList.contains('nav-collapsed'))) {
+          event.preventDefault();
+          header.querySelector('.nav-fold')?.click();
+        }
+      }, { passive: false });
       if (Settings.locked(key)) page.append(h('section', { class: 'panel private-gate' },
         h('h1', { class: 'page-title' }, `${view.label} 잠금`),
         h('p', null, '개인 기록을 보려면 비밀번호를 입력하세요.'),
@@ -331,7 +386,7 @@ const App = (() => {
     input.addEventListener('change', async () => {
       const f = input.files[0];
       if (!f) return;
-      if (!confirm(merge ? '백업에만 있는 기록을 현재 기록에 추가할까요? 같은 항목은 현재 기록을 유지해요.' : '지금 저장된 내용이 백업 파일 내용으로 바뀌어요. 계속할까요?')) return;
+      if (!await App.confirm(merge ? '백업에만 있는 기록을 현재 기록에 추가할까요? 같은 항목은 현재 기록을 유지해요.' : '지금 저장된 내용이 백업 파일 내용으로 바뀌어요. 계속할까요?')) return;
       try {
         const data = JSON.parse(await f.text());
         if (merge) await Store.mergeAll(data);
@@ -346,7 +401,7 @@ const App = (() => {
   }
 
   const openSettings = () => Settings.open();
-  const api = { views, registerView, toast, modal, field, subjectField, route, refresh, download, exportData, importData, openSettings, get current() { return current; } };
+  const api = { views, registerView, toast, modal, confirm: confirmAction, askText, field, subjectField, route, refresh, download, exportData, importData, openSettings, get current() { return current; } };
   return api;
 })();
 

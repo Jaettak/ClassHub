@@ -111,7 +111,7 @@ const SchoolData = (() => {
     const features = facilities.map((f, index) => sv('g', { onclick: (event) => { if (adding) return; event.stopPropagation(); const m = App.modal({ title: f.name, body: h('p', null, f.memo || f.type || '시설'), footer: [
       h('button', { class: 'btn', type: 'button', onclick: () => { const name = prompt('마커 이름', f.name)?.trim(); if (!name) return; update({ features: facilities.map((item, i) => i === index ? { ...item, name } : item) }); m.close(); } }, '이름 변경'),
       h('button', { class: 'btn', type: 'button', onclick: () => { adding = { index }; m.close(); App.toast('지도에서 새 위치를 누르세요.'); } }, '위치 변경'),
-      h('button', { class: 'btn danger', type: 'button', onclick: () => { if (!confirm('이 마커를 지울까요?')) return; update({ features: facilities.filter((_, i) => i !== index) }); m.close(); } }, '삭제')] }); } },
+      h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!await App.confirm('이 마커를 지울까요?')) return; update({ features: facilities.filter((_, i) => i !== index) }); m.close(); } }, '삭제')] }); } },
       sv('circle', { cx: f.x, cy: f.y, r: 9, fill: f.type === '안전시설' ? '#e44747' : '#2f6bff' }),
       sv('text', { x: Number(f.x) + 12, y: f.y, 'font-size': 15, fill: '#27324c' }, f.name)));
     const imageLayer = sv('image', { x: 0, y: 0, width: w, height, preserveAspectRatio: 'none' });
@@ -277,8 +277,8 @@ const SchoolData = (() => {
       packages.length ? h('details', { class: 'school-source-detail' }, h('summary', null, `가져온 원본 요약 ${packages.length}건`), packages.map((item) =>
         h('details', null, h('summary', null, item.source?.documentTitle || kinds[kind]),
           h('pre', null, JSON.stringify({ source: item.source, overview: item.overview, unresolved: item.unresolved }, null, 2)),
-          h('button', { class: 'btn danger', type: 'button', onclick: () => {
-            if (!confirm('이 가져오기 기록과 해당 파일로 추가한 항목을 삭제할까요?')) return;
+          h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+            if (!await App.confirm('이 가져오기 기록과 해당 파일로 추가한 항목을 삭제할까요?')) return;
             const ids = new Set(item.recordIds || []);
             if (kind === 'timetable') {
               const own = Store.get('timetable', null);
@@ -296,7 +296,7 @@ const SchoolData = (() => {
           } }, '가져온 자료 삭제')))) : null,
       files.length ? h('div', { class: 'school-doc-list' }, files.map((item) => h('div', { class: 'school-file-row' }, h('b', null, item.name),
         h('button', { class: 'btn', type: 'button', onclick: async () => { const file = await Store.getImg('school-' + item.id); if (!file) return App.toast('이 기기에 원본 파일이 없어요.'); const blob = await (await fetch(file.data)).blob(); const url = URL.createObjectURL(blob); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000); } }, '보기'),
-        h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!confirm('이 파일을 삭제할까요?')) return; await Store.delImg('school-' + item.id); Store.set('schoolFiles', saved().filter((x) => x.id !== item.id)); after(); } }, '삭제')))) : null);
+        h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!await App.confirm('이 파일을 삭제할까요?')) return; await Store.delImg('school-' + item.id); Store.set('schoolFiles', saved().filter((x) => x.id !== item.id)); after(); } }, '삭제')))) : null);
   }
   const MAP_AI_GUIDE = `학교 지도 사진을 층별로 바로 올릴 수 있게 준비해 주세요.\n1. 사진에서 각 층 도면을 정확히 잘라 별도의 PNG 또는 JPG 파일로 만들어 주세요.\n2. 기울기·회전·대비·가독성을 보정하되 원본에 없는 선, 글자, 방, 안전시설을 새로 만들지 마세요.\n3. 한 층당 한 파일로 내보내고 파일명을 '건물명-층.png'처럼 알아보기 쉽게 붙여 주세요. 여러 건물이면 건물별로 분리해 주세요.\n4. 판독한 교실·계단·화장실·소화기 등은 이미지와 별도로 간단한 목록으로 알려 주세요. 불확실한 글자나 위치는 불확실하다고 표시해 주세요.\n5. 원본 사진과 보정한 이미지를 비교해 빠진 영역이 없는지 확인해 주세요. 완성된 층별 이미지 파일을 사용자에게 주세요.`;
   let openFloorId = null;
@@ -326,7 +326,7 @@ const SchoolData = (() => {
         after(); App.toast(replaceFloor ? '층 지도 사진을 교체했어요.' : `층별 지도 ${added.length}장을 저장했어요.`);
       } catch (_) { App.toast('지도 사진을 저장하지 못했어요.'); }
   }
-  function photoFloorView(floor, after) {
+  function photoFloorView(floor, after, editing = false) {
     const w = floor.width || 1000, height = floor.height || 700, features = floor.features || [];
     const imageKey = `school-floor-${floor.id}`;
     const update = (patch) => { Store.set('schoolPlaces', Store.get('schoolPlaces', []).map((row) => row.id === floor.id ? { ...row, ...patch } : row)); after(); };
@@ -391,43 +391,44 @@ const SchoolData = (() => {
     scroller.addEventListener('pointermove', (event) => { if (!pan || pan.id !== event.pointerId) return; scroller.scrollLeft = pan.left+pan.x-event.clientX; scroller.scrollTop = pan.top+pan.y-event.clientY; });
     const stopPan = (event) => { if (pan?.id === event.pointerId) pan = null; };
     scroller.addEventListener('pointerup', stopPan); scroller.addEventListener('pointercancel', stopPan);
-    return h('details', { class: 'school-floor school-photo-floor', open: floor.id === openFloorId, ontoggle: (event) => { if (event.currentTarget.open) openFloorId = floor.id; else if (openFloorId === floor.id) openFloorId = null; } }, h('summary', null, floor.name),
+    const moveFloor = (offset) => {
+      const items = Store.get('schoolPlaces', []).slice(), index = items.findIndex((item) => item.id === floor.id);
+      const target = index + offset;
+      if (index < 0 || target < 0 || target >= items.length) return;
+      [items[index], items[target]] = [items[target], items[index]];
+      Store.set('schoolPlaces', items); after();
+    };
+    return h('details', { class: 'school-floor school-photo-floor', open: floor.id === openFloorId, ontoggle: (event) => { if (event.currentTarget.open) openFloorId = floor.id; else if (openFloorId === floor.id) openFloorId = null; } },
+      h('summary', { class: 'school-floor-heading' }, h('span', null, floor.name), editing ? h('span', { class: 'school-floor-order' },
+        h('button', { class: 'btn', type: 'button', 'aria-label': `${floor.name} 위로 이동`, onclick: (event) => { event.preventDefault(); event.stopPropagation(); moveFloor(-1); } }, '↑'),
+        h('button', { class: 'btn', type: 'button', 'aria-label': `${floor.name} 아래로 이동`, onclick: (event) => { event.preventDefault(); event.stopPropagation(); moveFloor(1); } }, '↓')) : null),
       h('div', { class: 'school-map-actions' },
-        h('button', { class: 'btn', type: 'button', onclick: () => { const name = prompt('층 이름', floor.name)?.trim(); if (name) update({ name }); } }, '이름 변경'),
+        editing ? h('button', { class: 'btn', type: 'button', onclick: () => { const name = prompt('층 이름', floor.name)?.trim(); if (name) update({ name }); } }, '이름 변경') : null,
         h('button', { class: 'btn', type: 'button', onclick: () => { placing = true; App.toast('사진에서 마커를 놓을 위치를 눌러 주세요.'); } }, '마커 추가'),
-        h('button', { class: 'btn', type: 'button', onclick: () => uploadFloorImages(after, floor) }, '사진 교체'),
-        h('button', { class: 'btn', type: 'button', 'aria-label': `${floor.name} 위로 이동`, onclick: () => {
-          const items = Store.get('schoolPlaces', []).slice(), i = items.findIndex((item) => item.id === floor.id);
-          if (i <= 0) return;
-          [items[i - 1], items[i]] = [items[i], items[i - 1]];
-          Store.set('schoolPlaces', items); after();
-        } }, '↑ 위로'),
-        h('button', { class: 'btn', type: 'button', 'aria-label': `${floor.name} 아래로 이동`, onclick: () => {
-          const items = Store.get('schoolPlaces', []).slice(), i = items.findIndex((item) => item.id === floor.id);
-          if (i < 0 || i >= items.length - 1) return;
-          [items[i], items[i + 1]] = [items[i + 1], items[i]];
-          Store.set('schoolPlaces', items); after();
-        } }, '↓ 아래로'),
+        editing ? h('button', { class: 'btn', type: 'button', onclick: () => uploadFloorImages(after, floor) }, '사진 교체') : null,
         h('label', { class: 'school-zoom' }, '확대', zoom),
-        h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!confirm(`${floor.name} 지도를 삭제할까요?`)) return; await Store.delImg(imageKey); Store.set('schoolPlaces', Store.get('schoolPlaces', []).filter((row) => row.id !== floor.id)); after(); } }, '지도 삭제')),
-      scroller, h('p', { class: 'muted' }, `${floor.floorImageFile || '사진 미첨부'} · 마커 ${features.length}개 · 사진은 이 기기에 저장되고 Drive를 연결하면 동기화돼요.`));
+        editing ? h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!await App.confirm(`${floor.name} 지도를 삭제할까요?`)) return; await Store.delImg(imageKey); Store.set('schoolPlaces', Store.get('schoolPlaces', []).filter((row) => row.id !== floor.id)); after(); } }, '지도 삭제') : null),
+      scroller, h('details', { class: 'school-photo-info' }, h('summary', null, '지도 정보'),
+        h('p', { class: 'muted' }, `${floor.floorImageFile || '사진 미첨부'} · 마커 ${features.length}개 · 사진은 이 기기에 저장되고 Drive를 연결하면 동기화돼요.`)));
   }
   function renderMap(root) {
     openFloorId = null;
+    let editing = false;
     const panel = h('section', { class: 'panel' });
     const dropZone = h('div', { class: 'school-photo-drop' }, '지도 사진을 여기로 끌어 놓으세요');
     dropZone.addEventListener('dragover', (event) => { if ([...(event.dataTransfer?.types || [])].includes('Files')) { event.preventDefault(); dropZone.classList.add('drag-over'); } });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', (event) => { event.preventDefault(); dropZone.classList.remove('drag-over'); saveFloorImages(event.dataTransfer.files, draw); });
-    const draw = () => panel.replaceChildren(h('h1', { class: 'page-title' }, '학교 지도'),
-      dropZone,
-      h('div', { class: 'school-photo-start' },
+    const draw = () => panel.replaceChildren(h('div', { class: 'title-row' }, h('h1', { class: 'page-title' }, '학교 지도'),
+      h('button', { class: 'btn' + (editing ? ' primary' : ''), type: 'button', 'aria-pressed': editing, onclick: () => { editing = !editing; draw(); } }, editing ? '수정 완료' : '수정')),
+      editing ? dropZone : document.createDocumentFragment(),
+      editing ? h('div', { class: 'school-photo-start' },
         h('button', { class: 'btn primary', type: 'button', onclick: () => uploadFloorImages(draw) }, '＋ 층별 지도 사진 올리기'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(MAP_AI_GUIDE); App.toast('AI에 보낼 안내를 복사했어요.'); } catch (_) { App.modal({ title: 'AI에 보낼 안내', body: h('textarea', { rows: 12, value: MAP_AI_GUIDE }) }); } } }, 'AI에 보낼 사진 준비 안내'),
-        h('p', { class: 'hint' }, '층별 지도 사진을 버튼으로 올리세요. 컴퓨터에서는 여기로 끌어 놓을 수도 있어요. 사진 위에 마커를 직접 추가할 수 있어요.')),
+        h('p', { class: 'hint' }, '층별 지도 사진을 버튼으로 올리세요. 컴퓨터에서는 여기로 끌어 놓을 수도 있어요. 사진 위에 마커를 직접 추가할 수 있어요.')) : document.createDocumentFragment(),
       h('div', { class: 'school-places' }, Store.get('schoolPlaces', []).length
-        ? Store.get('schoolPlaces', []).map((floor) => photoFloorView(floor, draw))
-        : h('p', { class: 'empty-box' }, '층별 지도 사진을 올리면 여기에 나타나요.')));
+        ? Store.get('schoolPlaces', []).map((floor) => photoFloorView(floor, draw, editing))
+        : h('p', { class: 'empty-box' }, editing ? '층별 지도 사진을 올리면 여기에 나타나요.' : '수정을 눌러 층별 지도 사진을 올려 주세요.')),
+      h('div', { class: 'school-map-ai' }, h('button', { class: 'btn ghost', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(MAP_AI_GUIDE); App.toast('AI에 보낼 안내를 복사했어요.'); } catch (_) { App.modal({ title: 'AI에 보낼 안내', body: h('textarea', { rows: 12, value: MAP_AI_GUIDE }) }); } } }, 'AI에 보낼 사진 준비 안내')));
     root.append(panel); draw();
   }
   function render(root) {
@@ -436,7 +437,7 @@ const SchoolData = (() => {
     const kindSelect = h('select', { 'aria-label': 'AI 정리 양식 종류' }, Object.entries(kinds).map(([value, label]) => h('option', { value }, label)));
     const fileRow = (item) => h('div', { class: 'school-file-row' }, h('b', null, item.name),
       h('button', { class: 'btn', type: 'button', onclick: async () => { const file = await Store.getImg('school-' + item.id); if (!file) return App.toast('이 기기에 원본 파일이 없어요.'); const blob = await (await fetch(file.data)).blob(); const url = URL.createObjectURL(blob); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000); } }, '보기'),
-      h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!confirm('이 파일을 삭제할까요?')) return; await Store.delImg('school-' + item.id); Store.set('schoolFiles', saved().filter((x) => x.id !== item.id)); draw(); } }, '삭제'));
+      h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!await App.confirm('이 파일을 삭제할까요?')) return; await Store.delImg('school-' + item.id); Store.set('schoolFiles', saved().filter((x) => x.id !== item.id)); draw(); } }, '삭제'));
     const draw = () => {
       const tabs = h('div', { class: 'school-tabs' }, [['calendar', '일정·계획'], ['map', '학교 지도'], ['reports', '성적표·생기부']].map(([key, label]) =>
         h('button', { type: 'button', class: 'btn' + (key === active ? ' primary' : ''), onclick: () => { active = key; draw(); } }, label)));

@@ -53,9 +53,10 @@ const Home = (() => {
       h('button', { type: 'button', class: 'bm b', title: '오늘 일정 원 그래프', 'aria-label': '오늘 일정 원 그래프로 보기', onclick: () => selectSide('pie') }),
       h('div', { class: 'side-date-nav' },
         h('button', { class: 'btn ghost', type: 'button', onclick: () => { selectedDate = new Date(); drawSide(); } }, '오늘'),
-        h('button', { class: 'btn ghost', type: 'button', 'aria-label': '이전 날짜', onclick: () => changeDate(-1) }, '◀'),
-        h('h3', null),
-        h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶')),
+        h('div', { class: 'side-date-controls' },
+          h('button', { class: 'btn ghost', type: 'button', 'aria-label': '이전 날짜', onclick: () => changeDate(-1) }, '◀'),
+          h('h3', null),
+          h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶'))),
       h('div', { class: 'side-scroll' }),
       st?.todo ? h('p', { class: 'note' }, `생기부 미기록 활동 ${st.todo}개`) : null);
 
@@ -151,6 +152,7 @@ const Home = (() => {
         Settings.protectedTab('calendar') ? null : todayBox)));
     sideObserver = new ResizeObserver(() => {
       if (todayBox.isConnected && matchMedia('(min-width: 1001px)').matches) cardFrame.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - cardFrame.getBoundingClientRect().top)}px`;
+      else if (todayBox.isConnected && matchMedia('(max-width: 640px)').matches) cardFrame.style.height = `${Math.max(360, todayBox.parentElement.getBoundingClientRect().height)}px`;
       else cardFrame.style.height = '';
       const width = todayBox.clientWidth, height = todayBox.clientHeight;
       const wide = todayBox.classList.contains('wide-pie');

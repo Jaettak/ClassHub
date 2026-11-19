@@ -357,14 +357,14 @@ const Notes = (() => {
       const name = h('input', { type: 'text', value: current.name, maxLength: 30 });
       const color = h('input', { type: 'color', value: current.color || COLORS[0], 'aria-label': '보관함 색상' });
       const m = App.modal({ title: '보관함 관리', body: [App.field('이름', name), App.field('보관함 색상', color),
-        h('button', { class: 'btn', type: 'button', onclick: () => {
-          if (!confirm(`이 보관함의 메모 색을 모두 ${color.value}로 바꿀까요?`)) return;
+        h('button', { class: 'btn', type: 'button', onclick: async () => {
+          if (!await App.confirm(`이 보관함의 메모 색을 모두 ${color.value}로 바꿀까요?`)) return;
           save(load().map((n) => n.folderId === current.id ? { ...n, color: color.value, updatedAt: Date.now() } : n));
           Store.set('noteFolders', folders().map((f) => f.id === current.id ? { ...f, color: color.value } : f));
           m.close(); redraw(); App.toast('보관함 메모의 색을 바꿨어요.');
         } }, '이 보관함 메모 색 모두 바꾸기')], footer: [
-        h('button', { class: 'btn danger', type: 'button', onclick: () => {
-          if (!confirm('보관함을 지울까요? 안의 메모는 기본 보관함으로 이동해요.')) return;
+        h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+          if (!await App.confirm('보관함을 지울까요? 안의 메모는 기본 보관함으로 이동해요.')) return;
           Store.set('noteFolders', folders().filter((f) => f.id !== current.id));
           save(load().map((n) => n.folderId === current.id ? { ...n, folderId: '' } : n));
           selectedFolder = ''; m.close(); redraw();
@@ -388,22 +388,29 @@ const Notes = (() => {
             m.close(); redraw(); openTrash();
           } }, '복원'),
           h('button', { class: 'btn danger', type: 'button', onclick: async () => {
-            if (!confirm('이 메모를 영구 삭제할까요?')) return;
+            if (!await App.confirm('이 메모를 영구 삭제할까요?')) return;
             await removeImages(n);
             save(load().filter((x) => x.id !== n.id)); m.close(); redraw(); openTrash();
           } }, '영구 삭제'))))
         : h('p', { class: 'muted' }, '휴지통이 비어 있어요.'),
         footer: list.length ? [h('button', { class: 'btn danger', type: 'button', onclick: async () => {
-          if (!confirm(`휴지통의 메모 ${list.length}개를 모두 영구 삭제할까요?`)) return;
+          if (!await App.confirm(`휴지통의 메모 ${list.length}개를 모두 영구 삭제할까요?`)) return;
           for (const note of list) await removeImages(note);
           save(load().filter((n) => !n.deletedAt)); m.close(); redraw(); App.toast('휴지통을 비웠어요.');
         } }, '휴지통 비우기')] : null });
     }
-    function removeCompleted() {
+    async function removeCompleted() {
       const count = active().filter((n) => n.done).length;
-      if (!count || !confirm(`예전에 완료 표시한 메모 ${count}개를 휴지통으로 옮길까요?`)) return;
+      if (!count || !await App.confirm(`예전에 완료 표시한 메모 ${count}개를 휴지통으로 옮길까요?`)) return;
       const now = Date.now();
       save(load().map((n) => n.done && !n.deletedAt ? { ...n, deletedAt: now, updatedAt: now } : n));
+      redraw(); App.toast(`${count}개를 휴지통으로 옮겼어요.`);
+    }
+    async function removeAllNotes() {
+      const count = active().length;
+      if (!count || !await App.confirm(`메모 ${count}개를 모두 휴지통으로 옮길까요?`)) return;
+      const now = Date.now();
+      save(load().map((n) => n.deletedAt ? n : { ...n, deletedAt: now, updatedAt: now }));
       redraw(); App.toast(`${count}개를 휴지통으로 옮겼어요.`);
     }
     root.append(h('section', { class: 'panel' },
@@ -412,6 +419,7 @@ const Notes = (() => {
         h('div', { class: 'nt-actions' },
           h('button', { class: 'btn', type: 'button', onclick: addFolder }, '＋ 보관함'),
           h('button', { class: 'btn primary', type: 'button', onclick: () => edit({}, redraw) }, '＋ 새 메모'),
+          h('button', { class: 'btn ghost', type: 'button', onclick: removeAllNotes }, '전체 삭제'),
           h('button', { class: 'trash-icon-btn', type: 'button', onclick: openTrash, title: '메모 휴지통', 'aria-label': '메모 휴지통' }, icon('trash')))),
       active().some((n) => n.done) ? h('button', { class: 'btn ghost nt-legacy-done', type: 'button', onclick: removeCompleted }, '완료 표시된 메모 한꺼번에 삭제') : null,
       folderBar,

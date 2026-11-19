@@ -305,8 +305,8 @@ const Timetable = (() => {
         body: [h('p', { class: 'hint' }, '과목 색상을 바꾸면 같은 과목이 시간표·홈·일정 관리·성적 분석에 동일하게 표시돼요.'),
           h('div', { class: 'tt-color-list' }, edits.map((item) => {
             const room = h('input', { type: 'text', value: Store.get('subjectRooms', {})[item.name] || '', placeholder: '기본 교실', maxLength: 40, 'aria-label': `${item.name} 기본 교실` });
-            const remove = h('button', { class: 'btn danger', type: 'button', onclick: () => {
-              if (!confirm(`${item.name} 과목을 현재 시간표에서 지울까요? 이미 일정에 추가된 과거 수업은 유지돼요.`)) return;
+            const remove = h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+              if (!await App.confirm(`${item.name} 과목을 현재 시간표에서 지울까요? 이미 일정에 추가된 과거 수업은 유지돼요.`)) return;
               remove.closest('.tt-subject-manage').remove();
               item.deleted = true;
             } }, '과목 삭제');
@@ -421,23 +421,23 @@ const Timetable = (() => {
           save(); draw();
         });
       }
-      function removeDay(d) {
+      async function removeDay(d) {
         if (t.days.length <= 1) return App.toast('요일은 최소 1개가 필요해요.');
-        if (t.cells[d].some(Boolean) && !confirm(`${t.days[d]}요일의 수업이 모두 지워져요. 삭제할까요?`)) return;
+        if (t.cells[d].some(Boolean) && !await App.confirm(`${t.days[d]}요일의 수업이 모두 지워져요. 삭제할까요?`)) return;
         t.days.splice(d, 1);
         t.cells.splice(d, 1);
         save(); draw();
       }
-      function removePeriod(p) {
+      async function removePeriod(p) {
         if (t.periods <= 1) return App.toast('교시는 최소 1개가 필요해요.');
-        if (t.cells.some((col) => col[p]) && !confirm(`${p + 1}교시의 수업이 모두 지워져요. 삭제할까요?`)) return;
+        if (t.cells.some((col) => col[p]) && !await App.confirm(`${p + 1}교시의 수업이 모두 지워져요. 삭제할까요?`)) return;
         t.periods--;
         t.cells.forEach((col) => col.splice(p, 1));
         if (Array.isArray(t.periodTimes)) t.periodTimes.splice(p, 1);
         save(); draw();
       }
-      function reset() {
-        if (!confirm('이 시간표를 모두 지우고 기본값으로 되돌릴까요?')) return;
+      async function reset() {
+        if (!await App.confirm('이 시간표를 모두 지우고 기본값으로 되돌릴까요?')) return;
         const d = DEFAULT();
         t.days = d.days; t.periods = d.periods; t.cells = d.cells; t.periodTimes = d.periodTimes; t.lunch = null;
         save(); draw();
@@ -445,8 +445,8 @@ const Timetable = (() => {
       function renameFriend() {
         askName('친구 이름 바꾸기', friend.name, (name) => { friend.name = name; save(); draw(); });
       }
-      function removeFriend() {
-        if (!confirm(`${friend.name}의 시간표를 삭제할까요?`)) return;
+      async function removeFriend() {
+        if (!await App.confirm(`${friend.name}의 시간표를 삭제할까요?`)) return;
         Store.set('ttFriends', friends().filter((x) => x.id !== friend.id));
         activeId = 'me'; draw();
       }

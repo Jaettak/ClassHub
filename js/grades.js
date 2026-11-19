@@ -7,21 +7,33 @@ const Grades = (() => {
   const save = (l) => Store.set('grades', l);
   const pct = (g) => (g.full > 0 ? (g.score / g.full) * 100 : 0);
   const isMock = (g) => g.recordType === 'mockExam' || /모의고사/.test(g.exam || '');
+  const examNumber = (g) => {
+    const name = `${g.exam || ''} ${g.assessmentName || ''}`;
+    const numbered = name.match(/([1-9])\s*회\s*(?:고사|시험)/);
+    return numbered ? Number(numbered[1]) : /중간/.test(name) ? 1 : /기말/.test(name) ? 2 : null;
+  };
+  const examText = (g) => examNumber(g) ? `${examNumber(g)}회고사` : g.exam || g.assessmentName || '고사';
   const category = (g) => isMock(g) ? 'mock' : g.recordType === 'courseResult' || /학기말|학기 성적/.test(g.exam || '') ? 'course'
-    : /수행/.test([g.category, g.assessmentName, g.exam].join(' ')) ? 'assessment' : 'exam';
+    : g.recordType === 'assessment' ? (/수행/.test(g.category || '') ? 'assessment' : /지필/.test(g.category || '') || examNumber(g) ? 'exam' : 'assessment')
+      : /수행/.test([g.category, g.assessmentName, g.exam].join(' ')) ? 'assessment' : 'exam';
+  const examKey = (g) => `${g.schoolYear || ''}|${g.grade || ''}|${g.semester || ''}|${g.subject || ''}|${examNumber(g) || examText(g)}`;
+  const displayRows = (rows) => {
+    const results = new Set(rows.filter((g) => g.recordType === 'examResult').map(examKey));
+    return rows.filter((g) => !(g.recordType === 'assessment' && category(g) === 'exam' && results.has(examKey(g))));
+  };
   const avgOf = (arr) => (arr.length ? arr.reduce((a, g) => a + pct(g), 0) / arr.length : 0);
   const fmt = (n) => (Math.round(n * 10) / 10).toString();
   const num = (v) => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
   const rankOf = (g) => num(g.rank ?? g.sourceDetails?.rankGrade ?? g.sourceDetails?.gradeLevel ?? g.sourceDetails?.gradeRank ?? g.sourceDetails?.['석차등급']);
 
   const groupKey = (g) => `${g.schoolYear || ''}|${g.grade}|${g.semester}|${g.exam}|${g.recordType || ''}|${g.examDate || ''}`;
-  const groupLabel = (g) => `${g.schoolYear ? `${g.schoolYear}학년도 ` : ''}${g.grade ? `${g.grade}학년 ` : ''}${g.semester ? `${g.semester}학기 ` : ''}${g.recordType === 'courseResult' ? '학기 성적' : g.exam || '시험'}${g.recordType === 'assessment' ? ' · 평가 항목' : ''}${g.examDate ? ` (${g.examDate})` : ''}`;
+  const groupLabel = (g) => `${g.schoolYear ? `${g.schoolYear}학년도 ` : ''}${g.grade ? `${g.grade}학년 ` : ''}${g.semester ? `${g.semester}학기 ` : ''}${category(g) === 'course' ? '학기말 성적' : category(g) === 'exam' ? examText(g) : category(g) === 'assessment' ? `수행평가 · ${g.assessmentName || g.exam || '평가'}` : g.exam || '모의고사'}${g.examDate ? ` (${g.examDate})` : ''}`;
 
   function filtered() {
     const q = filters.q.trim().toLowerCase();
     return load().filter((g) => (!filters.grade || String(g.grade) === filters.grade) && (!filters.sem || String(g.semester) === filters.sem)
-      && (!filters.subject || g.subject === filters.subject)
-      && (!filters.family || Curriculum2022.familyFor(g.subject) === filters.family)
+      && (q || !filters.subject || g.subject === filters.subject)
+      && (q || !filters.family || Curriculum2022.familyFor(g.subject) === filters.family)
       && (!q || String(g.subject || '').toLowerCase().includes(q)));
   }
 
@@ -75,8 +87,8 @@ const Grades = (() => {
         g.sourceDetails ? h('details', { class: 'school-source-detail' }, h('summary', null, '가져온 성적표 원문과 추가 항목'), h('pre', null, JSON.stringify(g.sourceDetails, null, 2))) : null,
       ],
       footer: [
-        !isNew ? h('button', { class: 'btn danger', type: 'button', onclick: () => {
-          if (!confirm('이 성적을 삭제할까요?')) return;
+        !isNew ? h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+          if (!await App.confirm('이 성적을 삭제할까요?')) return;
           save(load().filter((x) => x.id !== g.id)); m.close(); after();
         } }, '삭제') : null,
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
@@ -143,7 +155,7 @@ const Grades = (() => {
         i % labelEvery === 0 || i === n - 1 ? sv('text', { x: labelLeft ? pointX - 13 : pointX + 13, y: pointY < T + 20 ? pointY + 17 : pointY - 9,
           class: 'gr-val', 'text-anchor': labelLeft ? 'end' : 'start' }, fmt(g.score)) : null,
         i % labelEvery === 0 || i === n - 1 ? sv('text', { x: X(i), y: H - 24, class: 'gr-ax', 'text-anchor': 'middle' }, `${g.grade || '—'}-${g.semester || '—'}`) : null,
-        i % labelEvery === 0 || i === n - 1 ? sv('text', { x: X(i), y: H - 7, class: 'gr-ax', 'text-anchor': 'middle' }, (category(g) === 'course' ? '학기말' : g.exam || '시험').slice(0, 7)) : null);
+        i % labelEvery === 0 || i === n - 1 ? sv('text', { x: X(i), y: H - 7, class: 'gr-ax', 'text-anchor': 'middle' }, (category(g) === 'course' ? '학기말' : category(g) === 'exam' ? examText(g) : g.exam || '시험').slice(0, 7)) : null);
     });
     return svg;
   }
@@ -184,26 +196,31 @@ const Grades = (() => {
 
   function render(root) {
     SchoolData.repairImportedGrades();
-    root.append(SchoolData.tools('grades'));
     const body = h('div', { class: 'gr-body' });
     const stat = h('div', { class: 'stat' });
     let graphResize = null;
     const orderKey = (g) => `${g.examDate || ''}|${g.schoolYear || ''}|${g.grade || ''}|${g.semester || ''}|${g.created || 0}`;
+    const recordOrder = (a, b) => {
+      const rank = (g) => category(g) === 'exam' ? (examNumber(g) || 50) : category(g) === 'assessment' ? 100 : category(g) === 'course' ? 200 : 300;
+      return Number(a.schoolYear || 0) - Number(b.schoolYear || 0) || Number(a.grade || 0) - Number(b.grade || 0)
+        || Number(a.semester || 0) - Number(b.semester || 0) || rank(a) - rank(b)
+        || String(a.assessmentName || a.exam || '').localeCompare(String(b.assessmentName || b.exam || ''), 'ko');
+    };
     const familyOrder = (name) => { const i = Curriculum2022.families.indexOf(name); return i < 0 ? 999 : i; };
     const chartRowsFor = (rows) => rows.filter((g) => category(g) === (filters.mode === 'mock' ? 'mock' : filters.chart)
-      && (filters.mode === 'mock' || filters.chart !== 'exam' || !filters.chartExam || g.exam === filters.chartExam)).sort((a, b) => orderKey(a).localeCompare(orderKey(b)));
+      && (filters.mode === 'mock' || filters.chart !== 'exam' || !filters.chartExam || examText(g) === filters.chartExam)).sort((a, b) => orderKey(a).localeCompare(orderKey(b)));
     const combinedTrend = (rows) => {
       const groups = new Map();
       rows.forEach((g) => {
         const key = filters.mode === 'mock' ? `${g.examDate || g.schoolYear || ''}|${g.exam || '모의고사'}`
           : filters.chart === 'course' ? `${g.schoolYear || ''}|${g.grade || ''}|${g.semester || ''}`
-            : `${g.schoolYear || ''}|${g.grade || ''}|${g.semester || ''}|${g.exam || '고사'}`;
+            : `${g.schoolYear || ''}|${g.grade || ''}|${g.semester || ''}|${examText(g)}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(g);
       });
       return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, group]) => ({
         subject: '전체 평균', grade: group[0].grade, semester: group[0].semester,
-        exam: filters.mode === 'mock' ? group[0].exam || '모의고사' : filters.chart === 'course' ? '학기말' : group[0].exam,
+        exam: filters.mode === 'mock' ? group[0].exam || '모의고사' : filters.chart === 'course' ? '학기말' : examText(group[0]),
         score: group.reduce((sum, g) => sum+Number(g.score || 0), 0)/group.length,
         full: group.reduce((sum, g) => sum+Number(g.full || 100), 0)/group.length,
         examDate: group[0].examDate || '', schoolYear: group[0].schoolYear || '', groupKey: key,
@@ -213,8 +230,8 @@ const Grades = (() => {
       graphResize?.disconnect(); graphResize = null;
       if (typeof subjectSummary !== 'undefined') subjectSummary.textContent = subjectFilter.selectedOptions[0]?.textContent || '모든 과목';
       const all = load();
-      const allMode = all.filter((g) => isMock(g) === (filters.mode === 'mock'));
-      const list = filtered().filter((g) => isMock(g) === (filters.mode === 'mock'));
+      const allMode = displayRows(all.filter((g) => isMock(g) === (filters.mode === 'mock')));
+      const list = displayRows(filtered().filter((g) => isMock(g) === (filters.mode === 'mock')));
       const completionExtras = filters.mode === 'school' ? Store.get('schoolReportExtras', []).filter((g) => g.sourceDetails?.recordType === 'completion') : [];
       stat.replaceChildren(h('span', { class: 'pill' }, `기록 ${list.length}개`));
       body.replaceChildren();
@@ -222,15 +239,15 @@ const Grades = (() => {
       if (!list.length) body.append(h('div', { class: 'empty-box' }, '선택한 조건에 맞는 성적이 없어요. 아래 교과군·과목 목록에서 다른 기록을 볼 수 있어요.'));
       const subjects = [...new Set([...allMode.map((g) => g.subject || '과목 없음'), ...completionExtras.map((g) => g.subject || g.sourceDetails.subject)])];
       const families = [...new Set(subjects.map((name) => Curriculum2022.familyFor(name)))].sort((a, b) => familyOrder(a) - familyOrder(b) || a.localeCompare(b, 'ko'));
-      const focused = filters.subject ? list.filter((g) => g.subject === filters.subject) : [];
-      const selectedRows = focused.length ? focused : filters.family ? list.filter((g) => Curriculum2022.familyFor(g.subject) === filters.family) : [];
-      if (filters.mode === 'school' && filters.subject) {
+      const focused = !filters.q && filters.subject ? list.filter((g) => g.subject === filters.subject) : [];
+      const selectedRows = focused.length ? focused : !filters.q && filters.family ? list.filter((g) => Curriculum2022.familyFor(g.subject) === filters.family) : [];
+      if (filters.mode === 'school' && focused.length) {
         filters.chart = 'exam'; chartFilter.value = 'exam'; chartFilter.hidden = true;
         filters.chartExam = ''; chartExamFilter.value = '';
       } else chartFilter.hidden = filters.mode === 'mock';
-      chartExamFilter.hidden = filters.mode === 'mock' || !!filters.subject || filters.chart !== 'exam';
+      chartExamFilter.hidden = filters.mode === 'mock' || !!focused.length || filters.chart !== 'exam';
       const chartRows = chartRowsFor(focused);
-      const summaryRows = chartRowsFor(filters.subject || filters.family ? selectedRows : list);
+      const summaryRows = chartRowsFor(selectedRows.length ? selectedRows : list);
       const graphRows = focused.length ? chartRows : combinedTrend(summaryRows);
       const barRows = focused.length || (filters.mode === 'school' && filters.chart === 'exam') ? summaryRows.slice() : [...new Set(summaryRows.map((g) => g.subject))].map((name) => {
         const rows = summaryRows.filter((g) => g.subject === name);
@@ -245,8 +262,8 @@ const Grades = (() => {
       barRows.sort(compareRows);
       const scoreAvg = (rows) => rows.length ? `${fmt(rows.reduce((sum, g) => sum + Number(g.score || 0), 0) / rows.length)}점` : '—';
       const bars = (rows) => h('div', { class: 'gr-bars' }, rows.length ? rows.map((g) => {
-        const label = focused.length ? g.assessmentName || g.exam || '평가'
-          : filters.mode === 'school' && filters.chart === 'exam' ? `${g.subject} · ${g.grade || '—'}학년 ${g.semester || '—'}학기 ${g.exam || '고사'}`
+        const label = focused.length ? category(g) === 'exam' ? examText(g) : g.assessmentName || g.exam || '평가'
+          : filters.mode === 'school' && filters.chart === 'exam' ? `${g.subject} · ${g.grade || '—'}학년 ${g.semester || '—'}학기 ${examText(g)}`
             : `${g.subject} · ${g.exam || '학기 성적'}`;
         return h('div', { class: 'gr-bar', style: { '--c': colorFor(g.subject) } },
         h('span', { class: 'gb-n', title: label }, label), h('span', { class: 'gb-t' }, h('i', { style: { width: `${Math.max(0, Math.min(100, pct(g)))}%` } })),
@@ -282,7 +299,7 @@ const Grades = (() => {
             const viewport = h('div', { class: 'gr-expanded-chart' }, chart);
             const dialog = App.modal({ title: '점수 추이 확대', wide: true, body: viewport });
             dialog.back.classList.add('gr-chart-modal');
-            let scale = 1, pinch = null;
+            let scale = 1, pinch = null, drag = null;
             const apply = (next, clientX, clientY) => {
               const rect = viewport.getBoundingClientRect();
               const x = (clientX ?? rect.left + rect.width / 2) - rect.left;
@@ -297,6 +314,19 @@ const Grades = (() => {
             };
             requestAnimationFrame(() => apply(1));
             viewport.addEventListener('wheel', (event) => { event.preventDefault(); apply(scale * (event.deltaY < 0 ? 1.12 : 1 / 1.12), event.clientX, event.clientY); }, { passive: false });
+            viewport.addEventListener('pointerdown', (event) => {
+              if (event.pointerType !== 'mouse' || event.button !== 0 || scale <= 1) return;
+              drag = { id: event.pointerId, x: event.clientX, y: event.clientY, left: viewport.scrollLeft, top: viewport.scrollTop };
+              viewport.setPointerCapture(event.pointerId); viewport.classList.add('is-dragging');
+            });
+            viewport.addEventListener('pointermove', (event) => {
+              if (!drag || drag.id !== event.pointerId) return;
+              viewport.scrollLeft = drag.left + drag.x - event.clientX;
+              viewport.scrollTop = drag.top + drag.y - event.clientY;
+            });
+            const endDrag = (event) => { if (drag?.id === event.pointerId) { drag = null; viewport.classList.remove('is-dragging'); } };
+            viewport.addEventListener('pointerup', endDrag);
+            viewport.addEventListener('pointercancel', endDrag);
             viewport.addEventListener('touchstart', (event) => { if (event.touches.length === 2) { const [a, b] = event.touches; pinch = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), scale }; } }, { passive: true });
             viewport.addEventListener('touchmove', (event) => { if (!pinch || event.touches.length !== 2) return; event.preventDefault(); const [a, b] = event.touches; apply(pinch.scale * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / Math.max(1, pinch.distance), (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2); }, { passive: false });
             viewport.addEventListener('touchend', (event) => { if (event.touches.length < 2) pinch = null; });
@@ -340,8 +370,8 @@ const Grades = (() => {
           h('summary', null, family, ` · ${names.length}과목`),
           ...names.map((name) => h('details', { class: 'gr-subject-group', open: name === filters.subject },
             h('summary', null, h('i', { class: 'gr-dot', style: { background: colorFor(name) } }), name),
-            h('button', { class: 'btn ghost', type: 'button', onclick: () => { filters.family = family; filters.subject = name; familyFilter.value = family; subjectFilter.value = name; redraw(); } }, '이 과목 그래프 보기'),
-            ...allMode.filter((g) => g.subject === name).sort(compareRows).map(record),
+            h('button', { class: 'btn ghost', type: 'button', onclick: () => { filters.q = ''; search.value = ''; filters.grade = ''; filters.sem = ''; gradeFilter.value = ''; semesterFilter.value = ''; filters.family = family; filters.subject = name; familyFilter.value = family; subjectFilter.value = name; redraw(); } }, '이 과목 그래프 보기'),
+            ...allMode.filter((g) => g.subject === name).sort(recordOrder).map(record),
             ...completionExtras.filter((g) => (g.subject || g.sourceDetails.subject) === name).map((g) => {
               const row = g.sourceDetails;
               return h('div', { class: 'gr-completion-record' },
@@ -373,14 +403,24 @@ const Grades = (() => {
     } }, subjectSummary, subjectFilter, subjectOptions);
     const familyFilter = sel('family', [['', '모든 교과군'], ...Curriculum2022.families.map((name) => [name, name])]);
     subjectFilter.addEventListener('change', () => { if (filters.subject && filters.family && Curriculum2022.familyFor(filters.subject) !== filters.family) { filters.family = ''; familyFilter.value = ''; redraw(); } });
-    const chartExamFilter = sel('chartExam', [['', '모든 고사'], ...[...new Set(load().filter((g) => category(g) === 'exam').map((g) => g.exam))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko')).map((name) => [name, name])]);
+    const chartExamFilter = sel('chartExam', [['', '모든 고사'], ...[...new Set(load().filter((g) => category(g) === 'exam').map(examText))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })).map((name) => [name, name])]);
     chartExamFilter.hidden = filters.chart !== 'exam' || filters.mode === 'mock';
     const chartFilter = h('select', { 'aria-label': '그래프 종류', onchange: (event) => { filters.chart = event.target.value; chartExamFilter.hidden = filters.chart !== 'exam'; redraw(); } },
       [['course', '학기말 그래프'], ['exam', '고사별 그래프']].map(([value, label]) => h('option', { value, selected: filters.chart === value }, label)));
     const modeTabs = h('div', { class: 'seg gr-mode-tabs' }, [['school', '내신'], ['mock', '모의고사']].map(([value, label]) => h('button', { class: `seg-btn${filters.mode === value ? ' on' : ''}`, type: 'button', onclick: () => {
       filters.mode = value; modeTabs.querySelectorAll('button').forEach((button) => button.classList.toggle('on', button.textContent === label)); chartFilter.hidden = value === 'mock'; chartExamFilter.hidden = value === 'mock' || filters.chart !== 'exam'; redraw();
     } }, label)));
-    const search = h('input', { type: 'search', 'aria-label': '과목 검색', placeholder: '과목 이름 검색', value: filters.q, oninput: (e) => { filters.q = e.target.value; redraw(); } });
+    const gradeFilter = sel('grade', [['', '모든 학년'], ['1', '1학년'], ['2', '2학년'], ['3', '3학년']]);
+    const semesterFilter = sel('sem', [['', '모든 학기'], ['1', '1학기'], ['2', '2학기']]);
+    const search = h('input', { type: 'search', 'aria-label': '과목 검색', placeholder: '과목 이름 검색', value: filters.q, oninput: (e) => {
+      filters.q = e.target.value;
+      if (filters.q.trim()) {
+        filters.subject = ''; filters.family = ''; filters.grade = ''; filters.sem = '';
+        subjectFilter.value = ''; familyFilter.value = ''; gradeFilter.value = ''; semesterFilter.value = '';
+        subjectMenu.open = false;
+      }
+      redraw();
+    } });
     root.append(h('section', { class: 'panel' },
       h('div', { class: 'title-row' },
         h('h1', { class: 'page-title' }, '성적 관리'),
@@ -388,8 +428,8 @@ const Grades = (() => {
       stat,
       h('div', { class: 'gr-mode-row' }, modeTabs, search),
       h('div', { class: 'filters gr-filters' },
-        sel('grade', [['', '모든 학년'], ['1', '1학년'], ['2', '2학년'], ['3', '3학년']]),
-        sel('sem', [['', '모든 학기'], ['1', '1학기'], ['2', '2학기']]),
+        gradeFilter,
+        semesterFilter,
         familyFilter,
         subjectMenu,
         chartFilter,
@@ -403,6 +443,7 @@ const Grades = (() => {
         h('summary', null, item.sourceDetails?.recordType === 'completion'
           ? `${item.sourceDetails.schoolYear || ''}학년도 ${item.sourceDetails.grade || ''}학년 ${item.sourceDetails.semester || ''}학기 · ${item.subject || '과목 없음'} · ${item.sourceDetails.completionMark || (item.sourceDetails.completed === true ? 'P' : '미기재')}`
           : `${item.subject || '과목 없음'} · ${item.exam || ''}`), h('pre', null, JSON.stringify(item.sourceDetails, null, 2)))))));
+    root.append(SchoolData.tools('grades'));
   }
 
   return { render };

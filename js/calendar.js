@@ -108,8 +108,8 @@ const Calendar = (() => {
       body.replaceChildren(...(visible.length ? visible.map((exam) => h('div', { class: 'exam-list-row' },
       h('span', null, `${exam.title} · ${exam.start}${exam.start === exam.end ? '' : ` ~ ${exam.end}`}`),
       h('button', { class: 'btn', type: 'button', onclick: () => editExam(exam, () => { drawList(); after(); }) }, '수정'),
-      h('button', { class: 'btn danger', type: 'button', onclick: () => {
-        if (!confirm(`${exam.title} 시험기간을 삭제할까요?`)) return;
+      h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+        if (!await App.confirm(`${exam.title} 시험기간을 삭제할까요?`)) return;
         Store.set('examPeriods', exams().filter((x) => x.id !== exam.id)); drawList(); after();
       } }, '삭제'))) : [h('p', { class: 'muted' }, '등록된 시험이 없어요.') ]));
     };
@@ -226,7 +226,7 @@ const Calendar = (() => {
   }
 
   // ---------- 삭제 ----------
-  function removeEvent(ev, after, closeParent) {
+  async function removeEvent(ev, after, closeParent) {
     const base = events().find((x) => x.id === ev.id);
     if (!base) return;
     const finish = () => { if (closeParent) closeParent(); after(); };
@@ -249,7 +249,7 @@ const Calendar = (() => {
       return;
     }
     if (!base.repeat) {
-      if (!confirm('이 일정을 삭제할까요?')) return;
+      if (!await App.confirm('이 일정을 삭제할까요?')) return;
       saveEvents(events().filter((x) => x.id !== ev.id));
       finish();
       return;
@@ -548,7 +548,7 @@ const Calendar = (() => {
       const ro = R - lane * w;
       const ri = ro - w + (L > 1 ? 1.5 : 0);
       const a0 = ang(x.s); const a1 = ang(x.f);
-      svg.append(sv('path', { d: arc(a0, a1, ro, ri), fill: x.e.color, 'fill-opacity': x.e.done ? 0.38 : 1, stroke: '#fff', 'stroke-width': 2, class: 'pie-sec', tabindex: 0, role: 'button', 'aria-label': `${range(x.e)} ${x.e.title}${x.e.done ? ' (완료)' : ''}`,
+      svg.append(sv('path', { d: arc(a0, a1, ro, ri), fill: x.e.color, 'fill-opacity': x.e.done ? 0.38 : 1, class: 'pie-sec', tabindex: 0, role: 'button', 'aria-label': `${range(x.e)} ${x.e.title}${x.e.done ? ' (완료)' : ''}`,
         onclick: () => showEvent(x.e, redraw), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showEvent(x.e, redraw); } } },
       sv('title', null, `${range(x.e)} ${x.e.title}`)));
     });
@@ -591,7 +591,7 @@ const Calendar = (() => {
   // 가로로 긴 홈 북마크에서는 24시간을 반원에 펼쳐 표시한다.
   function semiPie(d, redraw) {
     const ds = dateStr(d), evs = layout(byDate(ds).filter((e) => !e.sourceBreak && (e.schoolLesson ? !Settings.protectedTab('timetable') : !Settings.protectedTab('calendar'))));
-    const C = 210, Y = 200, outer = 132, inner = 76;
+    const C = 210, Y = 207, outer = 150, inner = 86;
     const angle = (minutes) => Math.PI + Math.max(0, Math.min(1440, minutes)) / 1440 * Math.PI;
     const point = (radius, a) => [C + radius * Math.cos(a), Y + radius * Math.sin(a)];
     const f = (n) => n.toFixed(2);
@@ -661,11 +661,12 @@ const Calendar = (() => {
     const head = (label, ...extra) => h('div', { class: `cal-head cal-head-${mode}` },
       h('div', { class: 'cal-nav' },
         modeTabs(),
-        h('button', { class: 'btn', type: 'button', disabled: !canMove(-1), onclick: () => go(target(-1)), 'aria-label': `이전 ${unit()}` }, '◀'),
-        label,
-        h('button', { class: 'btn', type: 'button', disabled: !canMove(1), onclick: () => go(target(1)), 'aria-label': `다음 ${unit()}` }, '▶'),
+        h('div', { class: 'cal-date-controls' },
+          h('button', { class: 'btn', type: 'button', disabled: !canMove(-1), onclick: () => go(target(-1)), 'aria-label': `이전 ${unit()}` }, '◀'),
+          label,
+          h('button', { class: 'btn', type: 'button', disabled: !canMove(1), onclick: () => go(target(1)), 'aria-label': `다음 ${unit()}` }, '▶')),
         h('button', { class: 'btn ghost cal-today', type: 'button', onclick: () => go(new Date()) }, mode === 'month' ? '이번 달' : mode === 'week' ? '이번 주' : '오늘')),
-      h('div', { class: 'cal-act' }, mode === 'month' ? null : addBtn(), ...extra));
+      mode === 'month' && !extra.length ? null : h('div', { class: 'cal-act' }, mode === 'month' ? null : addBtn(), ...extra));
     const pageTitle = () => h('div', { class: 'title-row cal-title-row' }, h('h1', { class: 'page-title' }, '일정 관리'),
       h('button', { class: 'btn', type: 'button', onclick: () => manageExams(draw) }, '시험기간'));
 

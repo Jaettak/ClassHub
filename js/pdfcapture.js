@@ -513,9 +513,9 @@ const PdfCapture = (() => {
       renderPage();
     }
 
-    function closePdf() {
+    async function closePdf() {
       if (!st.doc) return;
-      if (!confirm('열어 둔 PDF를 지울까요? (저장한 오답노트는 그대로 남아요)')) return;
+      if (!await App.confirm('열어 둔 PDF를 지울까요? (저장한 오답노트는 그대로 남아요)')) return;
       st.token++;
       try { st.doc.destroy(); } catch (e) { /* 무시 */ }
       st.doc = null;
@@ -606,8 +606,8 @@ const PdfCapture = (() => {
       const current = folders().find((item) => item.id === folderFilter); if (!current) return;
       const name = h('input', { type: 'text', value: current.name, maxLength: 30 });
       const m = App.modal({ title: '오답 보관함 관리', body: App.field('이름', name), footer: [
-        h('button', { class: 'btn danger', type: 'button', onclick: () => {
-          if (!confirm('보관함을 지울까요? 안의 오답은 기본 보관함으로 이동해요.')) return;
+        h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+          if (!await App.confirm('보관함을 지울까요? 안의 오답은 기본 보관함으로 이동해요.')) return;
           Store.set('captureFolders', folders().filter((item) => item.id !== current.id));
           Store.set('captures', captures().map((item) => item.folderId === current.id ? { ...item, folderId: '' } : item));
           folderFilter = '*'; m.close(); drawGallery();
@@ -621,9 +621,9 @@ const PdfCapture = (() => {
       const m = App.modal({ title: '오답노트 휴지통', wide: true,
         body: list.length ? h('div', { class: 'cap-trash-list' }, list.map((item) => h('div', { class: 'cap-trash-row' }, h('b', null, item.title),
           h('button', { class: 'btn', type: 'button', onclick: () => { Store.set('captures', captures().map((x) => x.id === item.id ? { ...x, deletedAt: null } : x)); m.close(); drawGallery(); openTrash(); } }, '복원'),
-          h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!confirm('이 오답을 영구 삭제할까요?')) return; await Store.delImg(item.id); Store.set('captures', captures().filter((x) => x.id !== item.id)); m.close(); drawGallery(); openTrash(); } }, '영구 삭제')))) : h('p', { class: 'muted' }, '휴지통이 비어 있어요.'),
+          h('button', { class: 'btn danger', type: 'button', onclick: async () => { if (!await App.confirm('이 오답을 영구 삭제할까요?')) return; await Store.delImg(item.id); Store.set('captures', captures().filter((x) => x.id !== item.id)); m.close(); drawGallery(); openTrash(); } }, '영구 삭제')))) : h('p', { class: 'muted' }, '휴지통이 비어 있어요.'),
         footer: list.length ? [h('button', { class: 'btn danger', type: 'button', onclick: async () => {
-          if (!confirm(`휴지통의 오답 ${list.length}개를 모두 영구 삭제할까요?`)) return;
+          if (!await App.confirm(`휴지통의 오답 ${list.length}개를 모두 영구 삭제할까요?`)) return;
           for (const item of list) await Store.delImg(item.id);
           Store.set('captures', captures().filter((item) => !item.deletedAt)); m.close(); drawGallery();
         } }, '휴지통 비우기')] : [] });
@@ -691,6 +691,12 @@ const PdfCapture = (() => {
           h('button', { type: 'button', class: 'btn', onclick: () => cameraInput.click() }, '사진 찍기'),
           h('button', { type: 'button', class: 'btn', onclick: () => openEditor({ base: blankBase(), title: '', sourceType: 'drawing', ann: [] }, drawGallery) }, '직접 그리기'),
           h('button', { type: 'button', class: 'btn ghost', onclick: () => addReference(drawGallery) }, '문제 번호만'),
+          h('button', { type: 'button', class: 'btn ghost', onclick: async () => {
+            const count = captures().filter((item) => !item.deletedAt).length;
+            if (!count || !await App.confirm(`오답 ${count}개를 모두 휴지통으로 옮길까요?`)) return;
+            Store.set('captures', captures().map((item) => item.deletedAt ? item : { ...item, deletedAt: Date.now() }));
+            drawGallery();
+          } }, '전체 삭제'),
           h('button', { type: 'button', class: 'trash-icon-btn', onclick: openTrash, title: '오답노트 휴지통', 'aria-label': '오답노트 휴지통' }, icon('trash')))),
       fileInput, imageInput, cameraInput, dropzone, pdfSection, gallery);
     root.append(dropTarget);

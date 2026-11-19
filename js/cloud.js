@@ -176,7 +176,7 @@ const Cloud = (() => {
     const legacy = Store.legacyData();
     if (localStorage.getItem('classhub:migrated:' + user.uid) === '1') { App.toast('이 계정으로 이전 기록을 이미 가져왔어요.'); return; }
     if (!Object.keys(legacy).length) { App.toast('이전할 로컬 기록이 없어요.'); return; }
-    if (!confirm('이 브라우저의 기존 기록을 현재 계정에 복사할까요? 클라우드에 이미 있는 같은 항목은 유지합니다. 기존 로컬 기록도 보존합니다.')) return;
+    if (!await App.confirm('이 브라우저의 기존 기록을 현재 계정에 복사할까요? 클라우드에 이미 있는 같은 항목은 유지합니다. 기존 로컬 기록도 보존합니다.')) return;
     const current = await Store.exportAll();
     const merged = { ...legacy, ...current.kv };
     for (const key of ARRAY_KEYS) {

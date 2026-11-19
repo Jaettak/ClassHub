@@ -108,8 +108,8 @@ const Activities = (() => {
         h('p', { class: 'hint' }, '과목명이나 활동 종류가 불확실하면 학교 자료나 공식 교육과정을 검색해 확인하세요.'),
       ],
       footer: [
-        !isNew ? h('button', { class: 'btn danger', type: 'button', onclick: () => {
-          if (!confirm('이 활동을 삭제할까요?')) return;
+        !isNew ? h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+          if (!await App.confirm('이 활동을 삭제할까요?')) return;
           save(load().filter((x) => x.id !== act.id));
           m.close(); after();
         } }, '삭제') : null,
@@ -117,12 +117,12 @@ const Activities = (() => {
         h('button', { class: 'btn primary', type: 'button', onclick: submit }, '저장'),
       ],
     });
-    function submit() {
+    async function submit() {
       const t = title.value.trim();
       if (!t) { App.toast('활동명을 입력해 주세요.'); title.focus(); return; }
       if (!noDate.checked && !date.value) { App.toast('날짜를 선택하거나 “날짜 표기 안 함”을 체크해 주세요.'); return; }
       const sim = similarTo(t, act.id);
-      if (sim.length && !confirm(`비슷한 활동이 있어요: "${sim[0].title}" (${sim[0].date || '날짜 없음'})\n그래도 저장할까요?`)) return;
+      if (sim.length && !await App.confirm(`비슷한 활동이 있어요: "${sim[0].title}" (${sim[0].date || '날짜 없음'})\n그래도 저장할까요?`)) return;
       const rec = { ...act,
         id: act.id || uid(), title: t, type: type.value, date: noDate.checked ? '' : date.value,
         grade: grade.value, semester: sem.value, subjects: [...new Set([...subjects, subject.value()].filter(Boolean))], subject: subjects[0] || subject.value(), desc: desc.value.trim(), cv: cv.value.trim(),
@@ -190,7 +190,6 @@ const Activities = (() => {
 
   function render(root) {
     const expanded = new Set();
-    root.append(SchoolData.tools('activities'));
     const listBox = h('div', { class: 'act-list' });
     const stat = h('div', { class: 'stat' });
     const groupActions = h('div', { class: 'act-group-actions' });
@@ -329,6 +328,7 @@ const Activities = (() => {
       groupActions,
       listBox));
     redraw();
+    root.append(SchoolData.tools('activities'));
   }
 
   const stats = () => { const all = load().filter((a) => viewFor(a) === 'activities'); return { total: all.length, todo: all.filter((a) => !a.cvDone && !a.sourceSchoolImport).length }; };

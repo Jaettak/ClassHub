@@ -23,16 +23,18 @@ const Settings = (() => {
     const setup = !s.privatePinHash;
     const pin = h('input', { type: 'password', inputMode: 'text', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: setup ? '새 비밀번호 4자 이상' : '비밀번호' });
     const repeat = h('input', { type: 'password', inputMode: 'text', autocomplete: 'off', minLength: 4, maxLength: 32, placeholder: '비밀번호 다시 입력' });
-    const visible = h('button', { class: 'btn ghost pin-visibility', type: 'button', 'aria-label': '비밀번호 보기', onclick: () => {
-      const show = pin.type === 'password';
-      pin.type = show ? 'text' : 'password';
-      repeat.type = pin.type;
-      visible.classList.toggle('is-visible', show);
-      visible.setAttribute('aria-label', show ? '비밀번호 숨기기' : '비밀번호 보기');
-    } }, sv('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
-      sv('path', { d: 'M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7 }),
-      sv('circle', { cx: 12, cy: 12, r: 2.5, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7 }),
-      sv('path', { class: 'pin-eye-slash', d: 'M4 20 20 4', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-linecap': 'round' })));
+    const pinField = (input) => {
+      const eye = h('button', { class: 'pin-inline-eye', type: 'button', 'aria-label': '비밀번호 보기', onclick: () => {
+        const shown = input.type === 'password';
+        input.type = shown ? 'text' : 'password';
+        eye.setAttribute('aria-label', shown ? '비밀번호 숨기기' : '비밀번호 보기');
+        eye.classList.toggle('is-visible', shown);
+      } }, sv('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+        sv('path', { d: 'M2.5 12s3.5-5 9.5-5 9.5 5 9.5 5-3.5 5-9.5 5-9.5-5-9.5-5Z', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7 }),
+        sv('circle', { cx: 12, cy: 12, r: 2.5, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.7 }),
+        sv('path', { class: 'pin-eye-slash', d: 'M4 20 20 4', stroke: 'currentColor', 'stroke-width': 1.7, 'stroke-linecap': 'round' })));
+      return h('div', { class: 'pin-input-wrap' }, input, eye);
+    };
     const submit = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
       if (pin.value.length < 4) return App.toast('비밀번호를 4자 이상 입력해 주세요.');
       if (setup && pin.value !== repeat.value) return App.toast('비밀번호가 서로 달라요.');
@@ -45,7 +47,7 @@ const Settings = (() => {
     } }, setup ? '설정하고 열기' : '열기');
     const m = App.modal({ title: setup ? '잠금 설정' : '잠금 해제',
       body: [h('p', { class: 'hint' }, setup ? '잠근 탭을 열 때 사용할 비밀번호를 설정하세요.' : '잠근 탭을 보려면 비밀번호를 입력하세요.'),
-        h('div', { class: 'pin-entry' }, App.field('비밀번호', pin), visible), setup ? App.field('비밀번호 확인', repeat) : null],
+        App.field('비밀번호', pinField(pin)), setup ? App.field('비밀번호 확인', pinField(repeat)) : null],
       footer: [h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'), submit] });
     [pin, repeat].forEach((input) => input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); submit.click(); } }));
     pin.focus();
@@ -309,21 +311,21 @@ const Settings = (() => {
       if (previewMode === 'mini') {
         cardList.className = 'set-card-preview preview-mini-live';
         const vw = window.innerWidth;
-        const scale = Math.min(1, Math.min(680, Math.max(240, vw - 80)) / vw);
+        const scale = Math.min(1, Math.min(940, Math.max(240, vw - 24)) / vw);
         const max = vw <= 640 ? 3 : vw <= 1000 ? 5 : 7;
         const rows = Math.min(tiles.length, Math.max(vw <= 640 ? 1 : 2, Math.ceil(tiles.length / max)));
         let index = 0;
-        const nav = h('nav', { class: 'set-mini-nav' }, Array.from({ length: rows }, (_, row) => {
+        const nav = h('nav', { class: 'set-mini-nav tabs' }, h('div', { class: 'set-mini-layout nav-layout' }, Array.from({ length: rows }, (_, row) => {
           const count = Math.floor(tiles.length / rows) + (row < tiles.length % rows ? 1 : 0);
-          return h('div', { class: 'set-mini-row' }, tiles.slice(index, index += count));
-        }));
+          return h('div', { class: 'set-mini-row nav-row', style: { '--row-count': count } }, tiles.slice(index, index += count));
+        })));
         const stage = h('div', { class: 'set-mini-stage' },
           h('div', { class: 'set-mini-brand' }, icon('books'), h('b', null, 'Class', h('span', null, 'Hub'))),
-          nav, h('span', { class: 'set-mini-settings' }, icon('settings')));
+          nav);
         Object.assign(stage.style, { width: `${vw}px`, transform: `scale(${scale})` });
         const viewport = h('div', { class: 'set-mini-viewport' }, stage);
-        viewport.style.height = `${Math.max(92, 22 + rows * 52) * scale}px`;
         cardList.replaceChildren(viewport);
+        viewport.style.height = `${Math.ceil(stage.scrollHeight * scale)}px`;
         return;
       }
       cardList.className = 'set-card-preview preview-home-live';
@@ -333,7 +335,8 @@ const Settings = (() => {
       const schedule = h('div', { class: 'home-schedule-preview' }, h('h3', null, '오늘 시간표'),
         h('div', { class: 'home-schedule-list' }, lessons.length ? lessons.map((lesson) => h('div', { class: 'home-schedule-lesson' }, `${lesson.period}. ${lesson.displayTitle}`)) : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')));
       const logo = h('div', { class: 'home-logo' }, icon('books', 'logo-books'), h('div', { class: 'logo-name' }, 'Class', h('b', null, 'Hub')));
-      const side = h('div', { class: 'side-box' }, h('div', { class: 'side-date-nav' }, h('span', null, '오늘'), h('span', null, '◀'), h('h3', null, `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`), h('span', null, '▶')),
+      const side = h('div', { class: 'side-box' }, h('div', { class: 'side-date-nav' }, h('span', null, '오늘'),
+        h('div', { class: 'side-date-controls' }, h('span', null, '◀'), h('h3', null, `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`), h('span', null, '▶'))),
         h('div', { class: 'side-scroll' }, h('p', { class: 'muted' }, '오늘의 일정')));
       const stage = h('div', { class: 'set-home-stage' }, h('div', { class: 'home' }, h('div', { class: 'home-cards' }, tiles),
         h('aside', { class: 'home-side' }, h('div', { class: 'home-topline' }, schedule, logo), side)));
@@ -341,11 +344,6 @@ const Settings = (() => {
       const viewport = h('div', { class: 'set-home-viewport' }, stage);
       Object.assign(viewport.style, { width: `${vw * scale}px`, height: `${vh * scale}px` });
       const scroller = stage.querySelector('.home-cards');
-      const scrollControls = h('div', { class: 'set-home-scroll-controls' },
-        h('button', { type: 'button', 'aria-label': '탭 목록 위로', onclick: () => { scroller.scrollTop -= scroller.clientHeight * .8; } }, '↑'),
-        h('button', { type: 'button', 'aria-label': '탭 목록 아래로', onclick: () => { scroller.scrollTop += scroller.clientHeight * .8; } }, '↓'));
-      viewport.append(scrollControls);
-      requestAnimationFrame(() => { scrollControls.hidden = scroller.scrollHeight <= scroller.clientHeight + 2; });
       viewport.addEventListener('wheel', (event) => {
         if (!scroller || scroller.scrollHeight <= scroller.clientHeight) return;
         const before = scroller.scrollTop;
@@ -367,6 +365,7 @@ const Settings = (() => {
       ] : []));
       drawActions();
       const dialog = App.modal({ title: '탭 설정', wide: true, body: [h('p', { class: 'hint' }, '표시할 탭을 고르거나, 메인 화면과 상단 탭의 순서를 각각 끌어서 바꾸세요.'), actions, cardList], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
+      dialog.back.classList.add('set-tabs-dialog');
     };
     const tabBox = section('탭 설정', h('button', { class: 'btn', type: 'button', onclick: () => openTabPreview('visibility') }, '표시와 순서 바꾸기'));
     const lockChoices = cardNames.map(([id, label]) => ({ id, input: h('input', { type: 'checkbox', checked: (draft.privateLockTabs || (draft.privateLockEnabled === false ? [] : ['activities', 'grades'])).includes(id) }), label }));
@@ -429,8 +428,8 @@ const Settings = (() => {
     // 초기화
     const resetBox = section('데이터 초기화',
       h('button', { class: 'btn danger', type: 'button', onclick: async () => {
-        if (!confirm('저장된 모든 데이터(오답노트·시간표·일정·활동·성적·메모)가 지워져요. 계속할까요?')) return;
-        if ((prompt('정말 지울까요? 아래 칸에 "초기화"라고 입력하세요.') || '').trim() !== '초기화') { App.toast('취소했어요.'); return; }
+        if (!await App.confirm('저장된 모든 데이터(오답노트·시간표·일정·활동·성적·메모)가 지워져요. 계속할까요?')) return;
+        if ((await App.askText('정말 지울까요? 아래 칸에 "초기화"라고 입력하세요.') || '').trim() !== '초기화') { App.toast('취소했어요.'); return; }
         await Store.importAll({ app: 'ClassHub', kv: {}, img: {} });
         m.close(); apply(); App.toast('모두 지웠어요.'); App.route();
       } }, '모든 데이터 지우기'));

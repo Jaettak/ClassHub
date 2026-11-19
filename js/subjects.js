@@ -41,6 +41,8 @@ const Subjects = (() => {
   }
   function render(root) {
     const list = h('div', { class: 'subject-list' });
+    const sort = h('select', { 'aria-label': '과목 정렬', onchange: () => draw() },
+      h('option', { value: 'name' }, '이름순'), h('option', { value: 'family' }, '교과군순'));
     const view = h('select', { 'aria-label': '과목 목록 보기' },
       h('option', { value: 'timetable' }, '시간표 과목만'),
       h('option', { value: 'all' }, '전체 과목'));
@@ -59,6 +61,15 @@ const Subjects = (() => {
     const draw = () => {
       const active = timetableNames();
       const shown = view.value === 'timetable' ? names().filter((name) => active.has(name)) : names();
+      if (sort.value === 'family') {
+        const assigned = Store.get('subjectFamilies', {});
+        const rank = (name) => {
+          const family = assigned[name] || Curriculum2022.find(name)?.family || '기타';
+          const index = Curriculum2022.families.indexOf(family);
+          return index < 0 ? Curriculum2022.families.length : index;
+        };
+        shown.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, 'ko'));
+      }
       updateViewTabs();
       list.replaceChildren(...(shown.length ? shown.map((name) => {
       const color = h('input', { type: 'color', value: colorFor(name), 'aria-label': `${name} 색상` });
@@ -83,8 +94,8 @@ const Subjects = (() => {
       return h('div', { class: 'subject-row panel' }, h('strong', null, name), family, color,
         h('label', { class: 'check' }, '자동 색상', automatic), teacherButton, roomButton,
         h('button', { class: 'btn', type: 'button', onclick: save }, '저장'),
-        h('button', { class: 'btn danger', type: 'button', onclick: () => {
-          if (!confirm(`${name} 과목을 현재 시간표에서 지울까요? 이미 기록된 수업·성적은 유지돼요.`)) return;
+        h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+          if (!await App.confirm(`${name} 과목을 현재 시간표에서 지울까요? 이미 기록된 수업·성적은 유지돼요.`)) return;
           const tt = Store.get('timetable', null);
           if (tt?.cells) { tt.cells.forEach((day) => day.forEach((cell, i) => { if (cell?.subject === name) day[i] = null; })); Store.set('timetable', tt); }
           Store.set('subjectCatalog', catalog().filter((value) => value !== name));
@@ -107,10 +118,10 @@ const Subjects = (() => {
         Store.set('subjectCatalog', [...new Set([...catalog(), row.name])].sort((a, b) => a.localeCompare(b, 'ko')));
         Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name)); view.value = 'all'; draw();
       }) }, '공식 과목에서 선택')),
-      h('div', { class: 'subject-view-row' }, h('strong', null, '과목 목록'), viewTabs),
+      h('div', { class: 'subject-view-row' }, h('strong', null, '과목 목록'), viewTabs, sort),
       h('p', { class: 'hint' }, '색상과 과목별 선생님·교실을 관리해요. 시간표에서는 저장한 이름을 선택할 수 있어요. 과목을 삭제해도 과거 기록은 유지합니다.'), list));
     draw();
   }
-  return { render };
+  return { render, names };
 })();
 App.registerView('subjects', { label: '과목 관리', icon: 'subjects', render: Subjects.render });

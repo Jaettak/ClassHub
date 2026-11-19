@@ -149,8 +149,8 @@ const Timer = (() => {
         h('button', { class: 'btn tm-play', type: 'button', onclick: () => { st = session; toggle(); } }, '일시정지'),
         session.mode === 'up' ? h('button', { class: 'btn', type: 'button', onclick: () => { st = session; lap(); } }, '구간 저장') : null,
         h('button', { class: 'btn primary', type: 'button', onclick: () => { st = session; finish(false); } }, '끝내기'),
-        session.mode === 'down' ? h('button', { class: 'btn ghost tm-cancel', type: 'button', onclick: () => { if (confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소') : null,
-        session.mode === 'up' ? h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소') : null));
+        session.mode === 'down' ? h('button', { class: 'btn ghost tm-cancel', type: 'button', onclick: async () => { if (await App.confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소') : null,
+        session.mode === 'up' ? h('button', { class: 'btn ghost', type: 'button', onclick: async () => { if (await App.confirm('기록하지 않고 끌까요?')) { st = session; clear(); } } }, '취소') : null));
       const label = session.mode === 'up' ? '스톱워치' : '타이머';
       const collapsed = collapsedFor(session.mode);
       const row = h('div', { class: 'timer-dock-row' },
@@ -227,8 +227,13 @@ const Timer = (() => {
   }
 
   let resizeTimer = null;
+  let lastDockViewport = { width: innerWidth, height: innerHeight };
   window.addEventListener('resize', () => {
     if (!dock) return;
+    const keyboardResize = innerWidth === lastDockViewport.width && innerHeight < lastDockViewport.height - 100;
+    lastDockViewport = { width: innerWidth, height: innerHeight };
+    if (keyboardResize) return;
+    if (document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) return;
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (!dock?.isConnected) return;
@@ -262,10 +267,10 @@ const Timer = (() => {
     persist(); update();
   }
 
-  function start(o) {
+  async function start(o) {
     stopAlarm();
     st = sessions[o.mode] || null;
-    if (st && !confirm(`진행 중인 ${o.mode === 'up' ? '스톱워치' : '타이머'}가 있어요. 기록하고 새로 시작할까요?`)) return;
+    if (st && !await App.confirm(`진행 중인 ${o.mode === 'up' ? '스톱워치' : '타이머'}가 있어요. 기록하고 새로 시작할까요?`)) return;
     if (st) { saveSession(); sessions[o.mode] = null; if (App.current === 'timer') App.refresh(); }
     try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.resume) ctx.resume(); } catch (e) { /* 무시 */ }
     st = { title: o.title || '', evId: o.evId || '', date: o.date || todayStr(), mode: o.mode, total: o.seconds ?? ((o.minutes || 0) * 60), alarmSound: o.alarmSound, alarmVisual: o.alarmVisual, running: true, startedAt: Date.now(), order: Date.now(), before: 0, laps: [] };
@@ -347,13 +352,16 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
     h('div', { class: 'timer-mode-grid' },
       h('button', { class: 'timer-page-card', type: 'button', onclick: () => Timer.open({ mode: 'down' }) }, icon('timer'), h('h2', null, '타이머'), h('span', null, '정해 둔 시간만큼 집중하기')),
       h('button', { class: 'timer-page-card', type: 'button', onclick: () => Timer.open({ mode: 'up' }) }, icon('timer'), h('h2', null, '스톱워치'), h('span', null, '공부한 시간 재기'))),
-    h('h3', null, '최근 기록'),
+    h('div', { class: 'timer-history-heading' }, h('h3', null, '최근 기록'),
+      h('button', { class: 'btn ghost', type: 'button', onclick: () => removeAllLogs() }, '전체 삭제')),
     h('div', { class: 'timer-history' }));
+  root.append(panel);
   const list = panel.querySelector('.timer-history');
   const fmtMin = sec => `${Math.floor(sec / 60)}분 ${sec % 60}초`;
   const sameLog = (a, b) => a.id || b.id ? a.id === b.id : a.at === b.at;
   const drawLogs = () => {
-    const current = Store.get('timerLog', []).filter((x) => !x.deletedAt).slice().reverse();
+    const saved = Store.get('timerLog', []);
+    const current = (Array.isArray(saved) ? saved : []).filter((x) => x && !x.deletedAt).slice().reverse();
     list.replaceChildren(...(current.length ? current.slice(0, 30).map((x) => h('div', { class: 'timer-history-row' },
       h('details', { class: 'timer-history-item' },
         h('summary', null, h('b', null, x.title || (x.mode === 'up' ? '스톱워치' : '타이머')), h('span', null, `${x.date} · ${fmtMin(x.sec)}`)),
@@ -363,6 +371,12 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
       } }, '×'))) : [h('p', { class: 'muted' }, '아직 타이머 기록이 없어요.') ]));
   };
   drawLogs();
+  const removeAllLogs = async () => {
+    const count = Store.get('timerLog', []).filter((x) => !x.deletedAt).length;
+    if (!count || !await App.confirm(`타이머·스톱워치 기록 ${count}개를 휴지통으로 옮길까요?`)) return;
+    Store.set('timerLog', Store.get('timerLog', []).map((x) => x.deletedAt ? x : { ...x, deletedAt: Date.now() }));
+    drawLogs();
+  };
   const openTrash = () => {
     const body = h('div', { class: 'timer-trash' });
     const refresh = () => {
@@ -372,16 +386,15 @@ App.registerView('timer', { label: '타이머', icon: 'timer', render(root) {
         h('button', { class: 'btn ghost', type: 'button', onclick: () => {
           Store.set('timerLog', Store.get('timerLog', []).map((log) => sameLog(log, x) ? { ...log, deletedAt: null } : log)); refresh(); drawLogs();
         } }, '복원'),
-        h('button', { class: 'btn danger', type: 'button', onclick: () => {
-          if (!confirm('이 기록을 영구 삭제할까요?')) return;
+        h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+          if (!await App.confirm('이 기록을 영구 삭제할까요?')) return;
           Store.set('timerLog', Store.get('timerLog', []).filter((log) => !sameLog(log, x))); refresh();
         } }, '영구 삭제'))) : [h('p', { class: 'muted' }, '휴지통이 비어 있어요.') ]));
     };
     refresh();
-    App.modal({ title: '타이머 기록 휴지통', body, footer: [h('button', { class: 'btn danger', type: 'button', onclick: () => {
-      if (!confirm('휴지통의 기록을 모두 영구 삭제할까요?')) return;
+    App.modal({ title: '타이머 기록 휴지통', body, footer: [h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+      if (!await App.confirm('휴지통의 기록을 모두 영구 삭제할까요?')) return;
       Store.set('timerLog', Store.get('timerLog', []).filter((x) => !x.deletedAt)); refresh();
     } }, '휴지통 비우기')] });
   };
-  root.append(panel);
 } });

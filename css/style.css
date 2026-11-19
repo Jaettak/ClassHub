@@ -1950,13 +1950,6 @@ body.nav-collapsed .topbar .nav-fold::before { display: none; }
 .view-subjects .subject-add-row + .field { margin-top: 20px; }
 .tt-wrap:not(.tt-editing) .tt .x, .tt-wrap:not(.tt-editing) .tt .plus { display: none; }
 .tt-wrap:not(.tt-editing) .tt .slot { cursor: default; }
-.pin-entry { display: flex; align-items: end; gap: 8px; }
-.pin-entry .field { flex: 1; min-width: 0; }
-.pin-entry .pin-visibility { flex: none; margin-bottom: 0; }
-.pin-visibility { display: grid; place-items: center; width: 42px; height: 42px; padding: 8px; }
-.pin-visibility svg { display: block; width: 22px; height: 22px; }
-.pin-visibility .pin-eye-slash { display: none; }
-.pin-visibility.is-visible .pin-eye-slash { display: block; }
 .study-list > .saved-board { display: block; flex: 0 0 100%; width: 100%; min-width: 0; }
 .saved-board > summary { list-style-position: outside; margin-left: 18px; padding-left: 8px; padding-right: 14px; }
 .saved-board-content { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -2027,6 +2020,7 @@ body.nav-collapsed .topbar .nav-fold::before { display: none; }
 .cal-head-week .cal-nav > .cal-today { grid-column: 5; grid-row: 1; justify-self: end; }
 .ch-picker-input { min-width: 0; width: 100%; max-width: 100%; box-sizing: border-box; cursor: pointer; font-size: max(16px, 1rem); }
 select.ch-select { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 31px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7794' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M7 10l5 5 5-5'/%3E%3C/svg%3E"); background-position: right 9px center; background-repeat: no-repeat; }
+select.ch-select { touch-action: pan-y; }
 .ch-select-list { display: flex; flex-direction: column; gap: 4px; max-height: min(50vh,340px); overflow-y: auto; margin-top: 10px; }
 .ch-select-option { display: block; width: 100%; text-align: left; border: 0; border-radius: 10px; padding: 10px 12px; background: #fff; cursor: pointer; }
 .ch-select-option:hover, .ch-select-option.selected { background: #eaf1ff; color: var(--blue); font-weight: 800; }
@@ -2084,3 +2078,137 @@ input[type='checkbox']:checked::after { content: none; }
   .act-detail-modal, .gr-chart-modal { align-items: center; padding: 14px; }
   .act-detail-modal .modal, .gr-chart-modal .modal { width: min(100%, 760px); max-height: 88vh; border-radius: 20px; }
 }
+
+/* 2.4.1: 홈의 좁은 화면과 선택 요소 정리 */
+.view-home .home { padding-bottom: 18px; }
+.side-date-nav { grid-template-columns: minmax(18px,1fr) 28px 144px 28px minmax(18px,1fr); gap: 3px; }
+.side-box.wide-pie .home-pie-half svg { max-width: 520px; }
+.view-home .home-pie-view .pie-sec { stroke: none; }
+.home-day-notes-open { min-height: 42px; display: flex; align-items: center; padding-top: 8px; padding-bottom: 8px; margin-top: 5px; }
+.home-pie-actions > .btn:last-child { box-shadow: none !important; }
+.home-exam-banner .exam-name { align-self: center; }
+@container (max-width: 380px) { .home-exam-banner .exam-name { padding-top: 3px; } }
+.home-card.purple { background: linear-gradient(135deg, #b293ed, #8c69d0); }
+.set-card-preview.preview-home [data-tab-id='activities'] { background: #a983d7; }
+.view-subjects .subject-row .ch-color-input { flex: 0 0 40px; width: 40px !important; min-width: 40px; }
+.subject-view-row > select { flex: 0 0 auto; width: auto; min-width: 112px; margin-left: auto; }
+.nt-grid > .empty-box { grid-column: 1 / -1; width: 100%; }
+.ch-picker-nav { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; width: 100%; gap: 8px; }
+.ch-picker-nav strong { min-width: 0; text-align: center; }
+.pie-card .pie-toggle { width: 76px; min-width: 76px; justify-content: center; }
+.school-photo-floor > .school-floor-heading { display: flex; align-items: center; gap: 10px; }
+.school-floor-heading > span:first-child { flex: 1; min-width: 0; }
+.school-floor-order { display: inline-flex; gap: 5px; }
+.school-floor-order .btn { width: 32px; min-width: 32px; min-height: 30px; padding: 2px; }
+.school-photo-info { margin: 10px 0; font-size: .83rem; }
+.school-photo-info summary { cursor: pointer; color: var(--muted); }
+.school-photo-info p { margin: 7px 0; }
+.school-map-ai { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ym select.ch-select { padding-left: 31px; text-align: center; text-align-last: center; }
+@media (max-width: 640px) {
+  .view-home .home { padding-bottom: 16px; }
+  .view-home .home-card-frame { min-height: 0; overflow: hidden; }
+  .view-home .home-cards { height: calc(100% - 20px); min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; grid-auto-rows: minmax(86px, 96px); align-content: start; margin-block: 10px; padding: 0 10px; }
+  .view-home .home-card { min-height: 86px; }
+  .side-date-nav { grid-template-columns: minmax(18px,1fr) 25px 102px 25px minmax(18px,1fr); gap: 2px; }
+  .subject-view-tabs { min-width: 0; width: 100%; }
+  .subject-view-tabs .seg-btn { font-size: .74rem; padding-inline: 4px; }
+  .subject-view-row > select { min-width: 100px; }
+  .cal-head-day .cal-nav { grid-template-columns: 32px minmax(0, 1fr) 32px auto; }
+  .cal-head-day .cal-nav > .cal-label { grid-column: 2; grid-row: 2; }
+  .cal-head-day .cal-nav > .btn[aria-label^='이전'] { grid-column: 1; grid-row: 2; }
+  .cal-head-day .cal-nav > .btn[aria-label^='다음'] { grid-column: 3; grid-row: 2; }
+  .cal-head-day .cal-nav > .cal-today { grid-column: 4; grid-row: 2; justify-self: end; white-space: nowrap; }
+}
+
+/* v2.4.2: 날짜 이동과 미리보기 배치를 실제 화면의 줄 구성에 맞춘다. */
+.side-date-nav { display: grid; grid-template-columns: 42px minmax(0, 1fr) 42px; align-items: center; gap: 0; padding: 3px 0 0; width: 100%; }
+.side-date-nav > .btn:first-child { grid-column: 1; justify-self: start; width: auto; }
+.side-date-controls { grid-column: 2; display: grid; grid-template-columns: 28px 164px 28px; align-items: center; justify-self: center; gap: 1.5ch; }
+.side-date-controls > .btn, .side-date-nav .side-date-controls > .btn:first-child { width: 28px; min-width: 28px; padding-inline: 0; }
+.side-date-controls h3, .side-date-nav h3 { width: 164px; min-width: 164px; margin: 0; padding: 0; text-align: center; white-space: nowrap; }
+.timer-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; }
+.timer-history-heading h3 { margin: 0; }
+.confirm-message { white-space: pre-line; line-height: 1.6; margin: 0; }
+.confirm-dialog { align-items: center; padding: 16px; }
+.confirm-dialog .modal { width: min(420px, 100%); border-radius: 22px; }
+.confirm-dialog .modal-foot .danger { margin-right: 0; }
+.confirm-text label { display: grid; gap: 12px; font-weight: 700; line-height: 1.5; }
+.confirm-text input { width: 100%; }
+.title-row > button[hidden] { display: none; }
+.pin-input-wrap { position: relative; width: 100%; }
+.pin-input-wrap > input { width: 100%; padding-right: 48px; }
+.pin-input-wrap > input::-ms-reveal { display: none; }
+.pin-inline-eye { position: absolute; top: 50%; right: 7px; transform: translateY(-50%); display: grid; place-items: center; width: 34px; height: 34px; padding: 5px; border: 0; border-radius: 9px; background: transparent; color: #5d6980; cursor: pointer; }
+.pin-inline-eye:hover, .pin-inline-eye:focus-visible { background: #edf3ff; }
+.pin-inline-eye svg { width: 22px; height: 22px; }
+.pin-inline-eye .pin-eye-slash { display: none; }
+.pin-inline-eye.is-visible .pin-eye-slash { display: block; }
+
+.set-card-preview.preview-mini-live .set-mini-stage { box-sizing: border-box; min-height: 0; gap: 18px; padding: 8px 58px 14px 20px; align-items: center; }
+.set-card-preview.preview-mini-live .set-mini-brand { gap: 8px; font-size: 1.62rem; white-space: nowrap; }
+.set-card-preview.preview-mini-live .set-mini-brand > .ico { width: 68px; height: 50px; }
+.set-card-preview.preview-mini-live .set-mini-nav { display: block; flex: 1 1 auto; width: min(100%, 930px); margin: 0 0 0 auto; padding: 10px 4px 13px; }
+.set-card-preview.preview-mini-live .set-mini-layout { display: grid; gap: 5px; }
+.set-card-preview.preview-mini-live .set-mini-row { display: grid; grid-template-columns: repeat(var(--row-count), minmax(0, 1fr)); gap: 5px; justify-content: stretch; }
+.set-card-preview.preview-mini-live .set-mini-row .set-preview-tile { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 6px; align-items: center; justify-self: center; box-sizing: border-box; width: min(100%, 132px); min-height: 34px; max-width: 132px; padding: 5px; border: 1px solid #dce4f2; border-radius: 10px; background: #fff; box-shadow: 0 2px 6px #26365718; font-size: .75rem; }
+.set-card-preview.preview-mini-live .set-mini-row .set-preview-tile b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .75rem; }
+.set-card-preview.preview-mini-live .set-mini-row .set-preview-icon { width: 24px; height: 24px; }
+.set-card-preview.preview-mini-live .set-mini-settings { right: 10px; top: 8px; width: 22px; height: 22px; }
+
+.cal-title-row { margin-bottom: 18px; }
+.cal-head { display: block; margin-top: 0; }
+.cal-head .cal-nav { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 0; width: 100%; min-width: 0; }
+.cal-head .cal-nav > .seg { grid-column: 1; grid-row: 1; justify-self: start; width: auto; }
+.cal-head .cal-nav > .cal-date-controls { grid-column: 2; grid-row: 1; justify-self: center; }
+.cal-head .cal-nav > .cal-today { grid-column: 3; grid-row: 1; justify-self: start; margin-left: 8px; }
+.cal-head .cal-date-controls { display: grid; grid-template-columns: 34px minmax(0, max-content) 34px; align-items: center; gap: 6px; min-width: 0; }
+.cal-head .cal-date-controls > .btn { width: 34px; min-width: 34px; min-height: 34px; padding: 0; }
+.cal-head .cal-date-controls > .cal-label { text-align: center; white-space: nowrap; margin: 0; }
+.cal-head .cal-date-controls > .ym { display: inline-flex; width: max-content; min-width: 0; align-items: center; justify-content: center; gap: 6px; overflow: visible; }
+.cal-head .cal-date-controls > .ym select { box-sizing: border-box; flex: none; width: auto; min-width: 78px; max-width: none; padding-left: 12px; padding-right: 28px; text-align: center; text-align-last: center; }
+.cal-head .cal-date-controls > .ym select:first-child { min-width: 96px; }
+.cal-head .cal-act { justify-content: flex-start; margin-top: 9px; }
+@media (max-width: 640px) {
+  .side-date-nav { grid-template-columns: 37px minmax(0, 1fr) 37px; }
+  .side-date-controls { grid-template-columns: 25px 144px 25px; gap: 1.5ch; }
+  .side-date-controls h3, .side-date-nav h3 { width: 144px; min-width: 144px; font-size: .76rem; }
+  .side-date-controls > .btn, .side-date-nav .side-date-controls > .btn:first-child { width: 25px; min-width: 25px; }
+  .set-card-preview.preview-mini-live .set-mini-stage { gap: 18px; padding: 8px 58px 14px 20px; align-items: center; }
+  .set-card-preview.preview-mini-live .set-mini-brand { width: auto; font-size: 1.25rem; }
+  .set-card-preview.preview-mini-live .set-mini-brand > .ico { width: 54px; height: 39px; }
+  .set-card-preview.preview-mini-live .set-mini-nav { padding: 10px 4px 13px; }
+  .set-card-preview.preview-mini-live .set-mini-row .set-preview-tile { min-height: 34px; padding: 5px; }
+  .set-card-preview.preview-mini-live .set-mini-row .set-preview-tile b { font-size: .75rem; }
+  .cal-head .cal-nav { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); row-gap: 8px; }
+  .cal-head .cal-nav > .seg { grid-column: 1 / -1; grid-row: 1; }
+  .cal-head .cal-nav > .cal-date-controls { grid-column: 2; grid-row: 2; }
+  .cal-head .cal-nav > .cal-today { grid-column: 3; grid-row: 2; margin-left: 5px; }
+  .cal-head .cal-date-controls { grid-template-columns: 30px minmax(0, max-content) 30px; gap: 4px; max-width: calc(100vw - 135px); }
+  .cal-head .cal-date-controls > .btn { width: 30px; min-width: 30px; min-height: 32px; }
+  .cal-head .cal-date-controls > .cal-label { max-width: calc(100vw - 205px); overflow: hidden; text-overflow: ellipsis; font-size: .76rem; }
+  .cal-head .cal-date-controls > .ym { gap: 3px; }
+  .cal-head .cal-date-controls > .ym select { min-width: 44px; padding-left: 5px; padding-right: 20px; font-size: .75rem; }
+  .cal-head .cal-date-controls > .ym select:first-child { min-width: 74px; }
+}
+@container (max-width: 320px) {
+  .side-date-nav { grid-template-columns: 33px minmax(0, 1fr) 33px; }
+  .side-date-controls { grid-template-columns: 23px 130px 23px; }
+  .side-date-controls h3, .side-date-nav h3 { width: 130px; min-width: 130px; font-size: .7rem; }
+  .side-date-controls > .btn, .side-date-nav .side-date-controls > .btn:first-child { width: 23px; min-width: 23px; }
+}
+
+/* v2.4.3: 관리 버튼과 성적 분석 화면 정렬 */
+.creative-title-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
+.creative-title-actions > [hidden] { display: none !important; }
+.cal-fold-button { flex: none; white-space: nowrap; }
+.cal-fold-button::after { content: '빈 시간 펼치기'; display: block; height: 0; overflow: hidden; visibility: hidden; white-space: nowrap; }
+.cal-head .cal-date-controls { min-height: 38px; }
+.cal-head .cal-nav > .seg { min-height: 38px; }
+.act-attendance-head .act-perfect-icon { transform: translateY(-5px); }
+.set-tabs-dialog .modal.wide { width: min(1100px, 100%); }
+.set-card-preview.preview-mini-live .set-mini-settings { display: none; }
+.gr-filters > select:first-child { min-width: 130px; max-width: 135px; }
+.gr-filters > select:nth-child(2) { min-width: 130px; }
+.gr-expanded-chart { cursor: grab; }
+.gr-expanded-chart.is-dragging { cursor: grabbing; user-select: none; }
