@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.5.0';
+const CLASSHUB_VERSION = 'v2.6.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -196,9 +196,11 @@ const App = (() => {
       : knownSubjects();
     if (!opts.managedOnly && value && !list.includes(value)) list.push(value);
     const text = h('input', { type: 'text', placeholder: '새 과목 이름', maxLength: 20 });
+    const timetable = new Set((Store.get('timetable', {})?.cells || []).flatMap((day) => day || []).map((cell) => cell?.subject).filter(Boolean));
     const sel = h('select', { 'aria-label': label }, [
       h('option', { value: '' }, opts.empty || '과목 선택'),
-      list.map((s) => h('option', { value: s, selected: s === value }, s)),
+      h('optgroup', { label: '시간표 과목' }, list.filter((s) => timetable.has(s)).map((s) => h('option', { value: s, selected: s === value }, s))),
+      h('optgroup', { label: '표시한 과목' }, list.filter((s) => !timetable.has(s)).map((s) => h('option', { value: s, selected: s === value }, s))),
       opts.managedOnly ? null : h('option', { value: NEW }, '＋ 새 과목 추가'),
     ]);
     const picks = [];
@@ -297,8 +299,7 @@ const App = (() => {
                 const pageAnimation = page.animate([{ paddingTop: `${basePadding + expandedNavHeight}px` }, { paddingTop: `${basePadding}px` }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
                 pageAnimation.onfinish = () => { page.style.paddingTop = ''; pageAnimation.cancel(); };
               }
-              const animation = bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
-              bar.querySelector('.tabs')?.animate([{ opacity: 0, transform: 'translateY(-18px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
+              const animation = bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
             } else {
               const height = bar.getBoundingClientRect().height;
               expandedNavHeight = height;
@@ -313,8 +314,7 @@ const App = (() => {
                 pageAnimation.onfinish = () => { page.style.paddingTop = `${basePadding + height}px`; pageAnimation.cancel(); };
               }
               const style = getComputedStyle(bar);
-              const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)', opacity: 1 }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)', opacity: 0 }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
-              bar.querySelector('.tabs')?.animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-18px)' }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)' });
+              const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
               animation.onfinish = () => { document.body.classList.add('nav-collapsed'); animation.cancel(); };
             }
           } }),

@@ -145,8 +145,8 @@ const CloudDrive = (() => {
       button.disabled = false;
     } }, token ? 'Drive 동기화 다시 확인' : 'Google Drive 연결');
     return h('div', { class: 'set-row set-btns cloud-drive-settings' },
-      h('b', null, '이미지 동기화'), button, status,
-      h('p', { class: 'hint' }, 'PDF 원본과 학교 자료 원본은 업로드하지 않습니다. 활동·성적·메모 등 글 기록은 기존 Firebase 동기화를 사용합니다.'));
+      button, status,
+      h('small', { class: 'muted' }, 'PDF 원본과 학교 자료 원본은 업로드하지 않습니다. 글 기록은 계정 동기화를 사용합니다.'));
   }
   window.addEventListener('online', flush);
   return { accountChanged, disconnect, changed, read, connect, settingsSection };

@@ -152,9 +152,31 @@ const ClassHubPicker = (() => {
         hsv = toHsv(values); sync('rgb');
       }
     }));
+    const presets = ['#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#10b981','#14b8a6','#06b6d4','#3b82f6','#6366f1','#8b5cf6','#a855f7','#ec4899','#f43f5e','#991b1b','#9a3412','#854d0e','#365314','#166534','#115e59','#155e75','#1e40af','#312e81','#581c87','#831843','#ffffff','#e5e7eb','#94a3b8','#475569','#1f2937','#000000'];
+    const tabs = document.createElement('div'); tabs.className = 'seg ch-color-tabs';
+    const presetPanel = document.createElement('div'); presetPanel.className = 'ch-color-grid';
+    const customPanel = document.createElement('div'); customPanel.className = 'ch-color-custom';
+    customPanel.append(square, hueBar, rgbRow, hex);
+    const presetTab = button('추천 색상', () => { presetPanel.hidden = false; customPanel.hidden = true; presetTab.classList.add('on'); customTab.classList.remove('on'); }, 'seg-btn on');
+    const customTab = button('직접 고르기', () => { presetPanel.hidden = true; customPanel.hidden = false; customTab.classList.add('on'); presetTab.classList.remove('on'); }, 'seg-btn');
+    tabs.append(presetTab, customTab); customPanel.hidden = true;
+    const selectColor = (value) => { hsv = toHsv(fromHex(value)); sync(); };
+    presetPanel.append(...presets.map((value) => {
+      const cell = button('', () => selectColor(value), 'ch-color-cell'); cell.style.backgroundColor = value; cell.setAttribute('aria-label', value); return cell;
+    }));
+    const favorites = document.createElement('div'); favorites.className = 'ch-color-favorites';
+    const drawFavorites = () => {
+      const saved = Store.get('eventSavedColors', []).filter((value) => /^#[0-9a-f]{6}$/i.test(value)).slice(0, 5);
+      favorites.replaceChildren(...saved.map((value) => {
+        const cell = button('', () => selectColor(value), 'ch-color-cell'); cell.style.backgroundColor = value; cell.setAttribute('aria-label', `저장한 색 ${value}`); return cell;
+      }));
+    };
+    const saveFavorite = button('이 색 저장', () => {
+      Store.set('eventSavedColors', [chosen, ...Store.get('eventSavedColors', []).filter((value) => value !== chosen)].slice(0, 5)); drawFavorites();
+    }, 'btn ghost');
     const foot = document.createElement('div'); foot.className = 'ch-picker-actions';
-    foot.append(button('색상 적용', () => { if (!/^#[0-9a-f]{6}$/i.test(hex.value)) return App.toast('색상 코드는 #RRGGBB 형식으로 입력해 주세요.'); setValue(input, chosen, dialog); }, 'btn primary'));
-    body.append(preview, square, hueBar, rgbRow, hex, foot); sync();
+    foot.append(saveFavorite, button('색상 적용', () => { if (!/^#[0-9a-f]{6}$/i.test(hex.value)) return App.toast('색상 코드는 #RRGGBB 형식으로 입력해 주세요.'); setValue(input, chosen, dialog); }, 'btn primary'));
+    body.append(preview, tabs, presetPanel, customPanel, h('strong', { class: 'ch-color-saved-label' }, '저장한 색 · 최대 5개'), favorites, foot); sync(); drawFavorites();
   };
   const enhance = (input) => {
     const kind = input.type;
@@ -187,8 +209,14 @@ const ClassHubPicker = (() => {
     const list = document.createElement('div'); list.className = 'ch-select-list';
     const draw = (query = '') => {
       const filtered = options.filter((option) => option.textContent.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-      list.replaceChildren(...filtered.map((option) => button(option.textContent, () => setValue(select, option.value, dialog),
-        'ch-select-option' + (option.value === select.value ? ' selected' : ''))));
+      let previousGroup = '';
+      list.replaceChildren(...filtered.flatMap((option) => {
+        const group = option.parentElement?.tagName === 'OPTGROUP' ? option.parentElement.label : '';
+        const heading = group && group !== previousGroup ? [h('strong', { class: 'ch-select-group' }, group)] : [];
+        previousGroup = group;
+        return [...heading, button(option.textContent, () => setValue(select, option.value, dialog),
+          'ch-select-option' + (option.value === select.value ? ' selected' : ''))];
+      }));
       if (!filtered.length) { const empty = document.createElement('p'); empty.className = 'muted'; empty.textContent = '일치하는 항목이 없어요.'; list.append(empty); }
     };
     if (options.length > 12) {
@@ -203,23 +231,24 @@ const ClassHubPicker = (() => {
     select.classList.add('ch-select');
     select.setAttribute('aria-haspopup', 'dialog');
     let lastOpen = 0;
-    const show = () => { if (select.disabled || Date.now() - lastOpen < 450) return; lastOpen = Date.now(); openSelect(select); };
+    const show = () => { if (select.disabled || !select.isConnected || Date.now() - lastOpen < 450) return; lastOpen = Date.now(); openSelect(select); };
     let press = null;
-    let suppressClick = false;
+    let pendingOpen = false;
     select.addEventListener('pointerdown', (event) => {
       event.preventDefault();
-      suppressClick = false;
+      pendingOpen = false;
       press = { id: event.pointerId, x: event.clientX, y: event.clientY };
     });
     select.addEventListener('pointerup', (event) => {
       if (!press || press.id !== event.pointerId) return;
       const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y) > 9;
       press = null;
-      suppressClick = moved;
-      if (!moved) show();
+      pendingOpen = !moved;
+      // 터치의 합성 click이 끝나고 창을 열어야 새 창이 즉시 닫히지 않는다.
+      if (pendingOpen) setTimeout(() => { if (pendingOpen) show(); pendingOpen = false; }, 0);
     });
-    select.addEventListener('pointercancel', () => { press = null; });
-    select.addEventListener('click', (event) => { event.preventDefault(); if (!press && !suppressClick) show(); suppressClick = false; });
+    select.addEventListener('pointercancel', () => { press = null; pendingOpen = false; });
+    select.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); if (!press && !pendingOpen && event.detail === 0) show(); });
     select.addEventListener('keydown', (event) => {
       if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); show(); }
     });

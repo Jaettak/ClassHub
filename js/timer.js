@@ -130,7 +130,8 @@ const Timer = (() => {
     if (!running.length) { if (tick) clearInterval(tick); tick = null; document.title = baseTitle; return; }
     const scrollbarWidth = Math.max(0, innerWidth - document.documentElement.clientWidth);
     const toggleWidth = scrollbarWidth > 0 ? 30 : 22;
-    const collapseDistance = (row) => Math.max(0, document.documentElement.clientWidth - toggleWidth - row.getBoundingClientRect().left - 1);
+    // getBoundingClientRect() includes the current slide; offsetLeft does not.
+    const collapseDistance = (row) => Math.max(0, document.documentElement.clientWidth - toggleWidth - dock.getBoundingClientRect().left - row.offsetLeft - 1);
     const shiftRows = (change) => {
       const before = [...cards.children].map((row) => [row, row.getBoundingClientRect().top]);
       change();
@@ -247,7 +248,10 @@ const Timer = (() => {
         dock.style.top = `${dockPosition.y}px`;
       }
       dock.querySelectorAll('.timer-dock-row').forEach((row) => {
-        row.style.setProperty('--collapse-x', `${Math.max(0, document.documentElement.clientWidth - toggleWidth - row.getBoundingClientRect().left - 1)}px`);
+        const height = row.querySelector('.timer-dock').offsetHeight;
+        row.style.height = `${height}px`;
+        row.style.setProperty('--row-height', `${height}px`);
+        row.style.setProperty('--collapse-x', `${Math.max(0, document.documentElement.clientWidth - toggleWidth - dock.getBoundingClientRect().left - row.offsetLeft - 1)}px`);
       });
     }, 140);
   });

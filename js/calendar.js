@@ -71,7 +71,8 @@ const Calendar = (() => {
     return false;
   }
   const isDone = (e, ds) => (e.repeat || e.dateEnd || e.dates?.length ? (e.doneDates || []).includes(ds) : !!e.done);
-  const occ = (e, ds) => ({ ...e, date: ds, baseDate: e.date, done: isDone(e, ds), rep: !!e.repeat });
+  const occ = (e, ds) => ({ ...e, date: ds, baseDate: e.date, done: isDone(e, ds), rep: !!e.repeat,
+    color: e.schoolLesson ? colorFor(e.subject || e.title.replace(/\s*\(\d+교시\)$/, '')) : e.color });
   const sortFn = (a, b) => (a.date + a.start).localeCompare(b.date + b.start) || a.title.localeCompare(b.title);
 
   function repDesc(e) {
@@ -103,11 +104,23 @@ const Calendar = (() => {
 
   function manageExams(after = () => {}) {
     const body = h('div', { class: 'exam-list' });
+    const viewExam = (exam) => {
+      const days = Object.entries(exam.days || {}).sort(([a], [b]) => a.localeCompare(b));
+      const detail = h('div', { class: 'exam-detail' },
+        h('p', null, exam.start === exam.end ? exam.start : `${exam.start} ~ ${exam.end}`),
+        h('p', null, exam.showOnHome === false ? '메인 화면에 표시 안 함' : '메인 화면에 표시'),
+        ...(days.length ? days.map(([date, rows]) => h('section', { class: 'exam-detail-day' },
+          h('strong', null, date),
+          rows.length ? h('ul', null, rows.map((row) => h('li', null,
+            `${row.period || '-'}교시 · ${row.subject || '과목 미입력'}${row.room ? ` · ${row.room}` : ''}${row.start ? ` · ${row.start}${row.end ? `~${row.end}` : ''}` : ''}`)))
+            : h('p', { class: 'muted' }, '등록된 시험 과목이 없어요.'))) : [h('p', { class: 'muted' }, '등록된 시험 과목이 없어요.')]));
+      const modal = App.modal({ title: exam.title, body: detail,
+        footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => { modal.close(); editExam(exam, () => { drawList(); after(); }); } }, '수정')] });
+    };
     const drawList = () => {
       const visible = exams();
       body.replaceChildren(...(visible.length ? visible.map((exam) => h('div', { class: 'exam-list-row' },
-      h('span', null, `${exam.title} · ${exam.start}${exam.start === exam.end ? '' : ` ~ ${exam.end}`}`),
-      h('button', { class: 'btn', type: 'button', onclick: () => editExam(exam, () => { drawList(); after(); }) }, '수정'),
+      h('button', { class: 'exam-list-open', type: 'button', onclick: () => viewExam(exam) }, `${exam.title} · ${exam.start}${exam.start === exam.end ? '' : ` ~ ${exam.end}`}`),
       h('button', { class: 'btn danger', type: 'button', onclick: async () => {
         if (!await App.confirm(`${exam.title} 시험기간을 삭제할까요?`)) return;
         Store.set('examPeriods', exams().filter((x) => x.id !== exam.id)); drawList(); after();
@@ -156,7 +169,7 @@ const Calendar = (() => {
         dateRows.set(ds, []);
         daysBox.append(h('section', { class: 'exam-day', 'data-date': ds },
           h('div', { class: 'title-row' }, h('b', null, `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEK[d.getDay()]})`),
-            h('button', { class: 'btn ghost', type: 'button', onclick: () => addRow(ds) }, '＋ 과목')),
+            h('button', { class: 'btn ghost', type: 'button', onclick: () => addRow(ds) }, '＋ 교시')),
           h('div', { class: 'exam-subjects' })));
         (draft[ds] || source?.days?.[ds] || []).forEach((row) => addRow(ds, row));
       }
@@ -276,10 +289,19 @@ const Calendar = (() => {
     const src = base || ev;
     const isNew = !base;
     const title = h('input', { type: 'text', value: src.title || '', placeholder: '예: 수학 수행평가', maxLength: 60 });
+    const lessonSubjects = [...new Set([src.subject || src.title?.replace(/\s*\(\d+교시\)$/, ''),
+      ...Store.get('subjectCatalog', []),
+      ...(Store.get('timetable', {})?.cells || []).flatMap((day) => (day || []).map((cell) => cell?.subject)),
+      ...Store.get('grades', []).map((row) => row.subject),
+      ...Store.get('captures', []).map((row) => row.subject),
+      ...Curriculum2022.list.map((row) => row.name)].filter(Boolean))]
+      .filter((name) => name === src.subject || !Store.get('hiddenSubjects', []).includes(name))
+      .sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
     const lessonSubject = src.schoolLesson ? h('select', { 'aria-label': '수업 과목' },
-      [...new Set([src.subject || src.title?.replace(/\s*\(\d+교시\)$/, ''), ...Store.get('subjectCatalog', [])].filter(Boolean))].map((name) => h('option', { value: name, selected: name === src.subject }, name))) : null;
+      lessonSubjects.map((name) => h('option', { value: name, selected: name === src.subject }, name))) : null;
+    const periodCount = Math.max(1, Number(Store.get('timetable', {})?.periods) || 6, Number(src.period) || 0);
     const lessonPeriod = src.schoolLesson ? h('select', { 'aria-label': '수업 교시' },
-      Array.from({ length: 14 }, (_, i) => h('option', { value: i + 1, selected: Number(src.period) === i + 1 }, `${i + 1}교시`))) : null;
+      Array.from({ length: periodCount }, (_, i) => h('option', { value: i + 1, selected: Number(src.period) === i + 1 }, `${i + 1}교시`))) : null;
     const date = h('input', { type: 'date', value: src.date, min: `${MIN_Y}-01-01`, max: `${MAX_Y}-12-31` });
     const dateEnd = h('input', { type: 'date', value: src.dateEnd || '' });
     const extraDate = h('input', { type: 'date' });
@@ -591,15 +613,16 @@ const Calendar = (() => {
   // 가로로 긴 홈 북마크에서는 24시간을 반원에 펼쳐 표시한다.
   function semiPie(d, redraw) {
     const ds = dateStr(d), evs = layout(byDate(ds).filter((e) => !e.sourceBreak && (e.schoolLesson ? !Settings.protectedTab('timetable') : !Settings.protectedTab('calendar'))));
-    const C = 210, Y = 207, outer = 150, inner = 86;
+    const C = 210, Y = 196, outer = 150, inner = 86;
     const angle = (minutes) => Math.PI + Math.max(0, Math.min(1440, minutes)) / 1440 * Math.PI;
     const point = (radius, a) => [C + radius * Math.cos(a), Y + radius * Math.sin(a)];
     const f = (n) => n.toFixed(2);
-    const svg = sv('svg', { viewBox: '0 0 420 232', class: 'home-semi-svg', role: 'img', 'aria-label': `${longDate(d)} 반원 일정표` });
+    // 좌우의 빈 공간을 줄여 같은 카드에서도 그래프가 약 1.25배 크게 보이게 한다.
+    const svg = sv('svg', { viewBox: '42 0 336 220', class: 'home-semi-svg', role: 'img', 'aria-label': `${longDate(d)} 반원 일정표` });
     const baseRadius = (outer + inner) / 2;
     svg.append(sv('path', { d: `M${C - baseRadius} ${Y} A${baseRadius} ${baseRadius} 0 0 1 ${C + baseRadius} ${Y}`, fill: 'none', stroke: '#e3e9f3', 'stroke-width': outer - inner }));
     for (let k = 0; k <= 24; k += 6) {
-      const [x, y] = point(outer + 23, angle(k * 60));
+      const [x, y] = point(outer + 8, angle(k * 60));
       svg.append(sv('text', { x: f(x), y: f(y), class: 'pie-hr', 'text-anchor': 'middle' }, `${k}시`));
     }
     const lanes = Math.min(4, Math.max(1, ...evs.map((x) => x.lane + 1)));

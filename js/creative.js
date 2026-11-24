@@ -201,7 +201,9 @@ const Creative = (() => {
       area.replaceChildren(back, saved);
       saved.replaceChildren(...list().filter((item) => !item.deletedAt).map((item) => {
         const content = h('div', { class: 'saved-board-content' });
-        const details = h('details', { class: 'panel saved-board', ontoggle: async () => {
+        const details = h('details', { class: 'panel saved-board', onclick: (event) => {
+          if (!event.target.closest('summary, button, a, input')) details.open = !details.open;
+        }, ontoggle: async () => {
           if (details.open && !content.childElementCount) {
             const image = await Store.getImg('board-' + item.id);
             content.append(image?.data ? h('img', { class: 'saved-board-image', src: image.data, alt: `${item.title} 그림` }) : h('p', { class: 'muted' }, '저장된 그림이 없어요.'),
@@ -272,13 +274,7 @@ const Creative = (() => {
       list.hidden = true; editor.hidden = false; entry.hidden = true; backHandler = returnToEntry;
       const id = page?.id || uid();
       const subject = h('input', { type: 'text', value: page?.subject || '', placeholder: '과목 이름' });
-      const subjectChoice = h('select', { 'aria-label': '필기 과목 선택', onchange: () => { if (subjectChoice.value) subject.value = subjectChoice.value; } });
-      const showSubjects = () => {
-        const names = [...new Set([...Subjects.names(), ...pages().map((row) => row.subject)])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
-        subjectChoice.replaceChildren(h('option', { value: '' }, names.length ? '과목 선택' : '등록된 과목 없음'),
-          names.map((name) => h('option', { value: name, selected: name === subject.value }, name)));
-      };
-      showSubjects();
+      const subjectChoice = h('button', { class: 'btn', type: 'button', onclick: () => Subjects.choose(subject.value, (name) => { subject.value = name; }) }, '과목 선택');
       const unit = h('input', { type: 'text', value: page?.unit || '', placeholder: '단원' });
       const title = h('input', { type: 'text', value: page?.title || '', placeholder: '제목' });
       const body = h('textarea', { rows: 12, placeholder: '필기 내용을 입력하세요', value: page?.body || '' });

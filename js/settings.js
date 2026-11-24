@@ -323,6 +323,7 @@ const Settings = (() => {
           h('div', { class: 'set-mini-brand' }, icon('books'), h('b', null, 'Class', h('span', null, 'Hub'))),
           nav);
         Object.assign(stage.style, { width: `${vw}px`, transform: `scale(${scale})` });
+        stage.dataset.layout = vw <= 640 ? 'phone' : vw <= 1000 ? 'tablet' : 'desktop';
         const viewport = h('div', { class: 'set-mini-viewport' }, stage);
         cardList.replaceChildren(viewport);
         viewport.style.height = `${Math.ceil(stage.scrollHeight * scale)}px`;
@@ -434,7 +435,9 @@ const Settings = (() => {
         m.close(); apply(); App.toast('모두 지웠어요.'); App.route();
       } }, '모든 데이터 지우기'));
 
-    const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), schoolBox, alBox, viewBox, soundBox, notesBox, tabBox, lockBox, backupBox, downloadBox, versionBox, resetBox);
+    const driveBox = Cloud.user && typeof CloudDrive !== 'undefined' ? section('사진·그림 동기화', CloudDrive.settingsSection()) : null;
+    downloadBox.append(...[...versionBox.children].slice(1));
+    const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), driveBox, schoolBox, alBox, viewBox, soundBox, notesBox, tabBox, lockBox, backupBox, downloadBox, resetBox);
     const commit = () => {
       save({ school: draft.school, grade: grade.value.trim(), cls: cls.value.trim(), allergies: draft.allergies.slice().sort((a, b) => a - b),
         fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value), notesAutoTrashDays: Number(cleanupDays.value), tabOrder: miniOrder.slice(), homeCardOrder: homeOrder.slice(), enabledTabs: enabledChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockTabs: lockChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockEnabled: true });

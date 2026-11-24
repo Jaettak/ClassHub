@@ -12,7 +12,7 @@ const context = vm.createContext({
   dateStr: (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
   todayStr: () => '2026-11-05',
   parseDate: (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); },
-  colorFor: () => '#4f8cff',
+  colorFor: (name) => state.subjectColors?.[name] || '#4f8cff',
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'holidays.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'calendar.js'), 'utf8'), context);
@@ -22,8 +22,10 @@ const Timetable = vm.runInContext('Timetable', context);
 state.events = [
   { id: 'range', date: '2026-11-05', dateEnd: '2026-11-07', start: '10:00', end: '11:00', title: '기간', color: '#4f8cff' },
   { id: 'multi', date: '2026-11-05', dates: ['2026-11-05', '2026-11-07'], start: '12:00', end: '13:00', title: '선택', color: '#4f8cff' },
-  { id: 'lesson', date: '2026-11-05', start: '09:00', end: '10:00', title: '평소 수업', schoolLesson: true, color: '#4f8cff' },
+  { id: 'lesson', date: '2026-11-05', start: '09:00', end: '10:00', title: '평소 수업 (1교시)', subject: '평소 수업', schoolLesson: true, color: '#4f8cff' },
 ];
+state.subjectColors = { '평소 수업': '#d42660' };
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'lesson').color, '#d42660');
 assert.equal(Calendar.byDate('2026-11-06').map((e) => e.id).join(','), 'range');
 assert.equal(Calendar.byDate('2026-11-07').map((e) => e.id).join(','), 'range,multi');
 Calendar.setDone('multi', '2026-11-07', true);

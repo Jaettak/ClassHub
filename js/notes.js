@@ -58,6 +58,7 @@ const Notes = (() => {
         n.body ? h('p', null, n.body) : null,
         photos,
         when ? h('small', null, `연결된 날짜 · ${when}`) : null,
+        n.subject ? h('small', null, `과목 · ${n.subject}`) : null,
         n.folderId ? h('small', null, `보관함 · ${folders().find((f) => f.id === n.folderId)?.name || '기본 보관함'}`) : null),
       footer: [
         h('button', { class: 'btn danger', type: 'button', onclick: () => { m.close(); trash(n.id, after); } }, '휴지통으로 이동'),
@@ -91,6 +92,8 @@ const Notes = (() => {
     const folder = h('select', { 'aria-label': '메모 보관함' },
       h('option', { value: '' }, '기본 보관함'),
       folders().map((f) => h('option', { value: f.id, selected: f.id === (n.folderId || (selectedFolder === '*' ? '' : selectedFolder)) }, f.name)));
+    const subject = h('input', { type: 'text', value: n.subject || '', placeholder: '과목 없음', maxLength: 50 });
+    const subjectChoice = h('button', { class: 'btn', type: 'button', onclick: () => Subjects.choose(subject.value, (name) => { subject.value = name; }) }, '과목 선택');
     const noteDate = h('input', { type: 'date', value: n.date || '' });
     const endDate = h('input', { type: 'date', value: n.dateEnd || '' });
     const extraDate = h('input', { type: 'date' });
@@ -129,7 +132,7 @@ const Notes = (() => {
           h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, '사진 파일·갤러리에서 추가'),
           h('button', { class: 'btn', type: 'button', onclick: () => cameraInput.click() }, '사진 찍기')),
           fileInput, cameraInput, photoList),
-        App.field('보관함', folder), App.field('날짜 연결', mode), singleField, endField, manyField, h('div', { class: 'field' }, h('span', null, '색상'), swatches), h('label', { class: 'check' }, pin, '맨 위에 고정')],
+        App.field('보관함', folder), App.field('과목', h('div', { class: 'study-subject-controls' }, subjectChoice, subject)), App.field('날짜 연결', mode), singleField, endField, manyField, h('div', { class: 'field' }, h('span', null, '색상'), swatches), h('label', { class: 'check' }, pin, '맨 위에 고정')],
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: submit }, '저장'),
@@ -139,7 +142,7 @@ const Notes = (() => {
       if (!title.value.trim() && !body.value.trim() && !photos.length) { App.toast('내용이나 사진을 넣어 주세요.'); body.focus(); return; }
       if (mode.value === 'one' && !noteDate.value || mode.value === 'range' && (!noteDate.value || !endDate.value || endDate.value < noteDate.value) || mode.value === 'many' && !selectedDates.size)
         return App.toast('연결할 날짜를 확인해 주세요.');
-      const rec = { ...n, id: n.id || uid(), title: title.value.trim(), body: body.value.trim(), folderId: folder.value,
+      const rec = { ...n, id: n.id || uid(), title: title.value.trim(), body: body.value.trim(), folderId: folder.value, subject: subject.value.trim(),
         date: ['one', 'range'].includes(mode.value) ? noteDate.value : '', dateEnd: mode.value === 'range' ? endDate.value : '',
         dates: mode.value === 'many' ? [...selectedDates].sort() : [], color, pinned, createdAt: n.createdAt || Date.now(), updatedAt: Date.now(),
         images: photos.map(({ id, name, type }) => ({ id, name, type })) };

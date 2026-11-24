@@ -203,7 +203,6 @@ const Cloud = (() => {
       h('p', null, user.email || 'Google 계정'),
       h('p', { class: 'muted' }, loaded ? queue.length ? '저장 대기 ' + queue.length + '건' : '클라우드 연결됨' : '오프라인 또는 연결 중'),
       needsImport ? h('p', { class: 'cloud-import-hint' }, '이 브라우저에 이전 시간표·일정·메모가 있어요. 다른 기기에도 보이게 하려면 아래에서 가져와 주세요.') : null,
-      typeof CloudDrive !== 'undefined' ? CloudDrive.settingsSection() : null,
       h('div', { class: 'set-row set-btns' },
         h('button', { class: 'btn', type: 'button', onclick: migrate }, '이 브라우저의 기존 기록 가져오기'),
         h('button', { class: 'btn', type: 'button', onclick: () => auth.signOut() }, '로그아웃'),
