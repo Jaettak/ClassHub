@@ -2295,3 +2295,19 @@ input[type='checkbox']:checked::after { content: none; }
   .set-home-stage .home-card-frame { display: block; flex: 1 1 auto; min-height: 55vh; width: 100%; overflow: hidden; }
   .set-home-stage .home-cards { height: calc(100% - 20px); min-height: 0; margin-block: 10px; overflow-y: auto; }
 }
+
+/* Center the date itself in the bookmark card. Keep both arrows at equal, fixed offsets. */
+.side-date-nav { position: relative; display: block; box-sizing: border-box; width: 100%; min-height: 38px; padding: 3px 0 0; }
+.side-date-nav > .btn:first-child { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: auto; }
+.side-date-controls { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: 26px 164px 26px; gap: 5px; align-items: center; justify-self: auto; }
+.side-date-controls > .btn, .side-date-nav .side-date-controls > .btn:first-child { box-sizing: border-box; width: 26px; min-width: 26px; padding-inline: 0; }
+.side-date-controls h3, .side-date-nav h3 { box-sizing: border-box; width: 164px; min-width: 164px; margin: 0; padding: 0; text-align: center; white-space: nowrap; font-size: .96rem; }
+@media (max-width: 640px) {
+  .side-date-controls { grid-template-columns: 23px 96px 23px; gap: 4px; }
+  .side-date-controls > .btn, .side-date-nav .side-date-controls > .btn:first-child { width: 23px; min-width: 23px; }
+  .side-date-controls h3, .side-date-nav h3 { width: 96px; min-width: 96px; font-size: .9rem; }
+}
+@container (max-width: 340px) {
+  .side-box .bm.r { right: 36px; }
+  .side-box .bm.b { right: 8px; }
+}
