@@ -134,7 +134,7 @@ const CloudDrive = (() => {
     saveState(); await flush();
   }
   function settingsSection() {
-    const status = h('p', { class: 'hint' }, !enabled() ? '연결하면 메모 사진·오답 이미지·필기·화이트보드·학교 지도 사진을 다른 기기에서 가져옵니다.'
+    const status = h('p', { class: 'muted' }, !enabled() ? 'Drive 연결 전'
       : token ? `Drive 연결됨 · 업로드 대기 ${Object.keys(pending).length}개` : 'Drive 연결을 다시 눌러 주세요. 이 기기의 파일은 그대로 보관됩니다.');
     const button = h('button', { class: 'btn', type: 'button', onclick: async () => {
       button.disabled = true; status.textContent = 'Google Drive에 연결하는 중…';
@@ -144,9 +144,9 @@ const CloudDrive = (() => {
       clearTimeout(waiting);
       button.disabled = false;
     } }, token ? 'Drive 동기화 다시 확인' : 'Google Drive 연결');
-    return h('div', { class: 'set-row set-btns cloud-drive-settings' },
-      button, status,
-      h('small', { class: 'muted' }, 'PDF 원본과 학교 자료 원본은 업로드하지 않습니다. 글 기록은 계정 동기화를 사용합니다.'));
+    return h('div', { class: 'cloud-drive-settings' },
+      h('p', { class: 'hint' }, 'Drive를 연결하면 메모 사진·오답 이미지·필기·화이트보드·학교 지도 사진을 다른 기기에서 가져옵니다. PDF 원본과 학교 자료 원본은 업로드하지 않습니다. 글 기록은 계정 동기화를 사용합니다.'),
+      h('div', { class: 'set-row set-btns' }, button, status));
   }
   window.addEventListener('online', flush);
   return { accountChanged, disconnect, changed, read, connect, settingsSection };

@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.6.0';
+const CLASSHUB_VERSION = 'v2.7.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -190,38 +190,20 @@ const App = (() => {
 
   // 기존 과목 선택 또는 새 과목 직접 입력. { el, value(), onPick(fn) }
   function subjectField(label, value, opts = {}) {
-    const NEW = '__new__';
-    const list = opts.managedOnly
-      ? [...new Set(Store.get('subjectCatalog', []))].filter((name) => !Store.get('hiddenSubjects', []).includes(name)).sort((a, b) => a.localeCompare(b, 'ko'))
-      : knownSubjects();
-    if (!opts.managedOnly && value && !list.includes(value)) list.push(value);
-    const text = h('input', { type: 'text', placeholder: '새 과목 이름', maxLength: 20 });
-    const timetable = new Set((Store.get('timetable', {})?.cells || []).flatMap((day) => day || []).map((cell) => cell?.subject).filter(Boolean));
-    const sel = h('select', { 'aria-label': label }, [
-      h('option', { value: '' }, opts.empty || '과목 선택'),
-      h('optgroup', { label: '시간표 과목' }, list.filter((s) => timetable.has(s)).map((s) => h('option', { value: s, selected: s === value }, s))),
-      h('optgroup', { label: '표시한 과목' }, list.filter((s) => !timetable.has(s)).map((s) => h('option', { value: s, selected: s === value }, s))),
-      opts.managedOnly ? null : h('option', { value: NEW }, '＋ 새 과목 추가'),
-    ]);
     const picks = [];
-    const sync = () => {
-      text.hidden = sel.value !== NEW;
-      if (!text.hidden) text.focus();
-      picks.forEach((fn) => fn(sel.value === NEW ? '' : sel.value));
-    };
-    sel.addEventListener('change', sync);
-    text.hidden = true;
-    if (!opts.managedOnly && !list.length) { sel.value = NEW; text.hidden = false; }
+    const text = h('input', { type: 'text', value: value || '', placeholder: opts.empty || '과목 이름', maxLength: 50, readOnly: !!opts.managedOnly, 'aria-label': label });
+    const notify = () => picks.forEach((fn) => fn(text.value.trim()));
+    text.addEventListener('change', notify);
+    const choose = h('button', { class: 'btn', type: 'button', onclick: () => Subjects.choose(text.value, (name) => { text.value = name; notify(); }) }, '과목 선택');
     const official = h('button', { class: 'btn ghost', type: 'button', onclick: () => Curriculum2022.pick((row) => {
-      if (![...sel.options].some((option) => option.value === row.name)) sel.add(h('option', { value: row.name }, row.name), sel.querySelector(`option[value="${NEW}"]`));
-      sel.value = row.name;
+      text.value = row.name;
       Store.set('subjectCatalog', [...new Set([...Store.get('subjectCatalog', []), row.name])].sort((a, b) => a.localeCompare(b, 'ko')));
       Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name));
-      sync();
+      notify();
     }) }, '공식 과목 찾기');
     return {
-      el: field(label, h('div', { class: 'subj' }, sel, opts.managedOnly ? null : text, opts.managedOnly ? null : official)),
-      value: () => (sel.value === NEW ? text.value.trim() : sel.value),
+      el: field(label, h('div', { class: 'subj subject-field-controls' }, choose, text, opts.managedOnly ? null : official)),
+      value: () => text.value.trim(),
       onPick: (fn) => picks.push(fn),
     };
   }
@@ -289,6 +271,8 @@ const App = (() => {
           h('button', { class: 'nav-fold', type: 'button', 'aria-label': '탭 메뉴 접기 또는 펼치기', onclick: () => {
             const bar = document.querySelector('.topbar');
             bar.getAnimations().forEach((animation) => animation.cancel());
+            const moving = [...bar.querySelectorAll('.brand, .tabs, .top-settings')];
+            moving.forEach((element) => element.getAnimations().forEach((animation) => animation.cancel()));
             if (document.body.classList.contains('nav-collapsed')) {
               document.body.classList.remove('nav-collapsed');
               const page = app.querySelector('.page');
@@ -300,6 +284,7 @@ const App = (() => {
                 pageAnimation.onfinish = () => { page.style.paddingTop = ''; pageAnimation.cancel(); };
               }
               const animation = bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
+              moving.forEach((element) => element.animate([{ transform: `translateY(-${expandedNavHeight}px)` }, { transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' }));
             } else {
               const height = bar.getBoundingClientRect().height;
               expandedNavHeight = height;
@@ -315,7 +300,8 @@ const App = (() => {
               }
               const style = getComputedStyle(bar);
               const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
-              animation.onfinish = () => { document.body.classList.add('nav-collapsed'); animation.cancel(); };
+              moving.forEach((element) => element.animate([{ transform: 'translateY(0)' }, { transform: `translateY(-${height}px)` }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' }));
+              animation.onfinish = () => { document.body.classList.add('nav-collapsed'); moving.forEach((element) => element.getAnimations().forEach((movingAnimation) => movingAnimation.cancel())); animation.cancel(); };
             }
           } }),
           navTabs(key),

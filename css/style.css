@@ -2264,3 +2264,34 @@ input[type='checkbox']:checked::after { content: none; }
 .gr-filters > select:nth-child(2) { min-width: 130px; }
 .gr-expanded-chart { cursor: grab; }
 .gr-expanded-chart.is-dragging { cursor: grabbing; user-select: none; }
+
+/* Keep the bookmark date controls clear of the ribbons on narrow screens. */
+@media (max-width: 640px) {
+  .side-date-nav { grid-template-columns: 36px minmax(0, 1fr) 78px; }
+  .side-date-controls { grid-template-columns: 23px 112px 23px; gap: 4px; justify-self: start; }
+  .side-date-controls h3, .side-date-nav h3 { width: 112px; min-width: 112px; font-size: .85rem; }
+  .side-date-controls > .btn, .side-date-nav .side-date-controls > .btn:first-child { width: 23px; min-width: 23px; }
+}
+@container (max-width: 320px) {
+  .side-date-nav { grid-template-columns: 31px minmax(0, 1fr) 72px; }
+  .side-date-controls { grid-template-columns: 22px 104px 22px; gap: 3px; }
+  .side-date-controls h3, .side-date-nav h3 { width: 104px; min-width: 104px; font-size: .81rem; }
+}
+.subject-choice-groups section { overflow: hidden; }
+.subject-choice-groups h4 { position: sticky; top: 0; z-index: 1; flex: none; background: #fff; padding: 7px 0; }
+.subject-choice-list { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+.subject-visibility-controls { display: flex; gap: 8px; align-items: center; }
+.subject-visibility-controls input { flex: 1; min-width: 0; }
+.set-card-preview.preview-mini-live .set-mini-stage[data-layout='tablet'],
+.set-card-preview.preview-mini-live .set-mini-stage[data-layout='phone'] {
+  flex-wrap: wrap; align-content: flex-start; align-items: flex-start; gap: 0;
+}
+.set-card-preview.preview-mini-live .set-mini-stage[data-layout='tablet'] .set-mini-nav,
+.set-card-preview.preview-mini-live .set-mini-stage[data-layout='phone'] .set-mini-nav {
+  flex: 0 0 100%; width: 100%; max-width: none; margin: 0; padding: 10px 4px 13px;
+}
+@media (max-width: 640px) {
+  .set-home-stage .home { height: 100%; }
+  .set-home-stage .home-card-frame { display: block; flex: 1 1 auto; min-height: 55vh; width: 100%; overflow: hidden; }
+  .set-home-stage .home-cards { height: calc(100% - 20px); min-height: 0; margin-block: 10px; overflow-y: auto; }
+}

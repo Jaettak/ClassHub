@@ -15,13 +15,18 @@ const Subjects = (() => {
   function choose(current, onPick) {
     const timetable = timetableNames();
     const list = h('div', { class: 'subject-choice-groups' });
-    const group = (label, values) => h('section', null, h('h4', null, label),
-      values.length ? values.map((name) => h('button', { class: 'btn ghost', type: 'button', onclick: () => { onPick(name); dialog.close(); } }, name))
-        : h('p', { class: 'muted' }, '선택할 과목이 없어요. 과목 관리에서 표시할 과목을 골라 주세요.'));
+    const search = h('input', { type: 'search', placeholder: '과목 검색', 'aria-label': '선택할 과목 검색' });
+    const group = (label, values) => h('section', null, h('h4', null, label), h('div', { class: 'subject-choice-list' },
+      values.length ? values.map((name) => h('button', { class: 'btn ghost' + (name === current ? ' on' : ''), type: 'button', onclick: () => { onPick(name); dialog.close(); } }, name))
+        : h('p', { class: 'muted' }, '표시할 과목이 없어요. 과목 관리에서 골라 주세요.')));
     const visible = names();
-    list.append(group('시간표 과목', visible.filter((name) => timetable.has(name))),
-      group('표시한 과목', visible.filter((name) => !timetable.has(name))));
-    const dialog = App.modal({ title: '과목 선택', body: list });
+    const draw = () => {
+      const filtered = visible.filter((name) => name.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()));
+      list.replaceChildren(group('시간표 과목', filtered.filter((name) => timetable.has(name))), group('표시한 과목', filtered));
+    };
+    search.addEventListener('input', draw);
+    draw();
+    const dialog = App.modal({ title: '과목 선택', body: [search, list] });
   }
   function manageOptions(subject, button, type) {
     const isRoom = type === 'room';
@@ -53,6 +58,7 @@ const Subjects = (() => {
   }
   function render(root) {
     const list = h('div', { class: 'subject-list' });
+    const search = h('input', { type: 'search', placeholder: '과목 검색', 'aria-label': '과목 관리 검색', oninput: () => draw() });
     const sort = h('select', { 'aria-label': '과목 정렬', onchange: () => draw() },
       h('option', { value: 'name' }, '이름순'), h('option', { value: 'family' }, '교과군순'));
     const view = h('select', { 'aria-label': '과목 목록 보기' },
@@ -72,7 +78,8 @@ const Subjects = (() => {
     };
     const draw = () => {
       const active = timetableNames();
-      const shown = view.value === 'timetable' ? names().filter((name) => active.has(name)) : names();
+      const shown = (view.value === 'timetable' ? names().filter((name) => active.has(name)) : names())
+        .filter((name) => name.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()));
       if (sort.value === 'family') {
         const assigned = Store.get('subjectFamilies', {});
         const rank = (name) => {
@@ -120,16 +127,23 @@ const Subjects = (() => {
         : '등록된 과목이 없어요. 위에서 새 과목을 추가할 수 있어요.')]));
     };
     view.addEventListener('change', draw);
-    const input = h('input', { type: 'text', placeholder: '새 과목 이름', maxLength: 50 });
     const visibility = () => {
       const list = h('div', { class: 'subject-visibility-list' });
-      const drawVisibility = () => list.replaceChildren(...allNames().map((name) => h('label', { class: 'subject-visibility-row' },
+      const query = h('input', { type: 'search', placeholder: '표시할 과목 검색', 'aria-label': '표시할 과목 검색' });
+      const order = h('select', { 'aria-label': '표시할 과목 정렬' },
+        h('option', { value: 'name' }, '이름순'), h('option', { value: 'checked' }, '체크한 과목 먼저'));
+      const drawVisibility = () => list.replaceChildren(...allNames()
+        .filter((name) => name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase()))
+        .sort((a, b) => order.value === 'checked' ? Number(names().includes(b)) - Number(names().includes(a)) || a.localeCompare(b, 'ko') : a.localeCompare(b, 'ko'))
+        .map((name) => h('label', { class: 'subject-visibility-row' },
         h('input', { type: 'checkbox', checked: names().includes(name), onchange: (event) => {
           const hidden = new Set(Store.get('hiddenSubjects', []));
           if (event.target.checked) { hidden.delete(name); Store.set('subjectCatalog', [...new Set([...catalog(), name])]); }
           else hidden.add(name);
-          Store.set('hiddenSubjects', [...hidden]); draw();
+          Store.set('hiddenSubjects', [...hidden]); draw(); drawVisibility();
         } }), name)));
+      query.addEventListener('input', drawVisibility);
+      order.addEventListener('change', drawVisibility);
       drawVisibility();
       const setAll = (show) => {
         const all = allNames();
@@ -138,18 +152,25 @@ const Subjects = (() => {
         drawVisibility(); draw();
       };
       App.modal({ title: '표시할 과목', body: [h('p', { class: 'hint' }, '과목 선택창에 보일 과목을 고르세요.'),
+        h('div', { class: 'subject-visibility-controls' }, query, order),
         h('div', { class: 'set-row set-btns' }, h('button', { class: 'btn', type: 'button', onclick: () => setAll(true) }, '전체 선택'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => setAll(false) }, '전체 해제')), list] });
     };
+    const addSubject = () => {
+      const input = h('input', { type: 'text', placeholder: '새 과목 이름', maxLength: 50 });
+      const add = (name) => {
+        name = name.trim(); if (!name) return App.toast('과목 이름을 입력해 주세요.');
+        Store.set('subjectCatalog', [...new Set([...catalog(), name])].sort((a, b) => a.localeCompare(b, 'ko')));
+        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((value) => value !== name));
+        view.value = 'all'; search.value = ''; draw(); dialog.close();
+      };
+      const dialog = App.modal({ title: '과목 추가', body: [App.field('새 과목 이름', input),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => Curriculum2022.pick((row) => add(row.name)) }, '공식 과목에서 선택')],
+        footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => add(input.value) }, '추가')] });
+      input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); add(input.value); } });
+    };
     root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '과목 관리'),
-      h('div', { class: 'subject-add-row' }, input, h('button', { class: 'btn primary', type: 'button', onclick: () => {
-        const name = input.value.trim(); if (!name) return App.toast('과목 이름을 입력해 주세요.');
-        Store.set('subjectCatalog', [...new Set([...catalog(), name])].sort());
-        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((value) => value !== name)); input.value = ''; view.value = 'all'; draw();
-      } }, '과목 추가'), h('button', { class: 'btn ghost', type: 'button', onclick: () => Curriculum2022.pick((row) => {
-        Store.set('subjectCatalog', [...new Set([...catalog(), row.name])].sort((a, b) => a.localeCompare(b, 'ko')));
-        Store.set('hiddenSubjects', Store.get('hiddenSubjects', []).filter((name) => name !== row.name)); view.value = 'all'; draw();
-      }) }, '공식 과목에서 선택')),
+      h('div', { class: 'subject-add-row' }, search, h('button', { class: 'btn primary', type: 'button', onclick: addSubject }, '과목 추가')),
       h('div', { class: 'subject-view-row' }, h('strong', null, '과목 목록'), viewTabs, sort,
         h('button', { class: 'btn ghost', type: 'button', onclick: visibility }, '표시할 과목')),
       h('p', { class: 'hint' }, '색상과 과목별 선생님·교실을 관리해요. 시간표에서는 저장한 이름을 선택할 수 있어요. 과목을 삭제해도 과거 기록은 유지합니다.'), list));

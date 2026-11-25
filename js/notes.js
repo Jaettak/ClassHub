@@ -7,6 +7,7 @@ const Notes = (() => {
   const save = (l) => Store.set('notes', l);
   const folders = () => Store.get('noteFolders', []);
   const active = () => load().filter((n) => !n.deletedAt);
+  const noteColor = (n) => n.subject && n.subjectColorMode === 'subject' ? colorFor(n.subject) : n.color;
   const imageKey = (noteId, imageId) => `note-${noteId}-${imageId}`;
   const removeImages = async (note) => { for (const image of note.images || []) await Store.delImg(imageKey(note.id, image.id)); };
   const galleryPhoto = (noteId, photo, data = '') => {
@@ -93,7 +94,7 @@ const Notes = (() => {
       h('option', { value: '' }, '기본 보관함'),
       folders().map((f) => h('option', { value: f.id, selected: f.id === (n.folderId || (selectedFolder === '*' ? '' : selectedFolder)) }, f.name)));
     const subject = h('input', { type: 'text', value: n.subject || '', placeholder: '과목 없음', maxLength: 50 });
-    const subjectChoice = h('button', { class: 'btn', type: 'button', onclick: () => Subjects.choose(subject.value, (name) => { subject.value = name; }) }, '과목 선택');
+    const subjectChoice = h('button', { class: 'btn', type: 'button', onclick: () => Subjects.choose(subject.value, (name) => { subject.value = name; useSubjectColor(name); }) }, '과목 선택');
     const noteDate = h('input', { type: 'date', value: n.date || '' });
     const endDate = h('input', { type: 'date', value: n.dateEnd || '' });
     const extraDate = h('input', { type: 'date' });
@@ -114,15 +115,18 @@ const Notes = (() => {
     };
     mode.addEventListener('change', drawMode);
     drawDates(); drawMode();
-    let color = n.color || folders().find((f) => f.id === (n.folderId || selectedFolder))?.color || COLORS[active().length % COLORS.length];
+    let color = noteColor(n) || folders().find((f) => f.id === (n.folderId || selectedFolder))?.color || COLORS[active().length % COLORS.length];
+    let subjectColorMode = n.subjectColorMode || 'custom';
     let pinned = !!n.pinned;
     const swatches = h('div', { class: 'swatches' });
     const drawSw = () => swatches.replaceChildren(...COLORS.map((c) => h('button', { type: 'button', class: 'sw' + (c === color ? ' on' : ''), style: { background: c }, 'aria-label': '색상 선택',
-      onclick: () => { color = c; drawSw(); } })));
+      onclick: () => { color = c; subjectColorMode = 'custom'; drawSw(); } })));
     drawSw();
+    const useSubjectColor = (name) => { if (name) { subjectColorMode = 'subject'; color = colorFor(name); drawSw(); } };
+    subject.addEventListener('change', () => useSubjectColor(subject.value.trim()));
     folder.addEventListener('change', () => {
       const folderColor = folders().find((f) => f.id === folder.value)?.color;
-      if (folderColor) { color = folderColor; drawSw(); }
+      if (folderColor) { color = folderColor; subjectColorMode = 'custom'; drawSw(); }
     });
     const pin = h('input', { type: 'checkbox', checked: pinned, onchange: () => { pinned = pin.checked; } });
     const m = App.modal({
@@ -144,7 +148,7 @@ const Notes = (() => {
         return App.toast('연결할 날짜를 확인해 주세요.');
       const rec = { ...n, id: n.id || uid(), title: title.value.trim(), body: body.value.trim(), folderId: folder.value, subject: subject.value.trim(),
         date: ['one', 'range'].includes(mode.value) ? noteDate.value : '', dateEnd: mode.value === 'range' ? endDate.value : '',
-        dates: mode.value === 'many' ? [...selectedDates].sort() : [], color, pinned, createdAt: n.createdAt || Date.now(), updatedAt: Date.now(),
+        dates: mode.value === 'many' ? [...selectedDates].sort() : [], color: subjectColorMode === 'subject' && subject.value.trim() ? colorFor(subject.value.trim()) : color, subjectColorMode, pinned, createdAt: n.createdAt || Date.now(), updatedAt: Date.now(),
         images: photos.map(({ id, name, type }) => ({ id, name, type })) };
       try { for (const photo of photos.filter((item) => item.data)) await Store.putImg(imageKey(rec.id, photo.id), { data: photo.data, type: photo.type, name: photo.name }); }
       catch (_) { return App.toast('사진 저장에 실패했어요. 다시 시도해 주세요.'); }
@@ -293,7 +297,7 @@ const Notes = (() => {
       } else list.forEach((n) => display.push({ n, target: grid }));
       display.forEach(({ n, target }) => {
         let touchDrag = null, ghost = null;
-        const card = h('div', { role: 'button', tabIndex: 0, draggable: !groupedMode, class: 'nt-card', 'data-note-id': n.id, style: { '--c': n.color },
+        const card = h('div', { role: 'button', tabIndex: 0, draggable: !groupedMode, class: 'nt-card', 'data-note-id': n.id, style: { '--c': noteColor(n) },
         onclick: (e) => { if (Date.now() < suppressClickUntil || e.target.closest('.nt-delete')) return; show(n, redraw); },
         onkeydown: (e) => { if (e.key === 'Enter' && e.target === e.currentTarget) show(n, redraw); },
         ondragstart: (e) => { if (groupedMode) return e.preventDefault(); dragId = n.id; e.dataTransfer.setData('text/plain', n.id); e.dataTransfer.effectAllowed = 'move'; },
@@ -435,7 +439,7 @@ const Notes = (() => {
     redraw();
   }
 
-  return { render, edit, show, forDate: (ds) => active().filter((n) => n.date === ds || (n.date && n.dateEnd && n.date <= ds && ds <= n.dateEnd) || n.dates?.includes(ds)), openForDate: (ds, after) => edit({ date: ds }, after) };
+  return { render, edit, show, noteColor, forDate: (ds) => active().filter((n) => n.date === ds || (n.date && n.dateEnd && n.date <= ds && ds <= n.dateEnd) || n.dates?.includes(ds)), openForDate: (ds, after) => edit({ date: ds }, after) };
 })();
 
 App.registerView('notes', { label: '메모', icon: 'notes', render: Notes.render });

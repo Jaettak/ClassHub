@@ -72,7 +72,7 @@ const Calendar = (() => {
   }
   const isDone = (e, ds) => (e.repeat || e.dateEnd || e.dates?.length ? (e.doneDates || []).includes(ds) : !!e.done);
   const occ = (e, ds) => ({ ...e, date: ds, baseDate: e.date, done: isDone(e, ds), rep: !!e.repeat,
-    color: e.schoolLesson ? colorFor(e.subject || e.title.replace(/\s*\(\d+교시\)$/, '')) : e.color });
+    color: e.schoolLesson || e.subject && e.colorSource === 'subject' ? colorFor(e.subject || e.title.replace(/\s*\(\d+교시\)$/, '')) : e.color });
   const sortFn = (a, b) => (a.date + a.start).localeCompare(b.date + b.start) || a.title.localeCompare(b.title);
 
   function repDesc(e) {
@@ -289,16 +289,8 @@ const Calendar = (() => {
     const src = base || ev;
     const isNew = !base;
     const title = h('input', { type: 'text', value: src.title || '', placeholder: '예: 수학 수행평가', maxLength: 60 });
-    const lessonSubjects = [...new Set([src.subject || src.title?.replace(/\s*\(\d+교시\)$/, ''),
-      ...Store.get('subjectCatalog', []),
-      ...(Store.get('timetable', {})?.cells || []).flatMap((day) => (day || []).map((cell) => cell?.subject)),
-      ...Store.get('grades', []).map((row) => row.subject),
-      ...Store.get('captures', []).map((row) => row.subject),
-      ...Curriculum2022.list.map((row) => row.name)].filter(Boolean))]
-      .filter((name) => name === src.subject || !Store.get('hiddenSubjects', []).includes(name))
-      .sort((a, b) => a.localeCompare(b, 'ko', { numeric: true }));
-    const lessonSubject = src.schoolLesson ? h('select', { 'aria-label': '수업 과목' },
-      lessonSubjects.map((name) => h('option', { value: name, selected: name === src.subject }, name))) : null;
+    const lessonSubject = src.schoolLesson ? App.subjectField('과목', src.subject || src.title?.replace(/\s*\(\d+교시\)$/, ''), { managedOnly: true }) : null;
+    const eventSubject = !src.schoolLesson ? App.subjectField('과목 (선택)', src.subject || '') : null;
     const periodCount = Math.max(1, Number(Store.get('timetable', {})?.periods) || 6, Number(src.period) || 0);
     const lessonPeriod = src.schoolLesson ? h('select', { 'aria-label': '수업 교시' },
       Array.from({ length: periodCount }, (_, i) => h('option', { value: i + 1, selected: Number(src.period) === i + 1 }, `${i + 1}교시`))) : null;
@@ -319,18 +311,22 @@ const Calendar = (() => {
     const memo = h('textarea', { rows: 3, placeholder: '장소, 준비물, 메모 등', value: eventMemo(src) });
     const room = h('input', { type: 'text', value: src.room || '', placeholder: '예: 과학실 (이 날짜에만 적용)', maxLength: 40 });
     const checkable = h('input', { type: 'checkbox', checked: src.checkable !== false });
-    let color = src.color || COLORS[0];
+    let colorSource = src.colorSource || (src.schoolLesson ? 'subject' : 'custom');
+    let color = colorSource === 'subject' && src.subject ? colorFor(src.subject) : src.color || COLORS[0];
     const swatches = h('div', { class: 'swatches' });
-    const customPicker = h('input', { type: 'color', value: color, class: 'event-color-picker', 'aria-label': '원하는 일정 색상 선택', onchange: () => { color = customPicker.value; drawSw(); } });
+    const customPicker = h('input', { type: 'color', value: color, class: 'event-color-picker', 'aria-label': '원하는 일정 색상 선택', onchange: () => { color = customPicker.value; colorSource = 'custom'; drawSw(); } });
     const favoriteBox = h('div', { class: 'event-color-favorites' });
     const drawSw = () => {
       swatches.replaceChildren(...COLORS.map((c) => h('button', { type: 'button', class: 'sw' + (c === color ? ' on' : ''), style: { background: c }, 'aria-label': '색상 선택',
-        onclick: () => { color = c; customPicker.value = c; drawSw(); } })));
+        onclick: () => { color = c; colorSource = 'custom'; customPicker.value = c; drawSw(); } })));
       favoriteBox.replaceChildren(...savedColors().map((c) => h('button', { type: 'button', class: 'sw' + (c === color ? ' on' : ''), style: { background: c }, title: `저장 색상 ${c}`,
-        onclick: () => { color = c; customPicker.value = c; drawSw(); } })));
+        onclick: () => { color = c; colorSource = 'custom'; customPicker.value = c; drawSw(); } })));
     };
     const favoriteAdd = h('button', { type: 'button', class: 'btn ghost', onclick: () => { saveFavoriteColor(color); drawSw(); App.toast('색상을 저장했어요. (최대 5개)'); } }, '현재 색상 저장');
     drawSw();
+    const useSubjectColor = (name) => { if (!name) return; colorSource = 'subject'; color = colorFor(name); customPicker.value = color; drawSw(); };
+    lessonSubject?.onPick(useSubjectColor);
+    eventSubject?.onPick(useSubjectColor);
 
     const rep = src.repeat || {};
     const rDays = new Set(rep.days && rep.days.length ? rep.days : [parseDate(src.date).getDay()]);
@@ -367,7 +363,7 @@ const Calendar = (() => {
     const m = App.modal({
       title: isNew ? '일정 추가' : '일정 수정',
       body: [
-        src.schoolLesson ? h('div', { class: 'row2' }, App.field('과목', lessonSubject), App.field('교시', lessonPeriod)) : App.field('제목', title),
+        ...(src.schoolLesson ? [h('div', { class: 'row2' }, lessonSubject.el, App.field('교시', lessonPeriod))] : [App.field('제목', title), eventSubject.el]),
         dateField,
         App.field('날짜 선택', dateMode), rangeField, manyField,
         h('div', { class: 'row2' }, App.field('시작', start), App.field('끝', end)),
@@ -389,7 +385,7 @@ const Calendar = (() => {
       ],
     });
     function submit() {
-      const t = src.schoolLesson ? `${lessonSubject.value} (${lessonPeriod.value}교시)` : title.value.trim();
+      const t = src.schoolLesson ? `${lessonSubject.value()} (${lessonPeriod.value}교시)` : title.value.trim();
       if (!t) { App.toast('제목을 입력해 주세요.'); title.focus(); return; }
       if (dateMode.value !== 'many' && !date.value || dateMode.value === 'many' && !selectedDates.size) { App.toast('날짜를 선택해 주세요.'); return; }
       if (!typeSel.value && dateMode.value === 'range' && (!dateEnd.value || dateEnd.value < date.value)) return App.toast('마지막 날짜를 확인해 주세요.');
@@ -398,8 +394,9 @@ const Calendar = (() => {
       if (typeSel.value && until.value && until.value < date.value) { App.toast('반복 끝 날짜가 시작 날짜보다 빨라요.'); return; }
       let e = end.value || start.value;
       if (e < start.value) e = start.value;
-      const rec = { ...(base || {}), id: src.id || uid(), date: dateMode.value === 'many' && !typeSel.value ? [...selectedDates].sort()[0] : date.value, start: start.value, end: e, title: t, memo: memo.value.trim(), room: src.schoolLesson ? room.value.trim() : src.room || '', color: src.schoolLesson ? colorFor(lessonSubject.value) : color, checkable: checkable.checked };
-      if (src.schoolLesson) { rec.subject = lessonSubject.value; rec.period = Number(lessonPeriod.value); }
+      const chosenSubject = src.schoolLesson ? lessonSubject.value() : eventSubject.value();
+      const rec = { ...(base || {}), id: src.id || uid(), date: dateMode.value === 'many' && !typeSel.value ? [...selectedDates].sort()[0] : date.value, start: start.value, end: e, title: t, memo: memo.value.trim(), room: src.schoolLesson ? room.value.trim() : src.room || '', subject: chosenSubject, colorSource: chosenSubject ? colorSource : 'custom', color: chosenSubject && colorSource === 'subject' ? colorFor(chosenSubject) : color, checkable: checkable.checked };
+      if (src.schoolLesson) { rec.period = Number(lessonPeriod.value); }
       if (typeSel.value) {
         const days = typeSel.value === 'weekly' ? [...rDays].sort((a, b) => a - b) : [];
         rec.repeat = { type: typeSel.value, days: typeSel.value === 'weekly' && !days.length ? [parseDate(rec.date).getDay()] : days, until: until.value };
@@ -421,7 +418,7 @@ const Calendar = (() => {
       m.close();
       after();
     }
-    setTimeout(() => (lessonSubject || title).focus(), 50);
+    setTimeout(() => title?.focus(), 50);
   }
 
   // ---------- 일정 자세히 보기 ----------
@@ -499,7 +496,7 @@ const Calendar = (() => {
         days.map((d) => h('div', { class: 'tl-lcell' },
           h('button', { class: 'btn ghost', type: 'button', onclick: () => {
             const ds = dateStr(d), notes = Notes.forDate(ds);
-            App.modal({ title: `${ds} 메모`, body: notes.length ? h('div', { class: 'nt-completed' }, notes.map((n) => h('button', { class: 'btn ghost', style: { background: n.color || '#fff4b8' }, type: 'button', onclick: () => Notes.show(n, redraw) }, n.title || n.body))) : h('p', { class: 'muted' }, '이 날의 메모가 없어요.'),
+            App.modal({ title: `${ds} 메모`, body: notes.length ? h('div', { class: 'nt-completed' }, notes.map((n) => h('button', { class: 'btn ghost', style: { background: Notes.noteColor(n) || '#fff4b8' }, type: 'button', onclick: () => Notes.show(n, redraw) }, n.title || n.body))) : h('p', { class: 'muted' }, '이 날의 메모가 없어요.'),
               footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => Notes.openForDate(ds, redraw) }, '＋ 메모')] });
           } }, h('span', { class: 'week-memo-word' }, '메모 '), Notes.forDate(dateStr(d)).length)))));
     }
@@ -807,7 +804,7 @@ const Calendar = (() => {
           lessons.length ? h('div', { class: 'day-lessons' }, h('b', null, '수업 '), lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher || '', onclick: () => showEvent(l, drawDay) }, `${l.period} ${l.displayTitle}`))) : null,
           h('section', { class: 'cal-day-notes' },
             h('div', { class: 'title-row' }, h('b', null, '이 날의 메모'), h('button', { class: 'btn ghost', type: 'button', onclick: () => Notes.openForDate(ds, drawDay) }, '＋ 메모')),
-            dayNotes.length ? dayNotes.map((n) => h('button', { class: 'cal-note', type: 'button', style: { '--c': n.color }, onclick: () => Notes.show(n, drawDay) },
+            dayNotes.length ? dayNotes.map((n) => h('button', { class: 'cal-note', type: 'button', style: { '--c': Notes.noteColor(n) }, onclick: () => Notes.show(n, drawDay) },
               h('b', null, n.title || '제목 없음'), h('span', null, n.body || ''))) : h('p', { class: 'muted' }, '시간이 정해지지 않은 메모가 없어요.')),
           timeline([focus], { big: true }, drawDay)));
       panel.replaceChildren(

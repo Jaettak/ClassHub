@@ -311,7 +311,7 @@ const Settings = (() => {
       if (previewMode === 'mini') {
         cardList.className = 'set-card-preview preview-mini-live';
         const vw = window.innerWidth;
-        const scale = Math.min(1, Math.min(940, Math.max(240, vw - 24)) / vw);
+        const scale = Math.min(1, Math.min(940, Math.max(220, vw - 48)) / vw);
         const max = vw <= 640 ? 3 : vw <= 1000 ? 5 : 7;
         const rows = Math.min(tiles.length, Math.max(vw <= 640 ? 1 : 2, Math.ceil(tiles.length / max)));
         let index = 0;
@@ -331,7 +331,7 @@ const Settings = (() => {
       }
       cardList.className = 'set-card-preview preview-home-live';
       const vw = window.innerWidth, vh = window.innerHeight;
-      const scale = Math.min(1, Math.min(680, Math.max(240, vw - 80)) / vw, Math.min(650, vh * .75) / vh);
+      const scale = Math.min(1, Math.min(940, Math.max(240, vw - 48)) / vw);
       const lessons = Settings.protectedTab('timetable') ? [] : Timetable.lessonsFor(new Date());
       const schedule = h('div', { class: 'home-schedule-preview' }, h('h3', null, '오늘 시간표'),
         h('div', { class: 'home-schedule-list' }, lessons.length ? lessons.map((lesson) => h('div', { class: 'home-schedule-lesson' }, `${lesson.period}. ${lesson.displayTitle}`)) : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')));
@@ -339,11 +339,11 @@ const Settings = (() => {
       const side = h('div', { class: 'side-box' }, h('div', { class: 'side-date-nav' }, h('span', null, '오늘'),
         h('div', { class: 'side-date-controls' }, h('span', null, '◀'), h('h3', null, `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`), h('span', null, '▶'))),
         h('div', { class: 'side-scroll' }, h('p', { class: 'muted' }, '오늘의 일정')));
-      const stage = h('div', { class: 'set-home-stage' }, h('div', { class: 'home' }, h('div', { class: 'home-cards' }, tiles),
+      const stage = h('div', { class: 'set-home-stage' }, h('div', { class: 'home' }, h('div', { class: 'home-card-frame' }, h('div', { class: 'home-cards' }, tiles)),
         h('aside', { class: 'home-side' }, h('div', { class: 'home-topline' }, schedule, logo), side)));
-      Object.assign(stage.style, { width: `${vw}px`, height: `${vh}px`, transform: `scale(${scale})` });
+      Object.assign(stage.style, { width: `${vw}px`, height: `${vw <= 640 ? vh * 1.45 : vh}px`, transform: `scale(${scale})` });
       const viewport = h('div', { class: 'set-home-viewport' }, stage);
-      Object.assign(viewport.style, { width: `${vw * scale}px`, height: `${vh * scale}px` });
+      Object.assign(viewport.style, { width: `${vw * scale}px`, height: `${(vw <= 640 ? vh * 1.45 : vh) * scale}px` });
       const scroller = stage.querySelector('.home-cards');
       viewport.addEventListener('wheel', (event) => {
         if (!scroller || scroller.scrollHeight <= scroller.clientHeight) return;

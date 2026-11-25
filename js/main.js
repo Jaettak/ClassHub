@@ -67,7 +67,7 @@ const Home = (() => {
       const refreshNotes = () => {
         const notes = Notes.forDate(ds);
         body.replaceChildren(...(notes.length
-          ? notes.map((n) => h('button', { class: 'btn ghost', style: { '--c': n.color || '#fff4b8' }, type: 'button', onclick: () => Notes.show(n, () => { refreshNotes(); drawSide(); }) }, n.title || n.body))
+          ? notes.map((n) => h('button', { class: 'btn ghost', style: { '--c': Notes.noteColor(n) || '#fff4b8' }, type: 'button', onclick: () => Notes.show(n, () => { refreshNotes(); drawSide(); }) }, n.title || n.body))
           : [h('p', { class: 'muted' }, '이 날의 메모가 없어요.')]));
       };
       refreshNotes();
