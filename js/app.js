@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.9.0';
+const CLASSHUB_VERSION = 'v2.10.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -271,8 +271,6 @@ const App = (() => {
           h('button', { class: 'nav-fold', type: 'button', 'aria-label': '탭 메뉴 접기 또는 펼치기', onclick: () => {
             const bar = document.querySelector('.topbar');
             bar.getAnimations().forEach((animation) => animation.cancel());
-            const moving = [...bar.querySelectorAll('.brand, .tabs, .top-settings')];
-            moving.forEach((element) => element.getAnimations().forEach((animation) => animation.cancel()));
             if (document.body.classList.contains('nav-collapsed')) {
               document.body.classList.remove('nav-collapsed');
               const page = app.querySelector('.page');
@@ -284,7 +282,6 @@ const App = (() => {
                 pageAnimation.onfinish = () => { page.style.paddingTop = ''; pageAnimation.cancel(); };
               }
               const animation = bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
-              moving.forEach((element) => element.animate([{ transform: `translateY(-${expandedNavHeight}px)` }, { transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' }));
             } else {
               const height = bar.getBoundingClientRect().height;
               expandedNavHeight = height;
@@ -300,8 +297,7 @@ const App = (() => {
               }
               const style = getComputedStyle(bar);
               const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
-              moving.forEach((element) => element.animate([{ transform: 'translateY(0)' }, { transform: `translateY(-${height}px)` }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' }));
-              animation.onfinish = () => { document.body.classList.add('nav-collapsed'); moving.forEach((element) => element.getAnimations().forEach((movingAnimation) => movingAnimation.cancel())); animation.cancel(); };
+              animation.onfinish = () => { document.body.classList.add('nav-collapsed'); animation.cancel(); };
             }
           } }),
           navTabs(key),

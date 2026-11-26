@@ -1,6 +1,8 @@
 // 과목별 필기와 자유 화이트보드. 그림은 현재 기기에 저장한다.
 const Creative = (() => {
   let backHandler = null;
+  let whiteboardScreen = 'entry', studyScreen = 'entry';
+  let whiteboardEditingId = null, studyEditingId = null;
   function board(root, key, afterSave = () => {}) {
     const canvas = h('canvas', { class: 'creative-canvas', width: 2000, height: matchMedia('(max-width: 640px)').matches ? 2000 : 1200 });
     const ctx = canvas.getContext('2d');
@@ -66,6 +68,11 @@ const Creative = (() => {
         });
       }
       if (showSelection && selection?.start) { ctx.save(); ctx.setLineDash([10, 6]); ctx.strokeStyle = '#2874e4'; ctx.lineWidth = 2; ctx.strokeRect(selection.x, selection.y, selection.w, selection.h); ctx.restore(); }
+    };
+    let pendingDraw = 0;
+    const scheduleDraw = () => {
+      if (pendingDraw) return;
+      pendingDraw = requestAnimationFrame(() => { pendingDraw = 0; draw(); });
     };
     const pos = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * canvas.width / r.width, (e.clientY - r.top) * canvas.height / r.height]; };
     const wrap = h('div', { class: 'creative-wrap' }, canvas);
@@ -140,18 +147,18 @@ const Creative = (() => {
     });
     canvas.addEventListener('pointermove', (e) => {
       if (touchPointers.size > 1) return;
-      if (mode === '선택' && selection?.start) { const [x, y] = pos(e), [sx, sy] = selection.start; Object.assign(selection, { x: Math.min(x, sx), y: Math.min(y, sy), w: Math.abs(x - sx), h: Math.abs(y - sy) }); draw(); return; }
+      if (mode === '선택' && selection?.start) { const [x, y] = pos(e), [sx, sy] = selection.start; Object.assign(selection, { x: Math.min(x, sx), y: Math.min(y, sy), w: Math.abs(x - sx), h: Math.abs(y - sy) }); scheduleDraw(); return; }
       if (!active) return;
       if (guides.rulerOn() && ['펜', '마커'].includes(active.tool)) {
         active.points.push(guides.project(active.points[0], pos(e)));
-        if (active.symmetry) draw();
+        if (active.symmetry) scheduleDraw();
         else DrawTools.liveSegment(ctx, active.points, active.color, active.size, active.alpha);
         return;
       }
       if (['펜', '마커', '지우개'].includes(active.tool)) {
         active.points.push(pos(e));
-        if (active.symmetry) draw(); else DrawTools.liveSegment(ctx, active.points, active.tool === '지우개' ? background.value : active.color, active.size, active.alpha);
-      } else { active.points[1] = pos(e); draw(); }
+        if (active.symmetry) scheduleDraw(); else DrawTools.liveSegment(ctx, active.points, active.tool === '지우개' ? background.value : active.color, active.size, active.alpha);
+      } else { active.points[1] = pos(e); scheduleDraw(); }
     });
     canvas.addEventListener('pointerup', (e) => { touchPointers.delete(e.pointerId); if (selection?.start) { delete selection.start; if (selection.w < 2 || selection.h < 2) { selection = null; frame.hide(); } else frame.show(selection); draw(); } });
     canvas.addEventListener('pointerup', () => { if (!active) return; strokes.push(active); undone = []; active = null; draw(); });
@@ -193,10 +200,11 @@ const Creative = (() => {
     const area = h('div', { hidden: true });
     const entry = h('div', { class: 'creative-entry' });
     let deleteAll;
-    const enter = () => { entry.hidden = true; area.hidden = false; backHandler = () => { area.hidden = true; entry.hidden = false; deleteAll.hidden = true; backHandler = null; }; };
+    const enter = () => { entry.hidden = true; area.hidden = false; backHandler = () => { whiteboardScreen = 'entry'; area.hidden = true; entry.hidden = false; deleteAll.hidden = true; backHandler = null; }; };
     const back = h('button', { class: 'btn ghost', type: 'button', onclick: () => backHandler?.() }, '← 선택 화면');
     const saved = h('div', { class: 'study-list' });
     const showSaved = () => {
+      whiteboardScreen = 'saved';
       deleteAll.hidden = false;
       area.replaceChildren(back, saved);
       saved.replaceChildren(...list().filter((item) => !item.deletedAt).map((item) => {
@@ -215,8 +223,10 @@ const Creative = (() => {
       }));
     };
     const open = (item = null) => {
+      whiteboardScreen = 'editor';
       deleteAll.hidden = true;
       const id = item?.id || uid();
+      whiteboardEditingId = id;
       const title = h('input', { type: 'text', value: item?.title || '', placeholder: '보드 이름' });
       const drawing = h('div');
       area.replaceChildren(back, App.field('이름', title), drawing);
@@ -241,6 +251,8 @@ const Creative = (() => {
     entry.append(
       h('button', { class: 'creative-entry-card', type: 'button', onclick: () => { enter(); showSaved(); } }, icon('whiteboard'), h('b', null, '저장한 보드'), h('span', null, '그림을 다시 열고 관리해요.')),
       h('button', { class: 'creative-entry-card', type: 'button', onclick: () => { enter(); open(); } }, icon('whiteboard'), h('b', null, '새 보드'), h('span', null, '빈 보드에서 바로 시작해요.')));
+    if (whiteboardScreen === 'saved') { enter(); showSaved(); }
+    else if (whiteboardScreen === 'editor') { enter(); open(list().find((item) => item.id === whiteboardEditingId && !item.deletedAt) || null); }
   }
   function study(root) {
     const pages = () => Store.get('studyPages', []);
@@ -249,7 +261,7 @@ const Creative = (() => {
     const editor = h('div', { class: 'study-editor' });
     const entry = h('div', { class: 'creative-entry' });
     let deleteAll;
-    const returnToEntry = () => { list.hidden = true; editor.hidden = true; entry.hidden = false; deleteAll.hidden = true; backHandler = null; };
+    const returnToEntry = () => { studyScreen = 'entry'; list.hidden = true; editor.hidden = true; entry.hidden = false; deleteAll.hidden = true; backHandler = null; };
     const back = h('button', { class: 'btn ghost', type: 'button', onclick: returnToEntry }, '← 선택 화면');
     const listBack = h('button', { class: 'btn ghost', type: 'button', onclick: returnToEntry }, '← 선택 화면');
     const draw = () => {
@@ -266,13 +278,22 @@ const Creative = (() => {
             const image = await Store.getImg('study-' + p.id);
             const dialog = App.modal({ title: p.title, body: [h('p', null, `${p.subject || '미분류'} · ${p.unit || '단원 없음'}`),
               h('p', { class: 'study-read-body' }, p.body || ''), image?.data ? h('img', { class: 'saved-board-image', src: image.data, alt: `${p.title} 그림` }) : null],
-              footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => { dialog.close(); open(p); } }, '수정')] });
+              footer: [
+                h('button', { class: 'btn danger', type: 'button', onclick: async () => {
+                  if (!await App.confirm('이 필기를 휴지통으로 옮길까요?')) return;
+                  savePages(pages().map((item) => item.id === p.id ? { ...item, deletedAt: Date.now() } : item));
+                  dialog.close(); draw();
+                } }, '휴지통'),
+                h('button', { class: 'btn primary', type: 'button', onclick: () => { dialog.close(); open(p); } }, '수정')
+              ] });
           } }, p.title)))))));
     };
     const open = (page = null) => {
+      studyScreen = 'editor';
       deleteAll.hidden = true;
       list.hidden = true; editor.hidden = false; entry.hidden = true; backHandler = returnToEntry;
       const id = page?.id || uid();
+      studyEditingId = id;
       const subject = h('input', { type: 'text', value: page?.subject || '', placeholder: '과목 이름' });
       const subjectChoice = h('button', { class: 'btn', type: 'button', onclick: () => Subjects.choose(subject.value, (name) => { subject.value = name; }) }, '과목 선택');
       const unit = h('input', { type: 'text', value: page?.unit || '', placeholder: '단원' });
@@ -286,12 +307,12 @@ const Creative = (() => {
           await boardEditor.save(true);
           savePages([{ id, subject: subject.value.trim(), unit: unit.value.trim(), title: title.value.trim(), body: body.value, updatedAt: Date.now() }, ...pages().filter((p) => p.id !== id)]);
           draw(); App.toast('필기를 저장했어요.');
-        } }, '필기 저장'), page ? h('button', { class: 'btn danger', type: 'button', onclick: () => { savePages(pages().map((p) => p.id === id ? { ...p, deletedAt: Date.now() } : p)); editor.replaceChildren(); editor.hidden = true; list.hidden = false; draw(); } }, '휴지통') : null),
+        } }, '필기 저장'), page ? h('button', { class: 'btn danger', type: 'button', onclick: () => { studyScreen = 'saved'; savePages(pages().map((p) => p.id === id ? { ...p, deletedAt: Date.now() } : p)); editor.replaceChildren(); editor.hidden = true; list.hidden = false; draw(); } }, '휴지통') : null),
         h('h3', null, '그림 필기'), drawing);
       boardEditor = board(drawing, 'study-' + id);
       editor.append(editor.querySelector('.study-save-row'));
     };
-    const savedView = () => { editor.replaceChildren(); editor.hidden = true; entry.hidden = true; list.hidden = false; deleteAll.hidden = false; backHandler = returnToEntry; draw(); };
+    const savedView = () => { studyScreen = 'saved'; editor.replaceChildren(); editor.hidden = true; entry.hidden = true; list.hidden = false; deleteAll.hidden = false; backHandler = returnToEntry; draw(); };
     const openTrash = () => {
       const deleted = pages().filter((p) => p.deletedAt);
       const m = App.modal({ title: '필기 휴지통', body: deleted.length ? h('div', { class: 'creative-trash-list' }, deleted.map((p) => h('div', { class: 'creative-trash-row' }, h('b', null, p.title),
@@ -312,8 +333,10 @@ const Creative = (() => {
       h('button', { class: 'creative-entry-card', type: 'button', onclick: () => { entry.hidden = true; list.hidden = true; editor.hidden = false; open(); } }, icon('study'), h('b', null, '새 필기'), h('span', null, '글과 그림으로 정리해요.')));
     list.hidden = true; editor.hidden = true;
     draw();
+    if (studyScreen === 'saved') savedView();
+    else if (studyScreen === 'editor') open(pages().find((page) => page.id === studyEditingId && !page.deletedAt) || null);
   }
-  return { whiteboard, study, back: () => { if (!backHandler) return false; backHandler(); return true; }, resetBack: () => { backHandler = null; } };
+  return { whiteboard, study, back: () => { if (!backHandler) return false; backHandler(); return true; }, resetBack: () => { backHandler = null; whiteboardScreen = 'entry'; studyScreen = 'entry'; } };
 })();
 App.registerView('whiteboard', { label: '화이트보드', icon: 'whiteboard', render: Creative.whiteboard });
 App.registerView('study', { label: '필기 공간', icon: 'study', render: Creative.study });

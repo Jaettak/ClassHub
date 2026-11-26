@@ -1,7 +1,8 @@
 // 홈 화면과 앱 시작
 const Home = (() => {
   let selectedDate = new Date();
-  let clockTimer, sideObserver;
+  let followToday = true;
+  let clockTimer, sideObserver, dateListeners;
   const easterAudio = new Audio('assets/easter-fall.wav');
   easterAudio.preload = 'auto';
   function playEasterSound() {
@@ -32,7 +33,10 @@ const Home = (() => {
   function render(root) {
     clearInterval(clockTimer);
     sideObserver?.disconnect();
+    dateListeners?.abort();
     const now = new Date();
+    const renderedToday = dateStr(now);
+    if (followToday && dateStr(selectedDate) !== renderedToday) selectedDate = now;
     Holidays.ensureYear(now.getFullYear(), () => App.refresh());
     if (selectedDate.getFullYear() !== now.getFullYear()) Holidays.ensureYear(selectedDate.getFullYear(), () => App.refresh());
     const st = Settings.protectedTab('activities') ? null : Activities.stats();
@@ -49,19 +53,20 @@ const Home = (() => {
 
     // 상자 크기는 고정하고, 내용이 많아지면 안에서 스크롤한다
     const todayBox = h('div', { class: 'side-box' },
-      h('button', { type: 'button', class: 'bm r', title: '오늘 일정 목록', 'aria-label': '오늘 일정 목록으로 보기', onclick: () => selectSide('list') }),
-      h('button', { type: 'button', class: 'bm b', title: '오늘 일정 원 그래프', 'aria-label': '오늘 일정 원 그래프로 보기', onclick: () => selectSide('pie') }),
       h('div', { class: 'side-date-nav' },
-        h('button', { class: 'btn ghost', type: 'button', onclick: () => { selectedDate = new Date(); drawSide(); } }, '오늘'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => { selectedDate = new Date(); followToday = true; drawSide(); } }, '오늘'),
         h('div', { class: 'side-date-controls' },
           h('button', { class: 'btn ghost', type: 'button', 'aria-label': '이전 날짜', onclick: () => changeDate(-1) }, '◀'),
           h('h3', null),
-          h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶'))),
+          h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶')),
+        h('div', { class: 'side-bookmarks' },
+          h('button', { type: 'button', class: 'bm r', title: '오늘 일정 목록', 'aria-label': '오늘 일정 목록으로 보기', onclick: () => selectSide('list') }),
+          h('button', { type: 'button', class: 'bm b', title: '오늘 일정 원 그래프', 'aria-label': '오늘 일정 원 그래프로 보기', onclick: () => selectSide('pie') }))),
       h('div', { class: 'side-scroll' }),
       st?.todo ? h('p', { class: 'note' }, `생기부 미기록 활동 ${st.todo}개`) : null);
 
     const sideScroll = todayBox.querySelector('.side-scroll');
-    function changeDate(n) { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + n); Holidays.ensureYear(selectedDate.getFullYear(), drawSide); drawSide(); }
+    function changeDate(n) { selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + n); followToday = dateStr(selectedDate) === todayStr(); Holidays.ensureYear(selectedDate.getFullYear(), drawSide); drawSide(); }
     function openDayNotes(ds) {
       const body = h('div', { class: 'nt-completed home-note-modal' });
       const refreshNotes = () => {
@@ -80,8 +85,9 @@ const Home = (() => {
         h('span', { class: 'date-short' }, `${selectedDate.getMonth() + 1}/${selectedDate.getDate()} (${WEEK[selectedDate.getDay()]})`));
       if (sideMode === 'pie') return sideScroll.replaceChildren(
         h('div', { class: 'home-pie-view' },
-          h('div', { class: 'home-pie-full' }, Calendar.homePie(selectedDate)),
-          h('div', { class: 'home-pie-half' }, Calendar.homeSemi(selectedDate))),
+          todayBox.classList.contains('wide-pie')
+            ? h('div', { class: 'home-pie-half' }, Calendar.homeSemi(selectedDate))
+            : h('div', { class: 'home-pie-full' }, Calendar.homePie(selectedDate))),
         h('div', { class: 'home-pie-actions' },
           Settings.protectedTab('notes') ? null : h('button', { class: 'btn ghost', type: 'button', onclick: () => openDayNotes(ds) }, '메모 보기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 전체 일정`, body: h('div', { class: 'home-pie-large' }, Calendar.homePie(selectedDate)), wide: true }) }, '전체 보기')));
@@ -151,20 +157,53 @@ const Home = (() => {
         }) : []),
         Settings.protectedTab('calendar') ? null : todayBox)));
     sideObserver = new ResizeObserver(() => {
-      if (todayBox.isConnected && matchMedia('(min-width: 1001px)').matches) cardFrame.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - cardFrame.getBoundingClientRect().top)}px`;
-      else if (todayBox.isConnected && matchMedia('(max-width: 640px)').matches) cardFrame.style.height = `${Math.max(360, todayBox.parentElement.getBoundingClientRect().height)}px`;
-      else cardFrame.style.height = '';
+      const frameRect = cardFrame.getBoundingClientRect();
+      const bookmarkRect = todayBox.getBoundingClientRect();
+      const sideBySide = frameRect.right < bookmarkRect.left;
+      if (todayBox.isConnected && sideBySide) {
+        // At low browser zoom the viewport is very tall in CSS pixels. End both
+        // panels near the last tab instead of stretching empty space to 100vh.
+        const lastCard = cards.lastElementChild;
+        const cardsBottom = lastCard
+          ? lastCard.getBoundingClientRect().bottom + cards.scrollTop - frameRect.top + 14
+          : 300;
+        const bookmarkOffset = bookmarkRect.top - frameRect.top;
+        todayBox.style.maxHeight = `${Math.max(300, cardsBottom - bookmarkOffset)}px`;
+        cardFrame.style.height = `${Math.max(200, todayBox.getBoundingClientRect().bottom - frameRect.top)}px`;
+      } else if (todayBox.isConnected && matchMedia('(max-width: 260px)').matches) {
+        todayBox.style.maxHeight = '';
+        cardFrame.style.height = '';
+      } else if (todayBox.isConnected && matchMedia('(max-width: 640px)').matches) {
+        todayBox.style.maxHeight = '';
+        cardFrame.style.height = `${Math.max(360, todayBox.parentElement.getBoundingClientRect().height)}px`;
+      } else {
+        todayBox.style.maxHeight = '';
+        cardFrame.style.height = '';
+      }
       const width = todayBox.clientWidth, height = todayBox.clientHeight;
       const wide = todayBox.classList.contains('wide-pie');
       // 카드 자체의 크기를 사용한다. 그래프 모양이 바뀌어도 기준 크기는 흔들리지 않는다.
       const ratio = width / Math.max(1, height);
       const diameter = Math.min(width - 32, height - 140);
-      const next = diameter < (wide ? 290 : 260) || height < 350 && ratio > (wide ? 1.55 : 1.75);
-      if (next !== wide) todayBox.classList.toggle('wide-pie', next);
+      const next = diameter < (wide ? 290 : 260) || ratio > (wide ? 1.55 : 1.7);
+      if (next !== wide) {
+        todayBox.classList.toggle('wide-pie', next);
+        if (sideMode === 'pie') drawSide();
+      }
     });
     sideObserver.observe(todayBox);
+    const checkDayChange = () => {
+      if (!root.isConnected || todayStr() === renderedToday) return false;
+      if (followToday) selectedDate = new Date();
+      App.refresh();
+      return true;
+    };
+    dateListeners = new AbortController();
+    window.addEventListener('focus', checkDayChange, { signal: dateListeners.signal });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDayChange(); }, { signal: dateListeners.signal });
     clockTimer = setInterval(() => {
       if (!root.isConnected) { clearInterval(clockTimer); sideObserver?.disconnect(); return; }
+      if (checkDayChange()) return;
       if (sideMode === 'pie' && dateStr(selectedDate) === todayStr()) drawSide();
     }, 60000);
   }

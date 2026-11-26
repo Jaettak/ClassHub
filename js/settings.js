@@ -437,8 +437,8 @@ const Settings = (() => {
       h('summary', null, helpIcon(), '도움말'),
       h('div', null, `현재 버전 ${CLASSHUB_VERSION}`));
     const body = h('div', { class: 'set-grid' },
-      schoolBox, backupBox, alBox, tabBox, notesBox, lockBox,
-      viewBox, soundBox, Cloud.accountSection(), driveBox, downloadBox, resetBox);
+      Cloud.accountSection(), driveBox, schoolBox, backupBox, alBox, tabBox,
+      notesBox, lockBox, viewBox, soundBox, downloadBox, resetBox);
     const content = h('div', null, versionHelp, body);
     const commit = () => {
       save({ school: draft.school, grade: grade.value.trim(), cls: cls.value.trim(), allergies: draft.allergies.slice().sort((a, b) => a - b),

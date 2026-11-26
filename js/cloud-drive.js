@@ -121,6 +121,7 @@ const CloudDrive = (() => {
   }
   async function connect() {
     if (!Cloud.user || Cloud.user.uid !== uid) throw new Error('Google 계정으로 먼저 로그인해 주세요.');
+    if (typeof location !== 'undefined' && location.protocol === 'file:') throw new Error('로컬 파일 미리보기에서는 Drive를 연결할 수 없어요. 배포된 ClassHub 웹사이트에서 연결해 주세요.');
     let accessToken;
     if (window.Capacitor?.isNativePlatform?.()) {
       const provider = new firebase.auth.GoogleAuthProvider();

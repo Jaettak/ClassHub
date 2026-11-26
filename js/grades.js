@@ -29,9 +29,9 @@ const Grades = (() => {
   const groupKey = (g) => `${g.schoolYear || ''}|${g.grade}|${g.semester}|${g.exam}|${g.recordType || ''}|${g.examDate || ''}`;
   const groupLabel = (g) => `${g.schoolYear ? `${g.schoolYear}학년도 ` : ''}${g.grade ? `${g.grade}학년 ` : ''}${g.semester ? `${g.semester}학기 ` : ''}${category(g) === 'course' ? '학기말 성적' : category(g) === 'exam' ? examText(g) : category(g) === 'assessment' ? `수행평가 · ${g.assessmentName || g.exam || '평가'}` : g.exam || '모의고사'}${g.examDate ? ` (${g.examDate})` : ''}`;
 
-  function filtered() {
+  function filtered(rows = load()) {
     const q = filters.q.trim().toLowerCase();
-    return load().filter((g) => (!filters.grade || String(g.grade) === filters.grade) && (!filters.sem || String(g.semester) === filters.sem)
+    return rows.filter((g) => (!filters.grade || String(g.grade) === filters.grade) && (!filters.sem || String(g.semester) === filters.sem)
       && (q || !filters.subject || g.subject === filters.subject)
       && (q || !filters.family || Curriculum2022.familyFor(g.subject) === filters.family)
       && (!q || String(g.subject || '').toLowerCase().includes(q)));
@@ -231,7 +231,7 @@ const Grades = (() => {
       if (typeof subjectSummary !== 'undefined') subjectSummary.textContent = subjectFilter.selectedOptions[0]?.textContent || '모든 과목';
       const all = load();
       const allMode = displayRows(all.filter((g) => isMock(g) === (filters.mode === 'mock')));
-      const list = displayRows(filtered().filter((g) => isMock(g) === (filters.mode === 'mock')));
+      const list = displayRows(filtered(all).filter((g) => isMock(g) === (filters.mode === 'mock')));
       const completionExtras = filters.mode === 'school' ? Store.get('schoolReportExtras', []).filter((g) => g.sourceDetails?.recordType === 'completion') : [];
       stat.replaceChildren(h('span', { class: 'pill' }, `기록 ${list.length}개`));
       body.replaceChildren();
@@ -265,7 +265,13 @@ const Grades = (() => {
         const label = focused.length ? category(g) === 'exam' ? examText(g) : g.assessmentName || g.exam || '평가'
           : filters.mode === 'school' && filters.chart === 'exam' ? `${g.subject} · ${g.grade || '—'}학년 ${g.semester || '—'}학기 ${examText(g)}`
             : `${g.subject} · ${g.exam || '학기 성적'}`;
-        return h('div', { class: 'gr-bar', style: { '--c': colorFor(g.subject) } },
+        const openDetails = () => {
+          const matches = g.id ? [g] : summaryRows.filter((row) => row.subject === g.subject);
+          if (matches.length === 1) { view(matches[0], redraw); return; }
+          App.modal({ title: `${g.subject} 성적`, body: h('div', { class: 'gr-bar-records' }, matches.map((row) =>
+            h('button', { class: 'btn', type: 'button', onclick: () => view(row, redraw) }, `${groupLabel(row)} · ${fmt(row.score)} / ${fmt(row.full)}점`))) });
+        };
+        return h('button', { class: 'gr-bar gr-bar-open', type: 'button', title: label, 'aria-label': `${label} 성적 자세히 보기`, onclick: openDetails, style: { '--c': colorFor(g.subject) } },
         h('span', { class: 'gb-n', title: label }, label), h('span', { class: 'gb-t' }, h('i', { style: { width: `${Math.max(0, Math.min(100, pct(g)))}%` } })),
         h('b', null, `${fmt(g.score)} / ${fmt(g.full)}점`));
       }) : h('p', { class: 'muted' }, '선택한 기준의 기록이 없어요.'));

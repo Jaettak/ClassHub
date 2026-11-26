@@ -2312,6 +2312,26 @@ input[type='checkbox']:checked::after { content: none; }
   .side-box .bm.b { right: 8px; }
 }
 
+/* Keep both bookmark controls beside the date arrows inside the header. */
+.side-date-nav .side-bookmarks { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: flex-start; gap: 4px; z-index: 4; }
+.side-box .side-bookmarks .bm,
+.side-box .side-bookmarks .bm.r,
+.side-box .side-bookmarks .bm.b,
+.side-box .side-bookmarks .bm[aria-pressed="true"] { position: relative; top: auto; right: auto; width: 18px; height: 29px; min-width: 18px; flex: none; }
+.side-box .side-bookmarks .bm:hover,
+.side-box .side-bookmarks .bm:focus-visible { height: 29px; transform: translateY(2px); }
+.side-box .side-bookmarks .bm::after { display: none; }
+.gr-bar-open { width: 100%; padding: 3px 2px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
+.gr-bar-open:hover, .gr-bar-open:focus-visible { background: #f3f6ff; outline: 2px solid #dce5f7; }
+.gr-bar-records { display: grid; gap: 8px; }
+.gr-bar-records .btn { width: 100%; text-align: left; }
+@media (max-width: 640px) {
+  .side-box .side-bookmarks .bm,
+  .side-box .side-bookmarks .bm.r,
+  .side-box .side-bookmarks .bm.b,
+  .side-box .side-bookmarks .bm[aria-pressed="true"] { width: 15px; height: 25px; min-width: 15px; }
+}
+
 /* Tab arrangement preview uses the same symmetric side padding as the live header. */
 .set-card-preview.preview-mini-live .set-mini-stage { padding-inline: 16px; }
 .set-card-preview.preview-mini-live .set-mini-nav { margin-left: auto; margin-right: auto; padding-inline: 0; }
@@ -2357,9 +2377,41 @@ input[type='checkbox']:checked::after { content: none; }
   .home-topline { display: contents; }
   .home-topline .home-logo { grid-column: 1; grid-row: 1; width: var(--tablet-card-size); height: var(--tablet-card-size); max-width: none; }
   .home-side .home-schedule-preview { display: flex; flex-direction: column; grid-column: 2; grid-row: 1; width: 100%; height: var(--tablet-card-size); min-height: 0; }
+  .home-side .home-schedule-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; }
   .home-side .side-box { grid-column: 1 / -1; grid-row: auto; height: clamp(400px, 52vh, 560px); min-height: 400px; }
   .home-side .home-exam-banner { grid-column: 1 / -1; }
 }
 
 /* Match the daily pie slices to the subtle shadow on the home bookmark pie. */
 .day-layout .pie-svg .pie-sec { filter: drop-shadow(0 2px 3px #1e3c8c25); }
+.view-home .home { column-gap: 18px; }
+
+/* A narrow window at high browser zoom must reflow instead of clipping cards. */
+@media (max-width: 260px) {
+  html { scrollbar-gutter: auto; }
+  .view-home .home { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; padding: 48px 8px 12px; }
+  .view-home .home-side, .view-home .home-card-frame { width: 100%; min-width: 0; }
+  .view-home .home-side { order: -1; display: flex; flex-direction: column; gap: 10px; }
+  .view-home .home-topline { display: flex; flex-direction: column; width: 100%; height: auto; gap: 10px; }
+  .view-home .home-topline .home-logo { width: 100%; max-width: none; height: auto; min-height: 0; aspect-ratio: auto; padding: 10px; }
+  .view-home .home-logo .logo-books { width: min(100%, 100px); padding-top: 0; }
+  .view-home .home-logo .logo-name { font-size: clamp(11px, 12vw, 18px); letter-spacing: -.5px; overflow-wrap: anywhere; }
+  .view-home .home-schedule-preview { display: flex; width: 100%; height: 150px; min-height: 0; padding: 8px; }
+  .view-home .home-side .side-box { width: 100%; min-width: 0; max-width: 100%; height: 300px; min-height: 0; padding: 12px 8px; }
+  .view-home .side-scroll { min-width: 0; padding-right: 0; }
+  .view-home .side-box.wide-pie .side-scroll { overflow-x: auto; }
+  .view-home .home-cards { display: grid; grid-template-columns: minmax(0, 1fr); height: auto; overflow: visible; }
+  .view-home .home-card { grid-template-columns: minmax(0, 1fr); min-width: 0; min-height: 72px; padding: 8px; gap: 4px; }
+  .view-home .hc-ico { width: 34px; height: 34px; border-radius: 10px; }
+  .view-home .hc-ico .ico { width: 24px; height: 24px; }
+  .view-home .hc-text b { font-size: .8rem; overflow-wrap: anywhere; }
+  .view-home .hc-text small { display: none; }
+  .home-settings-btn { top: 4px; right: 4px; width: 30px; height: 30px; min-width: 30px; min-height: 30px; padding: 4px; }
+  .home-settings-btn .ico, .home-settings-btn svg { width: 18px; height: 18px; }
+  .view-home .side-date-nav { min-height: 78px; }
+  .view-home .side-date-nav .side-bookmarks { top: 4px; transform: none; }
+  .view-home .side-date-nav > .btn:first-child { top: 4px; left: 0; transform: none; min-height: 26px; padding: 2px 4px; font-size: .7rem; }
+  .view-home .side-date-controls { top: auto; bottom: 0; left: 0; width: 100%; transform: none; grid-template-columns: 18px minmax(0, 1fr) 18px; gap: 2px; }
+  .view-home .side-date-controls > .btn, .view-home .side-date-nav .side-date-controls > .btn:first-child { width: 18px; min-width: 18px; min-height: 24px; padding: 0; font-size: .6rem; }
+  .view-home .side-date-controls h3, .view-home .side-date-nav h3 { width: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .65rem; }
+}
