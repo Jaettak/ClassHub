@@ -121,11 +121,38 @@ const CloudDrive = (() => {
   }
   async function connect() {
     if (!Cloud.user || Cloud.user.uid !== uid) throw new Error('Google 계정으로 먼저 로그인해 주세요.');
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.addScope(SCOPE);
-    provider.setCustomParameters?.({ prompt: 'consent' });
-    const result = await Cloud.user.reauthenticateWithPopup(provider);
-    const accessToken = firebase.auth.GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+    let accessToken;
+    if (window.Capacitor?.isNativePlatform?.()) {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.addScope(SCOPE);
+      const result = await Cloud.user.reauthenticateWithPopup(provider);
+      accessToken = firebase.auth.GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+    } else {
+      const oauth = window.google?.accounts?.oauth2;
+      const clientId = window.CLASSHUB_FIREBASE_CONFIG?.googleOAuthClientId;
+      if (!oauth || !clientId) throw new Error('Google 연결 기능을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
+      // Firebase 리디렉션 핸들러를 거치지 않아 브라우저의 저장소 분리에도 영향을 받지 않는다.
+      const response = await new Promise((resolve, reject) => {
+        const client = oauth.initTokenClient({
+          client_id: clientId,
+          scope: `openid ${SCOPE}`,
+          login_hint: Cloud.user.providerData.find((item) => item.providerId === 'google.com')?.uid || Cloud.user.email,
+          callback: resolve,
+          error_callback: () => reject(new Error('Google 연결 창이 닫혔거나 열리지 않았어요.')),
+        });
+        client.requestAccessToken({ prompt: 'consent' });
+      });
+      if (response.error) throw new Error(response.error_description || response.error);
+      if (!response.access_token || !oauth.hasGrantedAllScopes(response, SCOPE)) throw new Error('Drive 사용 권한을 받지 못했어요.');
+      const identityResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: { Authorization: `Bearer ${response.access_token}` },
+      });
+      if (!identityResponse.ok) throw new Error('연결된 Google 계정을 확인하지 못했어요.');
+      const identity = await identityResponse.json();
+      const googleUid = Cloud.user.providerData.find((item) => item.providerId === 'google.com')?.uid;
+      if (!googleUid || identity.sub !== googleUid) throw new Error('ClassHub에 로그인한 Google 계정으로 Drive를 연결해 주세요.');
+      accessToken = response.access_token;
+    }
     if (!accessToken) throw new Error('Drive 사용 권한을 받지 못했어요.');
     token = accessToken;
     await listFiles();

@@ -16,6 +16,7 @@ const images = {
 };
 let nextId = 1;
 const fetch = async (url, options = {}) => {
+  if (url.includes('openidconnect.googleapis.com/v1/userinfo')) return { ok: true, json: async () => ({ sub: 'google-user' }) };
   if (url.includes('spaces=appDataFolder')) return { ok: true, json: async () => ({ files: [] }) };
   if (url.includes('/upload/')) {
     uploaded.push(options.body?.text ? await options.body.text() : String(options.body));
@@ -25,7 +26,7 @@ const fetch = async (url, options = {}) => {
 };
 const context = {
   Blob, URLSearchParams, Date, Map, JSON, Promise, crypto: webcrypto, fetch, localStorage,
-  navigator: { onLine: true }, window: { addEventListener() {} },
+  navigator: { onLine: true }, window: { addEventListener() {}, Capacitor: { isNativePlatform: () => true } },
   Cloud: { user: { uid: 'test', reauthenticateWithPopup: async () => ({}) } },
   firebase: { auth: { GoogleAuthProvider: class { addScope() {} static credentialFromResult() { return { accessToken: 'token' }; } } } },
   Store: {
@@ -45,5 +46,15 @@ vm.runInContext(fs.readFileSync('js/cloud-drive.js', 'utf8') + '\nglobalThis.Clo
   assert(uploaded.some((body) => body.includes('classhub-media-capture1.json')));
   assert(uploaded.some((body) => body.includes('classhub-media-school-floor-1.json')));
   assert(!uploaded.some((body) => body.includes('school-source-1')));
+  context.Cloud.user = { uid: 'web', email: 'user@example.com', providerData: [{ providerId: 'google.com', uid: 'google-user' }] };
+  context.window.Capacitor.isNativePlatform = () => false;
+  context.window.CLASSHUB_FIREBASE_CONFIG = { googleOAuthClientId: 'test-web-client' };
+  context.window.google = { accounts: { oauth2: {
+    initTokenClient: (options) => ({ requestAccessToken: () => options.callback({ access_token: 'web-token', scope: 'openid https://www.googleapis.com/auth/drive.appdata' }) }),
+    hasGrantedAllScopes: (response, scope) => response.scope.split(' ').includes(scope),
+  } } };
+  context.CloudDrive.accountChanged('web');
+  await context.CloudDrive.connect();
+  assert.equal(uploaded.length, 4);
   console.log('cloud-drive-smoke: ok');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

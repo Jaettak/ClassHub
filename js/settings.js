@@ -311,7 +311,7 @@ const Settings = (() => {
       if (previewMode === 'mini') {
         cardList.className = 'set-card-preview preview-mini-live';
         const vw = window.innerWidth;
-        const scale = Math.min(1, Math.min(940, Math.max(220, vw - 48)) / vw);
+        const scale = Math.min(1, Math.min(940, Math.max(220, vw - 56)) / vw);
         const max = vw <= 640 ? 3 : vw <= 1000 ? 5 : 7;
         const rows = Math.min(tiles.length, Math.max(vw <= 640 ? 1 : 2, Math.ceil(tiles.length / max)));
         let index = 0;
@@ -331,10 +331,10 @@ const Settings = (() => {
       }
       cardList.className = 'set-card-preview preview-home-live';
       const vw = window.innerWidth, vh = window.innerHeight;
-      const scale = Math.min(1, Math.min(940, Math.max(240, vw - 48)) / vw);
+      const scale = Math.min(1, Math.min(940, Math.max(240, vw - 56)) / vw);
       const lessons = Settings.protectedTab('timetable') ? [] : Timetable.lessonsFor(new Date());
       const schedule = h('div', { class: 'home-schedule-preview' }, h('h3', null, '오늘 시간표'),
-        h('div', { class: 'home-schedule-list' }, lessons.length ? lessons.map((lesson) => h('div', { class: 'home-schedule-lesson' }, `${lesson.period}. ${lesson.displayTitle}`)) : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')));
+        h('div', { class: 'home-schedule-list' }, lessons.length ? lessons.map((lesson) => h('div', { class: 'home-schedule-lesson', style: { '--c': lesson.color || colorFor(lesson.subject) } }, `${lesson.period}. ${lesson.displayTitle}`)) : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')));
       const logo = h('div', { class: 'home-logo' }, icon('books', 'logo-books'), h('div', { class: 'logo-name' }, 'Class', h('b', null, 'Hub')));
       const side = h('div', { class: 'side-box' }, h('div', { class: 'side-date-nav' }, h('span', null, '오늘'),
         h('div', { class: 'side-date-controls' }, h('span', null, '◀'), h('h3', null, `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`), h('span', null, '▶'))),
@@ -406,9 +406,6 @@ const Settings = (() => {
         downloadStatus.textContent = android || windows ? `${release.tag_name || '최신'} 배포판입니다. 파일의 버전을 확인하고 설치해 주세요.` : '아직 내려받을 수 있는 앱 파일이 없어요.';
       })
       .catch(() => { downloadStatus.textContent = '아직 내려받을 수 있는 앱 파일이 없어요.'; });
-    const versionBox = section('앱 정보', h('p', null, CLASSHUB_VERSION),
-      h('p', { class: 'hint' }, '웹·컴퓨터·안드로이드에 공통으로 사용할 다음 버전의 로컬 미리보기입니다.'));
-
     // 백업
     const backupBox = section('백업',
       h('div', { class: 'set-row set-btns' },
@@ -436,8 +433,13 @@ const Settings = (() => {
       } }, '모든 데이터 지우기'));
 
     const driveBox = Cloud.user && typeof CloudDrive !== 'undefined' ? section('사진·그림 동기화', CloudDrive.settingsSection()) : null;
-    downloadBox.append(...[...versionBox.children].slice(1));
-    const body = h('div', { class: 'set-grid' }, Cloud.accountSection(), driveBox, schoolBox, alBox, viewBox, soundBox, notesBox, tabBox, lockBox, backupBox, downloadBox, resetBox);
+    const versionHelp = h('details', { class: 'context-help set-version-help' },
+      h('summary', null, helpIcon(), '도움말'),
+      h('div', null, `현재 버전 ${CLASSHUB_VERSION}`));
+    const body = h('div', { class: 'set-grid' },
+      schoolBox, backupBox, alBox, tabBox, notesBox, lockBox,
+      viewBox, soundBox, Cloud.accountSection(), driveBox, downloadBox, resetBox);
+    const content = h('div', null, versionHelp, body);
     const commit = () => {
       save({ school: draft.school, grade: grade.value.trim(), cls: cls.value.trim(), allergies: draft.allergies.slice().sort((a, b) => a - b),
         fontScale: draft.fontScale, reduceMotion: motion.checked, timerSound: sound.checked, uiSound: uiSound.checked, soundVolume: Number(volume.value), notesAutoTrashDays: Number(cleanupDays.value), tabOrder: miniOrder.slice(), homeCardOrder: homeOrder.slice(), enabledTabs: enabledChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockTabs: lockChoices.filter(({ input }) => input.checked).map(({ id }) => id), privateLockEnabled: true });
@@ -451,8 +453,8 @@ const Settings = (() => {
           else commit();
         } }, '저장'),
       ];
-    const m = target ? { close: () => { location.hash = '#home'; apply(); } } : App.modal({ title: '설정', wide: true, body, footer, onClose: apply });
-    if (target) target.append(h('section', { class: 'panel set-page' }, h('h1', { class: 'page-title' }, '설정'), body, h('div', { class: 'set-page-footer' }, footer)));
+    const m = target ? { close: () => { location.hash = '#home'; apply(); } } : App.modal({ title: '설정', wide: true, body: content, footer, onClose: apply });
+    if (target) target.append(h('section', { class: 'panel set-page' }, h('h1', { class: 'page-title' }, '설정'), content, h('div', { class: 'set-page-footer' }, footer)));
   }
 
   return { open, render: (root) => open(root), get, save, apply, locked, protectedTab, lock, unlock };

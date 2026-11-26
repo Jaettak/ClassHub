@@ -4,4 +4,5 @@ window.CLASSHUB_FIREBASE_CONFIG = {
   authDomain: 'classhub-e35f2.firebaseapp.com',
   projectId: 'classhub-e35f2',
   appId: '1:1059158769395:web:a9a4135d051fc3c4a68186',
+  googleOAuthClientId: '1059158769395-rbnr045msrsbjgsgflqc9c7st6arhob9.apps.googleusercontent.com',
 };

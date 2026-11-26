@@ -86,7 +86,7 @@ const Home = (() => {
           Settings.protectedTab('notes') ? null : h('button', { class: 'btn ghost', type: 'button', onclick: () => openDayNotes(ds) }, '메모 보기'),
           h('button', { class: 'btn ghost', type: 'button', onclick: () => App.modal({ title: `${ds} 전체 일정`, body: h('div', { class: 'home-pie-large' }, Calendar.homePie(selectedDate)), wide: true }) }, '전체 보기')));
       sideScroll.replaceChildren(...[
-        Settings.protectedTab('timetable') ? null : lessons.length ? h('div', { class: 'chips side-lessons' }, lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': colorFor(l.subject) }, title: l.teacher, onclick: () => Calendar.showEvent(l, drawSide) }, `${l.period} ${l.displayTitle}`)))
+        Settings.protectedTab('timetable') ? null : lessons.length ? h('div', { class: 'chips side-lessons' }, lessons.map((l) => h('button', { class: 'chip', type: 'button', style: { '--c': l.color || colorFor(l.subject) }, title: l.teacher, onclick: () => Calendar.showEvent(l, drawSide) }, `${l.period} ${l.displayTitle}`)))
           : h('p', { class: 'muted' }, '입력된 수업이 없어요.'),
         !Settings.protectedTab('notes') && Notes.forDate(ds).length ? h('button', { class: 'home-day-notes-open btn ghost', type: 'button', onclick: () => openDayNotes(ds) }, `이 날의 메모 ${Notes.forDate(ds).length}개 보기`) : null,
         Settings.protectedTab('calendar') ? null : dayEvents.length ? h('ul', { class: 'mini-list' }, dayEvents.map((e) => h('li', { style: { '--c': e.color } },
@@ -141,7 +141,7 @@ const Home = (() => {
         h('div', { class: 'home-topline' },
           !Settings.protectedTab('timetable') ? h('div', { class: 'home-schedule-preview' },
             h('h3', null, '오늘 시간표'),
-            Timetable.lessonsFor(now).length ? h('div', { class: 'home-schedule-list' }, Timetable.lessonsFor(now).map((lesson) => h('button', { type: 'button', class: 'home-schedule-lesson', style: { '--c': colorFor(lesson.subject) }, onclick: () => Calendar.showEvent(lesson, () => App.refresh()) }, `${lesson.period}. ${lesson.displayTitle}`)))
+            Timetable.lessonsFor(now).length ? h('div', { class: 'home-schedule-list' }, Timetable.lessonsFor(now).map((lesson) => h('button', { type: 'button', class: 'home-schedule-lesson', style: { '--c': lesson.color || colorFor(lesson.subject) }, onclick: () => Calendar.showEvent(lesson, () => App.refresh()) }, `${lesson.period}. ${lesson.displayTitle}`)))
               : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')) : null, logo),
         ...(!Settings.protectedTab('calendar') ? Calendar.visibleExams().slice(0, 3).map((exam) => {
           const today = todayStr(), offset = Math.round((parseDate(today) - parseDate(exam.start)) / 86400000);

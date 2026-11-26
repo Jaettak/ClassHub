@@ -26,6 +26,15 @@ state.events = [
 ];
 state.subjectColors = { '평소 수업': '#d42660' };
 assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'lesson').color, '#d42660');
+state.events.push({ id: 'custom-lesson', date: '2026-11-05', start: '11:00', end: '12:00', title: '평소 수업 (2교시)', subject: '평소 수업', schoolLesson: true, colorSource: 'custom', color: '#22aa44' });
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'custom-lesson').color, '#22aa44');
+assert.equal(Timetable.lessonsFor(new Date(2026, 10, 5)).find((e) => e.id === 'custom-lesson').color, '#22aa44');
+state.events.push({ id: 'self-study', date: '2026-11-05', start: '12:00', end: '13:00', title: '자습 (3교시)', subject: '', schoolLesson: true, selfStudy: true, colorSource: 'custom', color: '#8b95a5' });
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'self-study').color, '#8b95a5');
+state.subjectColors['평소 수업'] = '#3388cc';
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'lesson').color, '#3388cc');
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'custom-lesson').color, '#22aa44');
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'self-study').color, '#8b95a5');
 assert.equal(Calendar.byDate('2026-11-06').map((e) => e.id).join(','), 'range');
 assert.equal(Calendar.byDate('2026-11-07').map((e) => e.id).join(','), 'range,multi');
 Calendar.setDone('multi', '2026-11-07', true);

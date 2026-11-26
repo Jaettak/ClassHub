@@ -2311,3 +2311,55 @@ input[type='checkbox']:checked::after { content: none; }
   .side-box .bm.r { right: 36px; }
   .side-box .bm.b { right: 8px; }
 }
+
+/* Tab arrangement preview uses the same symmetric side padding as the live header. */
+.set-card-preview.preview-mini-live .set-mini-stage { padding-inline: 16px; }
+.set-card-preview.preview-mini-live .set-mini-nav { margin-left: auto; margin-right: auto; padding-inline: 0; }
+.set-card-preview.preview-mini-live .set-mini-row .set-preview-tile { width: 100%; max-width: none; min-width: 0; }
+.set-card-preview.preview-mini-live .set-mini-row .set-preview-tile b { font-size: .75rem; }
+@media (max-width: 1000px) {
+  .set-card-preview.preview-mini-live .set-mini-stage { padding-inline: 12px; }
+  .set-card-preview.preview-mini-live .set-mini-stage[data-layout] .set-mini-nav { padding-inline: 0; }
+  .set-card-preview.preview-mini-live .set-mini-row .set-preview-tile b { font-size: clamp(.65rem, 1.4vw, .75rem); }
+}
+@media (max-width: 640px) {
+  .set-card-preview.preview-mini-live, .set-card-preview.preview-home-live { padding: 4px; }
+  .set-card-preview.preview-mini-live .set-mini-stage { padding-inline: 10px; }
+  .set-card-preview.preview-mini-live .set-mini-row .set-preview-tile { grid-template-columns: 20px minmax(0, 1fr); gap: 4px; padding: 4px; }
+  .set-card-preview.preview-mini-live .set-mini-row .set-preview-icon { width: 20px; height: 20px; }
+  .set-card-preview.preview-mini-live .set-mini-row .set-preview-tile b { font-size: clamp(.58rem, 2.6vw, .75rem); text-overflow: clip; }
+}
+.subject-visibility-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 34%); gap: 10px; width: 100%; }
+.subject-visibility-controls > input, .subject-visibility-controls > select { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
+.subject-visibility-controls + .set-row { margin: 14px 0 16px; gap: 10px; }
+.subject-visibility-list { padding: 4px 2px 8px; }
+
+/* A lesson's subject is above its period and one-day self-study switch. */
+.lesson-edit-fields { display: grid; gap: 10px; min-width: 0; }
+.lesson-period-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.lesson-period-actions .field { min-width: 0; margin-bottom: 0; }
+.lesson-self-study { min-width: 76px; margin-bottom: 0; }
+.lesson-self-study.on { background: #e4e7ec; border-color: #9aa3b1; color: #404b5c; }
+.lesson-subject-inactive { opacity: .5; pointer-events: none; }
+
+/* Keep the whole tab preview at a fixed height so desktop cards can scroll. */
+@media (min-width: 1001px) {
+  .set-home-stage .home-card-frame { height: 100%; min-height: 0; align-self: stretch; }
+  .set-home-stage .home-cards { box-sizing: border-box; height: calc(100% - 20px); margin-block: 10px; min-height: 0; overflow-y: auto; overscroll-behavior: auto; }
+}
+
+/* Two-column home cards: keep the logo beside the timetable at every orientation. */
+@media (min-width: 641px) and (max-width: 1000px),
+       (min-width: 1001px) and (max-width: 1100px) and (orientation: portrait) {
+  .view-home .home { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .view-home .home-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); height: auto; overflow: visible; }
+  .home-side { --tablet-card-size: min(320px, 42vw); order: -1; container-type: inline-size; display: grid; grid-template-columns: var(--tablet-card-size) minmax(0, 1fr); gap: 12px; height: auto; }
+  .home-topline { display: contents; }
+  .home-topline .home-logo { grid-column: 1; grid-row: 1; width: var(--tablet-card-size); height: var(--tablet-card-size); max-width: none; }
+  .home-side .home-schedule-preview { display: flex; flex-direction: column; grid-column: 2; grid-row: 1; width: 100%; height: var(--tablet-card-size); min-height: 0; }
+  .home-side .side-box { grid-column: 1 / -1; grid-row: auto; height: clamp(400px, 52vh, 560px); min-height: 400px; }
+  .home-side .home-exam-banner { grid-column: 1 / -1; }
+}
+
+/* Match the daily pie slices to the subtle shadow on the home bookmark pie. */
+.day-layout .pie-svg .pie-sec { filter: drop-shadow(0 2px 3px #1e3c8c25); }

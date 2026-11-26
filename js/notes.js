@@ -118,15 +118,12 @@ const Notes = (() => {
     let color = noteColor(n) || folders().find((f) => f.id === (n.folderId || selectedFolder))?.color || COLORS[active().length % COLORS.length];
     let subjectColorMode = n.subjectColorMode || 'custom';
     let pinned = !!n.pinned;
-    const swatches = h('div', { class: 'swatches' });
-    const drawSw = () => swatches.replaceChildren(...COLORS.map((c) => h('button', { type: 'button', class: 'sw' + (c === color ? ' on' : ''), style: { background: c }, 'aria-label': '색상 선택',
-      onclick: () => { color = c; subjectColorMode = 'custom'; drawSw(); } })));
-    drawSw();
-    const useSubjectColor = (name) => { if (name) { subjectColorMode = 'subject'; color = colorFor(name); drawSw(); } };
+    const colorPicker = h('input', { type: 'color', value: color, 'aria-label': '메모 색상', onchange: () => { color = colorPicker.value; subjectColorMode = 'custom'; } });
+    const useSubjectColor = (name) => { if (name) { subjectColorMode = 'subject'; color = colorFor(name); colorPicker.value = color; } };
     subject.addEventListener('change', () => useSubjectColor(subject.value.trim()));
     folder.addEventListener('change', () => {
       const folderColor = folders().find((f) => f.id === folder.value)?.color;
-      if (folderColor) { color = folderColor; subjectColorMode = 'custom'; drawSw(); }
+      if (folderColor) { color = folderColor; subjectColorMode = 'custom'; colorPicker.value = color; }
     });
     const pin = h('input', { type: 'checkbox', checked: pinned, onchange: () => { pinned = pin.checked; } });
     const m = App.modal({
@@ -136,7 +133,7 @@ const Notes = (() => {
           h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, '사진 파일·갤러리에서 추가'),
           h('button', { class: 'btn', type: 'button', onclick: () => cameraInput.click() }, '사진 찍기')),
           fileInput, cameraInput, photoList),
-        App.field('보관함', folder), App.field('과목', h('div', { class: 'study-subject-controls' }, subjectChoice, subject)), App.field('날짜 연결', mode), singleField, endField, manyField, h('div', { class: 'field' }, h('span', null, '색상'), swatches), h('label', { class: 'check' }, pin, '맨 위에 고정')],
+        App.field('보관함', folder), App.field('과목', h('div', { class: 'study-subject-controls' }, subjectChoice, subject)), App.field('날짜 연결', mode), singleField, endField, manyField, App.field('색상', colorPicker), h('label', { class: 'check' }, pin, '맨 위에 고정')],
       footer: [
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
         h('button', { class: 'btn primary', type: 'button', onclick: submit }, '저장'),
@@ -158,6 +155,7 @@ const Notes = (() => {
       for (const old of n.images || []) if (!photos.some((photo) => photo.id === old.id)) Store.delImg(imageKey(rec.id, old.id));
       m.close();
       after();
+      show(rec, after);
     }
     setTimeout(() => (isNew ? body : title).focus(), 50);
   }

@@ -184,10 +184,6 @@ const Timetable = (() => {
     };
     refreshChoices(cur.subject);
     const picker = h('input', { type: 'color', value: colorFor(cur.subject || ''), 'aria-label': '과목 색상 선택' });
-    const swatches = h('div', { class: 'tt-color-swatches' }, PALETTE.map((hex) =>
-      h('button', { type: 'button', class: 'tt-swatch', style: { background: hex }, title: hex,
-        'aria-label': `${hex} 색상`, onclick: () => { picker.value = hex; } })));
-    const colorControls = h('div', { class: 'tt-color-edit' }, picker, swatches);
     function updatePicker(name) { picker.value = colorFor(name); }
     function storeColor(name) {
       if (!name) return;
@@ -204,7 +200,7 @@ const Timetable = (() => {
     });
     const m = App.modal({
       title: `${t.days[d]}요일 ${p + 1}교시`,
-      body: [subject.el, App.field('선생님 (선택)', h('div', { class: 'tt-saved-choice' }, teacherChoices, teacher)), App.field('교실 (선택)', h('div', { class: 'tt-saved-choice' }, roomChoices, room)), App.field('과목 색상', colorControls)],
+      body: [subject.el, App.field('선생님 (선택)', h('div', { class: 'tt-saved-choice' }, teacherChoices, teacher)), App.field('교실 (선택)', h('div', { class: 'tt-saved-choice' }, roomChoices, room)), App.field('과목 색상', picker)],
       footer: [
         cur.subject ? h('button', { class: 'btn danger', type: 'button', onclick: () => { t.cells[d][p] = null; save(); m.close(); done(); } }, '지우기') : null,
         h('button', { class: 'btn ghost', type: 'button', onclick: () => m.close() }, '취소'),
