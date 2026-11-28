@@ -131,10 +131,18 @@ const Subjects = (() => {
       const list = h('div', { class: 'subject-visibility-list' });
       const query = h('input', { type: 'search', placeholder: '표시할 과목 검색', 'aria-label': '표시할 과목 검색' });
       const order = h('select', { 'aria-label': '표시할 과목 정렬' },
-        h('option', { value: 'name' }, '이름순'), h('option', { value: 'checked' }, '체크한 과목 먼저'));
+        h('option', { value: 'name' }, '이름순'), h('option', { value: 'family' }, '교과군별'),
+        h('option', { value: 'checked' }, '체크한 과목 먼저'));
+      const familyRank = (name) => {
+        const family = Store.get('subjectFamilies', {})[name] || Curriculum2022.find(name)?.family || '기타';
+        const index = Curriculum2022.families.indexOf(family);
+        return index < 0 ? Curriculum2022.families.length : index;
+      };
       const drawVisibility = () => list.replaceChildren(...allNames()
         .filter((name) => name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase()))
-        .sort((a, b) => order.value === 'checked' ? Number(names().includes(b)) - Number(names().includes(a)) || a.localeCompare(b, 'ko') : a.localeCompare(b, 'ko'))
+        .sort((a, b) => order.value === 'checked' ? Number(names().includes(b)) - Number(names().includes(a)) || a.localeCompare(b, 'ko')
+          : order.value === 'family' ? familyRank(a) - familyRank(b) || a.localeCompare(b, 'ko')
+          : a.localeCompare(b, 'ko'))
         .map((name) => h('label', { class: 'subject-visibility-row' },
         h('input', { type: 'checkbox', checked: names().includes(name), onchange: (event) => {
           const hidden = new Set(Store.get('hiddenSubjects', []));
@@ -169,9 +177,28 @@ const Subjects = (() => {
         footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => add(input.value) }, '추가')] });
       input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); add(input.value); } });
     };
+    const studySwatch = h('span', { class: 'subject-study-swatch', style: { backgroundColor: colorFor('자습') }, 'aria-hidden': 'true' });
+    const openStudyColor = () => {
+      const color = h('input', { type: 'color', value: colorFor('자습'), 'aria-label': '자습 색상' });
+      const updateSwatch = () => { studySwatch.style.backgroundColor = colorFor('자습'); };
+      const dialog = App.modal({ title: '자습 색 설정', body: App.field('자습 색상', color), footer: [
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => {
+          const colors = { ...Store.get('subjectColors', {}) }; delete colors.자습;
+          Store.set('subjectColors', colors); updateSwatch(); dialog.close();
+          App.toast('자습 색상을 기본 회색으로 돌렸어요.');
+        } }, '기본 회색'),
+        h('button', { class: 'btn primary', type: 'button', onclick: () => {
+          Store.set('subjectColors', { ...Store.get('subjectColors', {}), 자습: color.value });
+          updateSwatch(); dialog.close(); App.toast('자습 색상을 저장했어요.');
+        } }, '저장')
+      ] });
+    };
     root.append(h('section', { class: 'panel' }, h('h1', { class: 'page-title' }, '과목 관리'),
-      h('div', { class: 'subject-add-row' }, search, h('button', { class: 'btn primary', type: 'button', onclick: addSubject }, '과목 추가')),
-      h('div', { class: 'subject-view-row' }, h('strong', null, '과목 목록'), viewTabs, sort,
+      h('div', { class: 'subject-add-row' }, search,
+        h('button', { class: 'btn primary', type: 'button', onclick: addSubject }, '과목 추가')),
+      h('div', { class: 'subject-view-row' }, h('strong', null, '과목 목록'), viewTabs,
+        h('div', { class: 'subject-view-controls' },
+          h('button', { class: 'btn ghost subject-study-button', type: 'button', onclick: openStudyColor }, studySwatch, '자습 색 설정'), sort),
         h('button', { class: 'btn ghost', type: 'button', onclick: visibility }, '표시할 과목')),
       h('p', { class: 'hint' }, '색상과 과목별 선생님·교실을 관리해요. 시간표에서는 저장한 이름을 선택할 수 있어요. 과목을 삭제해도 과거 기록은 유지합니다.'), list));
     draw();

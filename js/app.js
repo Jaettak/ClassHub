@@ -6,7 +6,7 @@ const dateStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getD
 const todayStr = () => dateStr(new Date());
 const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const PALETTE = ['#4f8cff', '#35c27a', '#ff9f2e', '#ff6f91', '#a276ff', '#18bfd1', '#f2c230', '#ff7a59'];
-const CLASSHUB_VERSION = 'v2.10.0';
+const CLASSHUB_VERSION = 'v2.11.0';
 
 function colorFor(text) {
   const name = String(text || '').trim();
@@ -14,6 +14,7 @@ function colorFor(text) {
   // 사용자 지정 과목 색상은 시간표·홈·일정 관리·성적 분석에 공통 적용한다.
   const custom = Store.get('subjectColors', {});
   if (custom && Object.prototype.hasOwnProperty.call(custom, name) && /^#[0-9a-fA-F]{6}$/.test(custom[name])) return custom[name];
+  if (name === '자습') return '#8b95a5';
   const auto = Store.get('subjectAutoColors', {});
   if (auto[name]) return auto[name];
   const used = new Set([...Object.values(custom || {}), ...Object.values(auto)].map((c) => String(c).toLowerCase()));
@@ -219,11 +220,11 @@ const App = (() => {
       return h('div', { class: 'nav-layout ' + className }, Array.from({ length: rows }, (_, row) => {
         const size = Math.floor(count / rows) + (row < count % rows ? 1 : 0);
         const cells = names.slice(index, index += size);
-        return h('div', { class: 'nav-row', style: { '--row-count': size } }, cells.map((n) => h('a', { href: '#' + n, class: n === active ? 'active' : '' },
+        return h('div', { class: 'nav-row', style: { '--row-count': size } }, cells.map((n) => h('a', { href: '#' + n, class: n === active ? 'active' : '', 'aria-label': views[n].label, title: views[n].label },
           h('span', { class: 'tab-ico' }, icon(views[n].icon)), h('span', { class: 'tab-txt' }, views[n].label))));
       }));
     };
-    return h('nav', { class: 'tabs' }, layout('desktop', 7, 2), layout('tablet', 5, 2), layout('phone', 3, 1));
+    return h('nav', { class: 'tabs' }, layout('desktop', 7, 2), layout('tablet', 5, 2), layout('phone', 6, 2));
   }
 
   const HELP = {
@@ -275,13 +276,15 @@ const App = (() => {
               document.body.classList.remove('nav-collapsed');
               const page = app.querySelector('.page');
               const height = bar.getBoundingClientRect().height;
-              const style = getComputedStyle(bar);
               const basePadding = Number(app.dataset.navBasePadding || 22);
               if (page && app.classList.contains('short-view')) {
                 const pageAnimation = page.animate([{ paddingTop: `${basePadding + expandedNavHeight}px` }, { paddingTop: `${basePadding}px` }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)', fill: 'forwards' });
                 pageAnimation.onfinish = () => { page.style.paddingTop = ''; pageAnimation.cancel(); };
               }
-              const animation = bar.animate([{ height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }, { height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
+              const animation = bar.animate([
+                { transform: `translateY(-${height}px)`, marginBottom: `-${height}px` },
+                { transform: 'translateY(0)', marginBottom: '0px' }
+              ], { duration: 290, easing: 'cubic-bezier(.22,1,.36,1)' });
             } else {
               const height = bar.getBoundingClientRect().height;
               expandedNavHeight = height;
@@ -295,8 +298,10 @@ const App = (() => {
                 const pageAnimation = page.animate([{ paddingTop: `${basePadding}px` }, { paddingTop: `${basePadding + height}px` }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
                 pageAnimation.onfinish = () => { page.style.paddingTop = `${basePadding + height}px`; pageAnimation.cancel(); };
               }
-              const style = getComputedStyle(bar);
-              const animation = bar.animate([{ height: `${height}px`, paddingTop: style.paddingTop, paddingBottom: style.paddingBottom, transform: 'translateY(0)' }, { height: '0px', paddingTop: '0px', paddingBottom: '0px', transform: 'translateY(-22px)' }], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
+              const animation = bar.animate([
+                { transform: 'translateY(0)', marginBottom: '0px' },
+                { transform: `translateY(-${height}px)`, marginBottom: `-${height}px` }
+              ], { duration: 290, easing: 'cubic-bezier(.55,0,.82,.35)', fill: 'forwards' });
               animation.onfinish = () => { document.body.classList.add('nav-collapsed'); animation.cancel(); };
             }
           } }),
@@ -385,6 +390,60 @@ const App = (() => {
   const openSettings = () => Settings.open();
   const api = { views, registerView, toast, modal, confirm: confirmAction, askText, field, subjectField, route, refresh, download, exportData, importData, openSettings, get current() { return current; } };
   return api;
+})();
+
+// 손가락을 떼지 않아도 안쪽 목록의 끝에서 바깥 화면으로 스크롤을 이어 간다.
+(() => {
+  let gesture = null;
+  const scrollable = (start) => {
+    for (let el = start instanceof Element ? start : start?.parentElement; el && el !== document.body; el = el.parentElement) {
+      if (/auto|scroll|overlay/.test(getComputedStyle(el).overflowY) && el.scrollHeight > el.clientHeight + 1) return el;
+    }
+    return null;
+  };
+  const passRemainder = (inner, delta) => {
+    let remaining = delta;
+    for (let node = inner; node && Math.abs(remaining) > .5; node = scrollable(node.parentElement)) {
+      const before = node.scrollTop;
+      node.scrollTop = Math.max(0, Math.min(node.scrollHeight - node.clientHeight, before + remaining));
+      remaining -= node.scrollTop - before;
+    }
+    if (Math.abs(remaining) > .5 && !document.body.classList.contains('modal-open')) window.scrollBy(0, remaining);
+  };
+  document.addEventListener('wheel', (event) => {
+    if (event.defaultPrevented || event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX) ||
+        !(event.target instanceof Element) || event.target.closest('.school-photo-scroll.zoomed')) return;
+    const inner = scrollable(event.target);
+    if (!inner) return;
+    const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? inner.clientHeight : 1);
+    const available = delta > 0 ? inner.scrollHeight - inner.clientHeight - inner.scrollTop : inner.scrollTop;
+    if (available + .5 >= Math.abs(delta)) return;
+    if (event.cancelable) event.preventDefault();
+    passRemainder(inner, delta);
+  }, { passive: false });
+  document.addEventListener('touchstart', (event) => {
+    gesture = null;
+    if (event.touches.length !== 1 || !(event.target instanceof Element) ||
+        event.target.closest('canvas, .school-photo-scroll.zoomed, .ch-color-square, .ch-color-hue')) return;
+    const inner = scrollable(event.target);
+    if (!inner) return;
+    gesture = { inner, x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }, { passive: true });
+  document.addEventListener('touchmove', (event) => {
+    if (!gesture || event.touches.length !== 1 || !gesture.inner.isConnected ||
+        event.target.closest?.('.set-preview-tile.dragging, .home-card.dragging')) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - gesture.x, dy = gesture.y - touch.clientY;
+    gesture.x = touch.clientX; gesture.y = touch.clientY;
+    if (Math.abs(dy) < 1 || Math.abs(dy) <= Math.abs(dx)) return;
+    const inner = gesture.inner, max = inner.scrollHeight - inner.clientHeight;
+    const available = dy > 0 ? max - inner.scrollTop : inner.scrollTop;
+    if (available + .5 >= Math.abs(dy) || !event.cancelable) return;
+    event.preventDefault();
+    passRemainder(inner, dy);
+  }, { passive: false });
+  document.addEventListener('touchend', (event) => { if (!event.touches.length) gesture = null; }, { passive: true });
+  document.addEventListener('touchcancel', () => { gesture = null; }, { passive: true });
 })();
 
 // 주요 선택 동작마다 같은 계열의 짧은 효과음을 낸다.

@@ -12,7 +12,7 @@ const context = vm.createContext({
   dateStr: (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
   todayStr: () => '2026-11-05',
   parseDate: (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); },
-  colorFor: (name) => state.subjectColors?.[name] || '#4f8cff',
+  colorFor: (name) => state.subjectColors?.[name] || (name === '자습' ? '#8b95a5' : '#4f8cff'),
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'holidays.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'calendar.js'), 'utf8'), context);
@@ -31,10 +31,14 @@ assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'custom-lesson')
 assert.equal(Timetable.lessonsFor(new Date(2026, 10, 5)).find((e) => e.id === 'custom-lesson').color, '#22aa44');
 state.events.push({ id: 'self-study', date: '2026-11-05', start: '12:00', end: '13:00', title: '자습 (3교시)', subject: '', schoolLesson: true, selfStudy: true, colorSource: 'custom', color: '#8b95a5' });
 assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'self-study').color, '#8b95a5');
+state.subjectColors.자습 = '#a8b6ca';
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'self-study').color, '#a8b6ca');
+state.events.push({ id: 'custom-study', date: '2026-11-05', start: '13:00', end: '14:00', title: '자습 (4교시)', subject: '', schoolLesson: true, selfStudy: true, colorSource: 'custom', color: '#7846af' });
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'custom-study').color, '#7846af');
 state.subjectColors['평소 수업'] = '#3388cc';
 assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'lesson').color, '#3388cc');
 assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'custom-lesson').color, '#22aa44');
-assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'self-study').color, '#8b95a5');
+assert.equal(Calendar.byDate('2026-11-05').find((e) => e.id === 'self-study').color, '#a8b6ca');
 assert.equal(Calendar.byDate('2026-11-06').map((e) => e.id).join(','), 'range');
 assert.equal(Calendar.byDate('2026-11-07').map((e) => e.id).join(','), 'range,multi');
 Calendar.setDone('multi', '2026-11-07', true);

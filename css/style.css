@@ -1054,9 +1054,9 @@ body.reduce-motion *, body.reduce-motion *::before, body.reduce-motion *::after 
   .view-wrong .title-row { align-items: flex-start; gap: 12px; margin-bottom: 18px; }
   .view-wrong .title-row .btn.primary { max-width: 100%; margin-bottom: 4px; }
   .pdf-tools { margin-bottom: 24px; }
-  .tt { min-width: 660px; }
-  .tt th.period, .tt th.corner { width: 68px; min-width: 68px; font-size: .69rem; }
-  .tt td.slot { min-width: 104px; height: 75px; padding: 5px; font-size: .94rem; }
+  .tt { min-width: 580px; }
+  .tt th.period, .tt th.corner { width: 62px; min-width: 62px; font-size: .67rem; }
+  .tt td.slot { min-width: 88px; height: 68px; padding: 4px; font-size: .86rem; }
   .tt td.slot small { font-size: .69rem; }
   .tt-period-time { font-size: .58rem; letter-spacing: -.03em; }
   .wk-scroll .tl { min-width: 520px; }
@@ -1510,6 +1510,10 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .subject-add-row { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
 .subject-add-row input { flex: 0 1 280px; width: 280px; min-width: 150px; max-width: 100%; }
 .subject-add-row .btn { flex: none; }
+.subject-view-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.subject-view-controls > select { flex: 0 0 auto; width: auto; min-width: 112px; }
+.subject-study-button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.subject-study-swatch { display: inline-block; width: 15px; height: 15px; flex: none; border: 1px solid #d3dbe8; border-radius: 5px; }
 .set-preview-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .set-card-preview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; max-height: min(58vh, 560px); overflow-y: auto; padding: 8px; border-radius: 16px; background: #f3f7ff; }
 .set-card-preview.preview-mini { grid-template-columns: repeat(6, minmax(0, 1fr)); background: #fff; border: 1px solid #dce4f2; }
@@ -1692,7 +1696,6 @@ input[type='date']::-webkit-calendar-picker-indicator, input[type='time']::-webk
 .set-card-preview [data-tab-id].drop-swap { outline: 3px solid #2f6bff; outline-offset: 2px; background-color: #eaf1ff; }
 @media (max-width: 720px) { .gr-overview { grid-template-columns: 1fr; } }
 .set-drop-insertion { position: fixed; z-index: 3200; border-radius: 999px; background: #2f6bff; box-shadow: 0 0 0 3px #fff, 0 0 0 5px #2f6bff55; pointer-events: none; }
-.set-drop-insertion::after { content: '여기에 넣기'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 3px 7px; border-radius: 999px; background: #2f6bff; color: #fff; white-space: nowrap; font-size: 10px; font-weight: 800; box-shadow: 0 2px 8px #193b8133; }
 .school-photo-scroll { cursor: grab; touch-action: pan-y; }
 .school-photo-scroll.zoomed { touch-action: none; }
 .school-photo-scroll:active { cursor: grabbing; }
@@ -2195,6 +2198,7 @@ input[type='checkbox']:checked::after { content: none; }
 .cal-head .cal-date-controls > .ym { display: inline-flex; width: max-content; min-width: 0; align-items: center; justify-content: center; gap: 6px; overflow: visible; }
 .cal-head .cal-date-controls > .ym select { box-sizing: border-box; flex: none; width: auto; min-width: 78px; max-width: none; padding-left: 12px; padding-right: 28px; text-align: center; text-align-last: center; }
 .cal-head .cal-date-controls > .ym select:first-child { min-width: 96px; }
+.cal-head-month .cal-date-controls > .ym select { height: 36px; min-height: 36px; padding-top: 3px; padding-bottom: 3px; line-height: 1.2; }
 .cal-head .cal-act { justify-content: flex-start; margin-top: 9px; }
 @media (max-width: 640px) {
   .side-date-nav { grid-template-columns: 37px minmax(0, 1fr) 37px; }
@@ -2312,14 +2316,20 @@ input[type='checkbox']:checked::after { content: none; }
   .side-box .bm.b { right: 8px; }
 }
 
-/* Keep both bookmark controls beside the date arrows inside the header. */
-.side-date-nav .side-bookmarks { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: flex-start; gap: 4px; z-index: 4; }
+/* Keep the normal ribbons unless their full-size footprint meets the date arrow. */
+.side-box > .side-bookmarks { position: absolute; right: 18px; top: 0; transform: none; display: flex; align-items: flex-start; gap: 8px; z-index: 4; }
 .side-box .side-bookmarks .bm,
 .side-box .side-bookmarks .bm.r,
 .side-box .side-bookmarks .bm.b,
-.side-box .side-bookmarks .bm[aria-pressed="true"] { position: relative; top: auto; right: auto; width: 18px; height: 29px; min-width: 18px; flex: none; }
-.side-box .side-bookmarks .bm:hover,
-.side-box .side-bookmarks .bm:focus-visible { height: 29px; transform: translateY(2px); }
+.side-box .side-bookmarks .bm[aria-pressed="true"] { position: relative; top: auto; right: auto; width: 28px; min-width: 28px; flex: none; }
+.side-box .side-bookmarks .bm.r { height: 49px; }
+.side-box .side-bookmarks .bm.b { height: 43px; }
+.side-box .side-bookmarks .bm.r[aria-pressed="true"] { height: 64px; }
+.side-box .side-bookmarks .bm.b[aria-pressed="true"] { height: 58px; }
+.side-box .side-bookmarks .bm.r:hover,
+.side-box .side-bookmarks .bm.r:focus-visible { height: 57px; }
+.side-box .side-bookmarks .bm.b:hover,
+.side-box .side-bookmarks .bm.b:focus-visible { height: 51px; }
 .side-box .side-bookmarks .bm::after { display: none; }
 .gr-bar-open { width: 100%; padding: 3px 2px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
 .gr-bar-open:hover, .gr-bar-open:focus-visible { background: #f3f6ff; outline: 2px solid #dce5f7; }
@@ -2329,7 +2339,7 @@ input[type='checkbox']:checked::after { content: none; }
   .side-box .side-bookmarks .bm,
   .side-box .side-bookmarks .bm.r,
   .side-box .side-bookmarks .bm.b,
-  .side-box .side-bookmarks .bm[aria-pressed="true"] { width: 15px; height: 25px; min-width: 15px; }
+  .side-box .side-bookmarks .bm[aria-pressed="true"] { width: 24px; min-width: 24px; }
 }
 
 /* Tab arrangement preview uses the same symmetric side padding as the live header. */
@@ -2409,9 +2419,113 @@ input[type='checkbox']:checked::after { content: none; }
   .home-settings-btn { top: 4px; right: 4px; width: 30px; height: 30px; min-width: 30px; min-height: 30px; padding: 4px; }
   .home-settings-btn .ico, .home-settings-btn svg { width: 18px; height: 18px; }
   .view-home .side-date-nav { min-height: 78px; }
-  .view-home .side-date-nav .side-bookmarks { top: 4px; transform: none; }
   .view-home .side-date-nav > .btn:first-child { top: 4px; left: 0; transform: none; min-height: 26px; padding: 2px 4px; font-size: .7rem; }
   .view-home .side-date-controls { top: auto; bottom: 0; left: 0; width: 100%; transform: none; grid-template-columns: 18px minmax(0, 1fr) 18px; gap: 2px; }
   .view-home .side-date-controls > .btn, .view-home .side-date-nav .side-date-controls > .btn:first-child { width: 18px; min-width: 18px; min-height: 24px; padding: 0; font-size: .6rem; }
   .view-home .side-date-controls h3, .view-home .side-date-nav h3 { width: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: .65rem; }
+}
+
+/* Only a cramped bookmark header changes the ribbons to two round controls. */
+.side-box.bookmarks-stacked > .side-bookmarks {
+  top: 37px; right: 18px; transform: translateY(-50%);
+  flex-direction: column; gap: 7px;
+}
+.side-box.bookmarks-stacked .side-bookmarks .bm,
+.side-box.bookmarks-stacked .side-bookmarks .bm.r,
+.side-box.bookmarks-stacked .side-bookmarks .bm.b,
+.side-box.bookmarks-stacked .side-bookmarks .bm[aria-pressed="true"] {
+  box-sizing: border-box; width: 23px; min-width: 23px; height: 18px;
+  border-radius: 7px; transform: none;
+}
+.side-box.bookmarks-stacked .side-bookmarks .bm::before { clip-path: none; border-radius: 7px; }
+.side-box.bookmarks-stacked .side-bookmarks .bm[aria-pressed="true"] { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #7185a7; }
+.side-box.bookmarks-stacked .side-bookmarks .bm:hover,
+.side-box.bookmarks-stacked .side-bookmarks .bm:focus-visible { height: 18px; transform: scale(1.06); }
+.side-box.bookmarks-stacked .side-date-controls {
+  box-sizing: border-box; width: min(190px, calc(100% - 88px));
+  grid-template-columns: 23px minmax(0, 1fr) 23px; gap: 4px;
+}
+.side-box.bookmarks-stacked .side-date-controls h3 {
+  box-sizing: border-box; width: auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; font-size: .8rem;
+}
+@media (max-width: 1000px) {
+  .side-box:not(.bookmarks-stacked) .side-bookmarks .bm { width: 24px; min-width: 24px; }
+  .side-box:not(.bookmarks-stacked) .side-bookmarks .bm.r { height: 43px; }
+  .side-box:not(.bookmarks-stacked) .side-bookmarks .bm.b { height: 38px; }
+  .side-box:not(.bookmarks-stacked) .side-bookmarks .bm.r[aria-pressed="true"] { height: 56px; }
+  .side-box:not(.bookmarks-stacked) .side-bookmarks .bm.b[aria-pressed="true"] { height: 51px; }
+}
+/* The order editor follows the real two-column home layout at tablet widths. */
+@media (min-width: 641px) and (max-width: 1000px),
+       (min-width: 1001px) and (max-width: 1100px) and (orientation: portrait) {
+  .set-home-stage .home { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100%; }
+  .set-home-stage .home-side { order: -1; }
+  .set-home-stage .home-card-frame { height: auto; min-height: 0; overflow: visible; }
+  .set-home-stage .home-cards {
+    box-sizing: border-box; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: 150px; gap: 14px; height: auto; margin-block: 10px;
+    padding: 12px; overflow: visible; align-content: start;
+  }
+  .set-home-stage .home-card { min-height: 132px; padding: 16px 18px; }
+}
+@media (max-width: 640px) {
+  .view-home .side-date-nav { min-height: 38px; }
+  .view-home .side-box.bookmarks-stacked > .side-bookmarks { top: 31px; }
+  .view-home .side-date-nav > .btn:first-child { top: 50%; transform: translateY(-50%); }
+  .view-home .side-date-controls {
+    top: 50%; bottom: auto; left: 50%; width: auto;
+    transform: translate(-50%, -50%);
+    grid-template-columns: 23px 112px 23px; gap: 4px;
+  }
+  .view-home .side-date-controls h3, .view-home .side-date-nav h3 {
+    width: 112px; min-width: 112px; overflow: visible;
+    text-overflow: clip; font-size: .85rem;
+  }
+  .view-home .side-box.bookmarks-stacked .side-date-controls { width: min(190px, calc(100% - 88px)); grid-template-columns: 23px minmax(0, 1fr) 23px; }
+  .view-home .side-box.bookmarks-stacked .side-date-controls h3 { width: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* Let a vertical gesture continue from an inner list to its surrounding page. */
+.side-scroll, .home-cards, .home-schedule-list, .wk-scroll, .day-layout .day-side,
+.modal-body, .timer-stack, .timer-history, .timer-stack-cards, .set-card-preview,
+.ch-select-list, .ch-time-list, .subject-choice-list, .gr-expanded-chart,
+.gr-bars, .sch-list, .pdf-stage, .ed-wrap, .creative-wrap, .school-photo-scroll,
+.school-calendar-list, .subject-official-results, .subject-visibility-list, .gr-select-options {
+  overscroll-behavior-y: auto;
+}
+.set-home-stage .home-cards { overscroll-behavior-y: auto; }
+@media (max-width: 640px) {
+  .cal-head-week .cal-nav { grid-template-columns: minmax(0, 1fr) auto; }
+  .cal-head-week .cal-nav > .seg { grid-column: 1; grid-row: 1; }
+  .cal-head-week .cal-nav > .cal-today { grid-column: 2; grid-row: 1; justify-self: end; margin-left: 0; }
+  .cal-head-week .cal-nav > .cal-date-controls {
+    grid-column: 1 / -1; grid-row: 2; justify-self: center;
+    box-sizing: border-box; width: min(100%, 260px); max-width: 100%;
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+  }
+  .cal-head-week .cal-date-controls > .cal-label {
+    width: 100%; max-width: none; white-space: normal; overflow: visible;
+    text-overflow: clip; line-height: 1.25; text-align: center;
+  }
+}
+.cal-head-week .cal-date-controls { width: 280px; max-width: 100%; grid-template-columns: 34px minmax(0, 1fr) 34px; }
+.cal-head-day .cal-date-controls { width: 250px; max-width: 100%; grid-template-columns: 34px minmax(0, 1fr) 34px; }
+.cal-head-day .cal-date-controls > .cal-label { width: 100%; min-width: 0; }
+@media (max-width: 640px) {
+  .topbar { padding-left: 10px; padding-right: 10px; }
+  .topbar .tabs { margin-left: 0; margin-right: 0; }
+  .cal-head-week .cal-date-controls { width: min(100%, 260px); grid-template-columns: 30px minmax(0, 1fr) 30px; }
+  .cal-head-day .cal-date-controls { width: min(220px, calc(100vw - 70px)); max-width: none; grid-template-columns: 30px minmax(0, 1fr) 30px; }
+  .cal-head-day .cal-date-controls > .cal-label { max-width: none; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .nav-layout.phone .nav-row a { grid-template-columns: 1fr; justify-items: center; width: 100%; min-height: 38px; padding: 4px; }
+  .topbar .nav-layout.phone .tab-txt { display: none; }
+  .set-mini-stage[data-layout='phone'] .set-mini-row .set-preview-tile { grid-template-columns: 1fr; justify-items: center; min-height: 34px; }
+  .set-mini-stage[data-layout='phone'] .set-mini-row .set-preview-tile b { display: none; }
+}
+@media (min-width: 560px) and (max-width: 640px) {
+  .topbar .nav-layout.phone .nav-row a { grid-template-columns: 24px minmax(0, 1fr); justify-items: stretch; gap: 3px; }
+  .topbar .nav-layout.phone .tab-txt { display: block; font-size: .64rem; text-align: left; }
+  .set-mini-stage[data-layout='phone'] .set-mini-row .set-preview-tile { grid-template-columns: 20px minmax(0, 1fr); justify-items: stretch; gap: 3px; }
+  .set-mini-stage[data-layout='phone'] .set-mini-row .set-preview-tile b { display: block; font-size: .62rem; }
 }

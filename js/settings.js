@@ -185,7 +185,7 @@ const Settings = (() => {
         const cardStyle = { grades: 'pink', calendar: 'orange', notes: 'amber', timetable: 'green', meals: 'teal', timer: 'slate', wrong: 'blue', study: 'indigo', activities: 'purple', subjects: 'orchid', whiteboard: 'coral', schoolmap: 'mint' };
         const tile = previewMode === 'home'
           ? h('div', { class: `home-card ${cardStyle[id]}`, 'data-tab-id': id }, h('span', { class: 'hc-ico' }, icon(id)), h('span', { class: 'hc-text' }, h('b', null, choice.label)), h('span', { class: 'hc-go' }, '→'))
-          : h('div', { class: 'set-preview-tile' + (choice.input.checked ? '' : ' disabled'), 'data-tab-id': id },
+          : h('div', { class: 'set-preview-tile' + (choice.input.checked ? '' : ' disabled'), 'data-tab-id': id, title: choice.label, 'aria-label': choice.label },
             h('span', { class: 'set-preview-icon' }, icon(id)), h('b', null, choice.label),
             previewMode === 'visibility' ? h('label', { class: 'set-preview-check' }, choice.input, '표시') : null);
         choice.input.onchange = () => { tile.classList.toggle('disabled', !choice.input.checked); };
@@ -311,9 +311,9 @@ const Settings = (() => {
       if (previewMode === 'mini') {
         cardList.className = 'set-card-preview preview-mini-live';
         const vw = window.innerWidth;
-        const scale = Math.min(1, Math.min(940, Math.max(220, vw - 56)) / vw);
-        const max = vw <= 640 ? 3 : vw <= 1000 ? 5 : 7;
-        const rows = Math.min(tiles.length, Math.max(vw <= 640 ? 1 : 2, Math.ceil(tiles.length / max)));
+        const scale = Math.min(1, Math.min(940, Math.max(1, cardList.clientWidth - 24)) / vw);
+        const max = vw <= 640 ? 6 : vw <= 1000 ? 5 : 7;
+        const rows = Math.min(tiles.length, Math.max(2, Math.ceil(tiles.length / max)));
         let index = 0;
         const nav = h('nav', { class: 'set-mini-nav tabs' }, h('div', { class: 'set-mini-layout nav-layout' }, Array.from({ length: rows }, (_, row) => {
           const count = Math.floor(tiles.length / rows) + (row < tiles.length % rows ? 1 : 0);
@@ -331,13 +331,14 @@ const Settings = (() => {
       }
       cardList.className = 'set-card-preview preview-home-live';
       const vw = window.innerWidth, vh = window.innerHeight;
-      const scale = Math.min(1, Math.min(940, Math.max(240, vw - 56)) / vw);
+      const scale = Math.min(1, Math.min(940, Math.max(1, cardList.clientWidth - 24)) / vw);
       const lessons = Settings.protectedTab('timetable') ? [] : Timetable.lessonsFor(new Date());
       const schedule = h('div', { class: 'home-schedule-preview' }, h('h3', null, '오늘 시간표'),
         h('div', { class: 'home-schedule-list' }, lessons.length ? lessons.map((lesson) => h('div', { class: 'home-schedule-lesson', style: { '--c': lesson.color || colorFor(lesson.subject) } }, `${lesson.period}. ${lesson.displayTitle}`)) : h('p', { class: 'muted' }, '오늘 등록된 수업이 없어요.')));
       const logo = h('div', { class: 'home-logo' }, icon('books', 'logo-books'), h('div', { class: 'logo-name' }, 'Class', h('b', null, 'Hub')));
       const side = h('div', { class: 'side-box' }, h('div', { class: 'side-date-nav' }, h('span', null, '오늘'),
         h('div', { class: 'side-date-controls' }, h('span', null, '◀'), h('h3', null, `${new Date().getMonth() + 1}월 ${new Date().getDate()}일`), h('span', null, '▶'))),
+        h('div', { class: 'side-bookmarks', 'aria-hidden': 'true' }, h('span', { class: 'bm r' }), h('span', { class: 'bm b' })),
         h('div', { class: 'side-scroll' }, h('p', { class: 'muted' }, '오늘의 일정')));
       const stage = h('div', { class: 'set-home-stage' }, h('div', { class: 'home' }, h('div', { class: 'home-card-frame' }, h('div', { class: 'home-cards' }, tiles)),
         h('aside', { class: 'home-side' }, h('div', { class: 'home-topline' }, schedule, logo), side)));
@@ -352,9 +353,10 @@ const Settings = (() => {
         if (scroller.scrollTop !== before) event.preventDefault();
       }, { passive: false });
       cardList.replaceChildren(viewport);
+      viewport.style.height = `${Math.max(vw <= 640 ? vh * 1.45 : vh, stage.scrollHeight) * scale}px`;
     };
     const openTabPreview = (initial) => {
-      previewMode = initial; drawCards();
+      previewMode = initial;
       const choices = [['visibility', '표시할 탭'], ['home', '메인 화면 순서'], ['mini', '상단 탭 순서']];
       const tabs = choices.map(([mode, label]) => h('button', { class: 'seg-btn' + (mode === initial ? ' on' : ''), type: 'button', onclick: () => {
         previewMode = mode; tabs.forEach((button, index) => button.classList.toggle('on', choices[index][0] === mode)); drawCards(); drawActions();
@@ -365,8 +367,11 @@ const Settings = (() => {
         h('button', { class: 'btn ghost', type: 'button', onclick: () => { enabledChoices.forEach(({ input }) => { input.checked = false; }); drawCards(); } }, '전체 해제')
       ] : []));
       drawActions();
-      const dialog = App.modal({ title: '탭 설정', wide: true, body: [h('p', { class: 'hint' }, '표시할 탭을 고르거나, 메인 화면과 상단 탭의 순서를 각각 끌어서 바꾸세요.'), actions, cardList], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')] });
+      const resizePreview = () => { if (previewMode !== 'visibility') drawCards(); };
+      const dialog = App.modal({ title: '탭 설정', wide: true, body: [h('p', { class: 'hint' }, '표시할 탭을 고르거나, 메인 화면과 상단 탭의 순서를 각각 끌어서 바꾸세요.'), actions, cardList], footer: [h('button', { class: 'btn primary', type: 'button', onclick: () => dialog.close() }, '선택 완료')], onClose: () => window.removeEventListener('resize', resizePreview) });
       dialog.back.classList.add('set-tabs-dialog');
+      drawCards();
+      window.addEventListener('resize', resizePreview);
     };
     const tabBox = section('탭 설정', h('button', { class: 'btn', type: 'button', onclick: () => openTabPreview('visibility') }, '표시와 순서 바꾸기'));
     const lockChoices = cardNames.map(([id, label]) => ({ id, input: h('input', { type: 'checkbox', checked: (draft.privateLockTabs || (draft.privateLockEnabled === false ? [] : ['activities', 'grades'])).includes(id) }), label }));

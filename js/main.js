@@ -58,10 +58,10 @@ const Home = (() => {
         h('div', { class: 'side-date-controls' },
           h('button', { class: 'btn ghost', type: 'button', 'aria-label': '이전 날짜', onclick: () => changeDate(-1) }, '◀'),
           h('h3', null),
-          h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶')),
-        h('div', { class: 'side-bookmarks' },
-          h('button', { type: 'button', class: 'bm r', title: '오늘 일정 목록', 'aria-label': '오늘 일정 목록으로 보기', onclick: () => selectSide('list') }),
-          h('button', { type: 'button', class: 'bm b', title: '오늘 일정 원 그래프', 'aria-label': '오늘 일정 원 그래프로 보기', onclick: () => selectSide('pie') }))),
+          h('button', { class: 'btn ghost', type: 'button', 'aria-label': '다음 날짜', onclick: () => changeDate(1) }, '▶'))),
+      h('div', { class: 'side-bookmarks' },
+        h('button', { type: 'button', class: 'bm r', title: '오늘 일정 목록', 'aria-label': '오늘 일정 목록으로 보기', onclick: () => selectSide('list') }),
+        h('button', { type: 'button', class: 'bm b', title: '오늘 일정 원 그래프', 'aria-label': '오늘 일정 원 그래프로 보기', onclick: () => selectSide('pie') })),
       h('div', { class: 'side-scroll' }),
       st?.todo ? h('p', { class: 'note' }, `생기부 미기록 활동 ${st.todo}개`) : null);
 
@@ -157,6 +157,14 @@ const Home = (() => {
         }) : []),
         Settings.protectedTab('calendar') ? null : todayBox)));
     sideObserver = new ResizeObserver(() => {
+      const dateNav = todayBox.querySelector('.side-date-nav');
+      // Compare the normal ribbon footprint with the fixed date controls.
+      // The result does not depend on the active style, so resizing cannot oscillate.
+      const phoneDateRow = matchMedia('(max-width: 640px)').matches;
+      const ordinaryControlsWidth = phoneDateRow ? 166 : 226;
+      const ordinaryRibbonWidth = phoneDateRow ? 56 : 64;
+      todayBox.classList.toggle('bookmarks-stacked',
+        dateNav.clientWidth / 2 + ordinaryControlsWidth / 2 + 8 > dateNav.clientWidth - ordinaryRibbonWidth);
       const frameRect = cardFrame.getBoundingClientRect();
       const bookmarkRect = todayBox.getBoundingClientRect();
       const sideBySide = frameRect.right < bookmarkRect.left;

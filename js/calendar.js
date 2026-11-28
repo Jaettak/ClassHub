@@ -63,8 +63,10 @@ const Calendar = (() => {
     return false;
   }
   const isDone = (e, ds) => (e.repeat || e.dateEnd || e.dates?.length ? (e.doneDates || []).includes(ds) : !!e.done);
+  const usesManagedStudyColor = (e) => e.selfStudy && (e.colorSource === 'selfStudy' ||
+    (!e.color || String(e.color).toLowerCase() === '#8b95a5'));
   const occ = (e, ds) => ({ ...e, date: ds, baseDate: e.date, done: isDone(e, ds), rep: !!e.repeat,
-    color: e.colorSource === 'custom' ? e.color : e.schoolLesson || e.subject && e.colorSource === 'subject'
+    color: usesManagedStudyColor(e) ? colorFor('자습') : e.colorSource === 'custom' ? e.color : e.schoolLesson || e.subject && e.colorSource === 'subject'
       ? colorFor(e.subject || e.title.replace(/\s*\(\d+교시\)$/, '')) : e.color });
   const sortFn = (a, b) => (a.date + a.start).localeCompare(b.date + b.start) || a.title.localeCompare(b.title);
 
@@ -294,8 +296,8 @@ const Calendar = (() => {
         selfStudyButton.classList.toggle('on', selfStudy);
         selfStudyButton.setAttribute('aria-pressed', String(selfStudy));
         lessonSubject.el.classList.toggle('lesson-subject-inactive', selfStudy);
-        colorSource = selfStudy ? 'custom' : 'subject';
-        color = selfStudy ? '#8b95a5' : colorFor(lessonSubject.value());
+        colorSource = selfStudy ? 'selfStudy' : 'subject';
+        color = selfStudy ? colorFor('자습') : colorFor(lessonSubject.value());
         customPicker.value = color;
       } }, '자습') : null;
     if (selfStudy) lessonSubject.el.classList.add('lesson-subject-inactive');
@@ -316,8 +318,9 @@ const Calendar = (() => {
     const memo = h('textarea', { rows: 3, placeholder: '장소, 준비물, 메모 등', value: eventMemo(src) });
     const room = h('input', { type: 'text', value: src.room || '', placeholder: '예: 과학실 (이 날짜에만 적용)', maxLength: 40 });
     const checkable = h('input', { type: 'checkbox', checked: src.checkable !== false });
-    let colorSource = src.colorSource || (src.schoolLesson ? 'subject' : 'custom');
-    let color = selfStudy ? '#8b95a5' : colorSource === 'subject' && src.subject ? colorFor(src.subject) : src.color || COLORS[0];
+    let colorSource = usesManagedStudyColor(src) ? 'selfStudy' : src.colorSource || (src.schoolLesson ? 'subject' : 'custom');
+    let color = selfStudy ? colorSource === 'selfStudy' ? colorFor('자습') : src.color || colorFor('자습')
+      : colorSource === 'subject' && src.subject ? colorFor(src.subject) : src.color || COLORS[0];
     const customPicker = h('input', { type: 'color', value: color, class: 'event-color-picker', 'aria-label': '원하는 일정 색상 선택', onchange: () => { color = customPicker.value; colorSource = 'custom'; } });
     const useSubjectColor = (name) => { if (!name) return; colorSource = 'subject'; color = colorFor(name); customPicker.value = color; };
     lessonSubject?.onPick(useSubjectColor);
@@ -391,7 +394,7 @@ const Calendar = (() => {
       if (e < start.value) e = start.value;
       const chosenSubject = src.schoolLesson ? selfStudy ? '' : lessonSubject.value() : eventSubject.value();
       const rec = { ...(base || {}), id: src.id || uid(), date: dateMode.value === 'many' && !typeSel.value ? [...selectedDates].sort()[0] : date.value, start: start.value, end: e, title: t, memo: memo.value.trim(), room: src.schoolLesson ? room.value.trim() : src.room || '', subject: chosenSubject, colorSource: chosenSubject ? colorSource : 'custom', color: chosenSubject && colorSource === 'subject' ? colorFor(chosenSubject) : color, checkable: checkable.checked };
-      if (src.schoolLesson) { rec.period = Number(lessonPeriod.value); rec.selfStudy = selfStudy; if (selfStudy) { rec.colorSource = 'custom'; rec.color = '#8b95a5'; rec.checkable = false; } }
+      if (src.schoolLesson) { rec.period = Number(lessonPeriod.value); rec.selfStudy = selfStudy; if (selfStudy) { rec.colorSource = colorSource === 'custom' ? 'custom' : 'selfStudy'; rec.color = rec.colorSource === 'custom' ? color : colorFor('자습'); rec.checkable = false; } }
       if (typeSel.value) {
         const days = typeSel.value === 'weekly' ? [...rDays].sort((a, b) => a - b) : [];
         rec.repeat = { type: typeSel.value, days: typeSel.value === 'weekly' && !days.length ? [parseDate(rec.date).getDay()] : days, until: until.value };
@@ -615,7 +618,7 @@ const Calendar = (() => {
     svg.append(sv('path', { d: `M${C - baseRadius} ${Y} A${baseRadius} ${baseRadius} 0 0 1 ${C + baseRadius} ${Y}`, fill: 'none', stroke: '#e3e9f3', 'stroke-width': outer - inner }));
     for (let k = 0; k <= 24; k += 6) {
       const [x, y] = point(outer + 8, angle(k * 60));
-      svg.append(sv('text', { x: f(x), y: f(y), class: 'pie-hr', 'text-anchor': 'middle' }, `${k}시`));
+      svg.append(sv('text', { x: f(x), y: f(y), class: 'pie-hr', 'text-anchor': k === 0 ? 'start' : k === 24 ? 'end' : 'middle' }, `${k}시`));
     }
     const lanes = Math.min(4, Math.max(1, ...evs.map((x) => x.lane + 1)));
     const band = (outer - inner) / lanes;
@@ -779,7 +782,7 @@ const Calendar = (() => {
       const evs = byDate(ds);
       const dayNotes = Notes.forDate(ds);
       const open = pieOpen();
-      const label = h('b', { class: 'cal-label' }, longDate(focus), Holidays.forDate(ds) ? h('span', { class: 'holiday-label' }, Holidays.forDate(ds)) : null);
+      const label = h('b', { class: 'cal-label' }, longDate(focus));
       const pieEvents = evs.filter((e) => !e.sourceBreak && (e.schoolLesson ? !Settings.protectedTab('timetable') : !Settings.protectedTab('calendar')));
       const legend = pieEvents.length
         ? h('ul', { class: 'pie-legend' }, pieEvents.map((e) => h('li', { class: e.done ? 'done' : '' },
